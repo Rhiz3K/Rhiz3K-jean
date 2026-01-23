@@ -1862,33 +1862,36 @@ pub async fn open_worktree_in_terminal(
 
     #[cfg(target_os = "linux")]
     {
-        // Try common Linux terminal emulators in order of preference
-        // Use owned Strings to avoid borrowing temporaries.
-        let terminals: Vec<(&str, Vec<String>)> = vec![
+        // Try common Linux terminal emulators in order of preference.
+        // Build args lazily to avoid allocating for terminals we don't use.
+        let terminals: [(&str, fn(&str) -> Vec<String>); 5] = [
             (
                 "gnome-terminal",
-                vec!["--working-directory".into(), worktree_path.clone()],
+                |path| vec!["--working-directory".into(), path.into()],
             ),
-            ("konsole", vec!["--workdir".into(), worktree_path.clone()]),
+            ("konsole", |path| vec!["--workdir".into(), path.into()]),
             (
                 "alacritty",
-                vec!["--working-directory".into(), worktree_path.clone()],
+                |path| vec!["--working-directory".into(), path.into()],
             ),
-            ("kitty", vec!["--directory".into(), worktree_path.clone()]),
+            ("kitty", |path| vec!["--directory".into(), path.into()]),
             (
                 "xterm",
-                vec![
-                    "-e".into(),
-                    "bash".into(),
-                    "-c".into(),
-                    format!("cd '{}'; exec bash", worktree_path),
-                ],
+                |path| {
+                    vec![
+                        "-e".into(),
+                        "bash".into(),
+                        "-c".into(),
+                        format!("cd '{}'; exec bash", path),
+                    ]
+                },
             ),
         ];
 
         let mut opened = false;
-        for (term, args) in terminals {
+        for (term, build_args) in terminals {
             if crate::platform::executable_exists(term) {
+                let args = build_args(&worktree_path);
                 match std::process::Command::new(term).args(args).spawn() {
                     Ok(_) => {
                         log::trace!("Opened terminal with {term}");
