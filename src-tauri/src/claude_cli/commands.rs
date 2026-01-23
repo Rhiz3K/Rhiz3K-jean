@@ -412,7 +412,7 @@ pub async fn install_claude_cli(app: AppHandle, version: Option<String>) -> Resu
     #[cfg(target_os = "macos")]
     {
         log::trace!("Removing quarantine attribute from {:?}", binary_path);
-        let _ = Command::new("xattr")
+        let _ = std::process::Command::new("xattr")
             .args(["-d", "com.apple.quarantine"])
             .arg(&binary_path)
             .output();

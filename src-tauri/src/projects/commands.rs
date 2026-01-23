@@ -1864,28 +1864,24 @@ pub async fn open_worktree_in_terminal(
     {
         // Try common Linux terminal emulators in order of preference.
         // Build args lazily to avoid allocating for terminals we don't use.
+        #[allow(clippy::type_complexity)]
         let terminals: [(&str, fn(&str) -> Vec<String>); 5] = [
-            (
-                "gnome-terminal",
-                |path| vec!["--working-directory".into(), path.into()],
-            ),
+            ("gnome-terminal", |path| {
+                vec!["--working-directory".into(), path.into()]
+            }),
             ("konsole", |path| vec!["--workdir".into(), path.into()]),
-            (
-                "alacritty",
-                |path| vec!["--working-directory".into(), path.into()],
-            ),
+            ("alacritty", |path| {
+                vec!["--working-directory".into(), path.into()]
+            }),
             ("kitty", |path| vec!["--directory".into(), path.into()]),
-            (
-                "xterm",
-                |path| {
-                    vec![
-                        "-e".into(),
-                        "bash".into(),
-                        "-c".into(),
-                        format!("cd '{}'; exec bash", path),
-                    ]
-                },
-            ),
+            ("xterm", |path| {
+                vec![
+                    "-e".into(),
+                    "bash".into(),
+                    "-c".into(),
+                    format!("cd '{}'; exec bash", path),
+                ]
+            }),
         ];
 
         let mut opened = false;
