@@ -172,15 +172,27 @@ export async function prefetchSessions(
 
     // Always register session mappings and worktree path
     if (Object.keys(sessionMappings).length > 0) {
-      storeUpdates.sessionWorktreeMap = { ...currentState.sessionWorktreeMap, ...sessionMappings }
-      storeUpdates.worktreePaths = { ...currentState.worktreePaths, [worktreeId]: worktreePath }
+      storeUpdates.sessionWorktreeMap = {
+        ...currentState.sessionWorktreeMap,
+        ...sessionMappings,
+      }
+      storeUpdates.worktreePaths = {
+        ...currentState.worktreePaths,
+        [worktreeId]: worktreePath,
+      }
     }
 
     if (Object.keys(reviewingUpdates).length > 0) {
-      storeUpdates.reviewingSessions = { ...currentState.reviewingSessions, ...reviewingUpdates }
+      storeUpdates.reviewingSessions = {
+        ...currentState.reviewingSessions,
+        ...reviewingUpdates,
+      }
     }
     if (Object.keys(waitingUpdates).length > 0) {
-      storeUpdates.waitingForInputSessionIds = { ...currentState.waitingForInputSessionIds, ...waitingUpdates }
+      storeUpdates.waitingForInputSessionIds = {
+        ...currentState.waitingForInputSessionIds,
+        ...waitingUpdates,
+      }
     }
     if (Object.keys(storeUpdates).length > 0) {
       useChatStore.setState(storeUpdates)

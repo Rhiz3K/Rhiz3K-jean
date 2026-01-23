@@ -40,7 +40,12 @@ import {
   useCreateBaseSession,
 } from '@/services/projects'
 import { isBaseSession } from '@/types/projects'
-import type { GitHubIssue, GitHubPullRequest, IssueContext, PullRequestContext } from '@/types/github'
+import type {
+  GitHubIssue,
+  GitHubPullRequest,
+  IssueContext,
+  PullRequestContext,
+} from '@/types/github'
 
 type TabId = 'quick' | 'issues' | 'prs'
 
@@ -84,7 +89,9 @@ export function NewWorktreeModal() {
   const [searchQuery, setSearchQuery] = useState('')
   const [includeClosed, setIncludeClosed] = useState(false)
   const [selectedItemIndex, setSelectedItemIndex] = useState(0)
-  const [creatingFromNumber, setCreatingFromNumber] = useState<number | null>(null)
+  const [creatingFromNumber, setCreatingFromNumber] = useState<number | null>(
+    null
+  )
 
   const searchInputRef = useRef<HTMLInputElement>(null)
 
@@ -126,7 +133,10 @@ export function NewWorktreeModal() {
 
   // Focus search input when switching to issues or prs tab
   useEffect(() => {
-    if ((activeTab === 'issues' || activeTab === 'prs') && newWorktreeModalOpen) {
+    if (
+      (activeTab === 'issues' || activeTab === 'prs') &&
+      newWorktreeModalOpen
+    ) {
       // Small delay to ensure the input is mounted
       const timer = setTimeout(() => {
         searchInputRef.current?.focus()
@@ -137,8 +147,10 @@ export function NewWorktreeModal() {
 
   // Reset selection when switching tabs
   useEffect(() => {
-    setSelectedItemIndex(0)
-    setSearchQuery('')
+    queueMicrotask(() => {
+      setSelectedItemIndex(0)
+      setSearchQuery('')
+    })
   }, [activeTab])
 
   const handleOpenChange = useCallback(
@@ -223,13 +235,18 @@ export function NewWorktreeModal() {
 
       try {
         // Fetch full issue details including comments
-        const issueDetail = await invoke<GitHubIssue & { comments: { body: string; author: { login: string }; created_at: string }[] }>(
-          'get_github_issue',
-          {
-            projectPath,
-            issueNumber: issue.number,
+        const issueDetail = await invoke<
+          GitHubIssue & {
+            comments: {
+              body: string
+              author: { login: string }
+              created_at: string
+            }[]
           }
-        )
+        >('get_github_issue', {
+          projectPath,
+          issueNumber: issue.number,
+        })
 
         // Create issue context for the worktree
         // Note: Backend expects camelCase for comments (createdAt not created_at)
@@ -274,13 +291,18 @@ export function NewWorktreeModal() {
 
       try {
         // Fetch full issue details including comments
-        const issueDetail = await invoke<GitHubIssue & { comments: { body: string; author: { login: string }; created_at: string }[] }>(
-          'get_github_issue',
-          {
-            projectPath,
-            issueNumber: issue.number,
+        const issueDetail = await invoke<
+          GitHubIssue & {
+            comments: {
+              body: string
+              author: { login: string }
+              created_at: string
+            }[]
           }
-        )
+        >('get_github_issue', {
+          projectPath,
+          issueNumber: issue.number,
+        })
 
         // Create issue context for the worktree
         const issueContext: IssueContext = {
@@ -327,16 +349,24 @@ export function NewWorktreeModal() {
 
       try {
         // Fetch full PR details including comments and reviews
-        const prDetail = await invoke<GitHubPullRequest & {
-          comments: { body: string; author: { login: string }; created_at: string }[]
-          reviews: { body: string; state: string; author: { login: string }; submittedAt?: string }[]
-        }>(
-          'get_github_pr',
-          {
-            projectPath,
-            prNumber: pr.number,
+        const prDetail = await invoke<
+          GitHubPullRequest & {
+            comments: {
+              body: string
+              author: { login: string }
+              created_at: string
+            }[]
+            reviews: {
+              body: string
+              state: string
+              author: { login: string }
+              submittedAt?: string
+            }[]
           }
-        )
+        >('get_github_pr', {
+          projectPath,
+          prNumber: pr.number,
+        })
 
         // Create PR context for the worktree
         const prContext: PullRequestContext = {
@@ -390,16 +420,24 @@ export function NewWorktreeModal() {
 
       try {
         // Fetch full PR details including comments and reviews
-        const prDetail = await invoke<GitHubPullRequest & {
-          comments: { body: string; author: { login: string }; created_at: string }[]
-          reviews: { body: string; state: string; author: { login: string }; submittedAt?: string }[]
-        }>(
-          'get_github_pr',
-          {
-            projectPath,
-            prNumber: pr.number,
+        const prDetail = await invoke<
+          GitHubPullRequest & {
+            comments: {
+              body: string
+              author: { login: string }
+              created_at: string
+            }[]
+            reviews: {
+              body: string
+              state: string
+              author: { login: string }
+              submittedAt?: string
+            }[]
           }
-        )
+        >('get_github_pr', {
+          projectPath,
+          prNumber: pr.number,
+        })
 
         // Create PR context for the worktree
         const prContext: PullRequestContext = {
@@ -588,7 +626,9 @@ export function NewWorktreeModal() {
               hasBaseSession={hasBaseSession}
               onCreateWorktree={handleCreateWorktree}
               onBaseSession={handleBaseSession}
-              isCreating={createWorktree.isPending || createBaseSession.isPending}
+              isCreating={
+                createWorktree.isPending || createBaseSession.isPending
+              }
             />
           )}
 
@@ -665,8 +705,12 @@ function QuickActionsTab({
         <div className="flex items-center gap-3">
           <GitBranch className="h-4 w-4 text-muted-foreground" />
           <div className="flex flex-col items-start">
-            <span>{hasBaseSession ? 'Switch to Base Session' : 'New Base Session'}</span>
-            <span className="text-xs text-muted-foreground">Work directly on the project folder</span>
+            <span>
+              {hasBaseSession ? 'Switch to Base Session' : 'New Base Session'}
+            </span>
+            <span className="text-xs text-muted-foreground">
+              Work directly on the project folder
+            </span>
           </div>
         </div>
         <kbd className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
@@ -692,7 +736,9 @@ function QuickActionsTab({
           )}
           <div className="flex flex-col items-start">
             <span>New Worktree</span>
-            <span className="text-xs text-muted-foreground">Create an isolated branch for your task</span>
+            <span className="text-xs text-muted-foreground">
+              Create an isolated branch for your task
+            </span>
           </div>
         </div>
         <kbd className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
@@ -811,7 +857,9 @@ function GitHubIssuesTab({
         {!isLoading && !error && issues.length === 0 && (
           <div className="flex items-center justify-center py-8">
             <span className="text-sm text-muted-foreground">
-              {searchQuery ? 'No issues match your search' : 'No open issues found'}
+              {searchQuery
+                ? 'No issues match your search'
+                : 'No open issues found'}
             </span>
           </div>
         )}
@@ -945,7 +993,9 @@ function GitHubPRsTab({
         {!isLoading && !error && prs.length === 0 && (
           <div className="flex items-center justify-center py-8">
             <span className="text-sm text-muted-foreground">
-              {searchQuery ? 'No PRs match your search' : 'No open pull requests found'}
+              {searchQuery
+                ? 'No PRs match your search'
+                : 'No open pull requests found'}
             </span>
           </div>
         )}
@@ -1100,7 +1150,11 @@ function PRItem({
         <GitPullRequest
           className={cn(
             'h-4 w-4 mt-0.5 flex-shrink-0',
-            pr.state === 'OPEN' ? 'text-green-500' : pr.state === 'MERGED' ? 'text-purple-500' : 'text-red-500'
+            pr.state === 'OPEN'
+              ? 'text-green-500'
+              : pr.state === 'MERGED'
+                ? 'text-purple-500'
+                : 'text-red-500'
           )}
         />
       )}

@@ -49,7 +49,12 @@ export const FloatingButtons = memo(function FloatingButtons({
     }
     // Also scroll to bottom so user sees the result
     onScrollToBottom()
-  }, [hasStreamingPlan, onStreamingPlanApproval, onPendingPlanApproval, onScrollToBottom])
+  }, [
+    hasStreamingPlan,
+    onStreamingPlanApproval,
+    onPendingPlanApproval,
+    onScrollToBottom,
+  ])
 
   return (
     <div className="absolute bottom-4 right-4 flex gap-2">

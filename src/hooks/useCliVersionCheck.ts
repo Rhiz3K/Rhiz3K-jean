@@ -7,7 +7,10 @@
 
 import { useEffect, useRef } from 'react'
 import { toast } from 'sonner'
-import { useClaudeCliStatus, useAvailableCliVersions } from '@/services/claude-cli'
+import {
+  useClaudeCliStatus,
+  useAvailableCliVersions,
+} from '@/services/claude-cli'
 import { useGhCliStatus, useAvailableGhVersions } from '@/services/gh-cli'
 import { useUIStore } from '@/store/ui-store'
 import { isNewerVersion } from '@/lib/version-utils'
@@ -49,9 +52,16 @@ export function useCliVersionCheck() {
     const updates: CliUpdateInfo[] = []
 
     // Check Claude CLI
-    if (claudeStatus?.installed && claudeStatus.version && claudeVersions?.length) {
+    if (
+      claudeStatus?.installed &&
+      claudeStatus.version &&
+      claudeVersions?.length
+    ) {
       const latestStable = claudeVersions.find(v => !v.prerelease)
-      if (latestStable && isNewerVersion(latestStable.version, claudeStatus.version)) {
+      if (
+        latestStable &&
+        isNewerVersion(latestStable.version, claudeStatus.version)
+      ) {
         updates.push({
           type: 'claude',
           currentVersion: claudeStatus.version,
@@ -63,7 +73,10 @@ export function useCliVersionCheck() {
     // Check GitHub CLI
     if (ghStatus?.installed && ghStatus.version && ghVersions?.length) {
       const latestStable = ghVersions.find(v => !v.prerelease)
-      if (latestStable && isNewerVersion(latestStable.version, ghStatus.version)) {
+      if (
+        latestStable &&
+        isNewerVersion(latestStable.version, ghStatus.version)
+      ) {
         updates.push({
           type: 'gh',
           currentVersion: ghStatus.version,

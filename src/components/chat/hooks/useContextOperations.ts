@@ -42,12 +42,15 @@ export function useContextOperations({
 }: UseContextOperationsParams): UseContextOperationsReturn {
   const [loadContextModalOpen, setLoadContextModalOpen] = useState(false)
 
+  const contextSummaryPrompt = preferences?.magic_prompts?.context_summary
+  const worktreeName = worktree?.name
+
   // Handle Save Context - generates context summary in the background
   const handleSaveContext = useCallback(async () => {
     if (!activeSessionId || !activeWorktreeId || !activeWorktreePath) return
 
     // Get project name from worktree
-    const projectName = worktree?.name ?? 'unknown-project'
+    const projectName = worktreeName ?? 'unknown-project'
 
     const toastId = toast.loading('Saving context...')
 
@@ -60,7 +63,7 @@ export function useContextOperations({
           worktreeId: activeWorktreeId,
           sourceSessionId: activeSessionId,
           projectName,
-          customPrompt: preferences?.magic_prompts?.context_summary,
+          customPrompt: contextSummaryPrompt,
         }
       )
 
@@ -76,9 +79,9 @@ export function useContextOperations({
     activeSessionId,
     activeWorktreeId,
     activeWorktreePath,
-    worktree?.name,
+    worktreeName,
     queryClient,
-    preferences?.magic_prompts?.context_summary,
+    contextSummaryPrompt,
   ])
 
   // Handle Load Context - opens modal to select saved context

@@ -35,17 +35,24 @@ const PROMPT_CONFIGS: PromptConfig[] = [
     description: 'Prompt for analyzing GitHub issues loaded into the context.',
     variables: [
       { name: '{issueRefs}', description: 'Issue numbers (e.g., #123, #456)' },
-      { name: '{issueWord}', description: '"issue" or "issues" based on count' },
+      {
+        name: '{issueWord}',
+        description: '"issue" or "issues" based on count',
+      },
     ],
     defaultValue: DEFAULT_INVESTIGATE_ISSUE_PROMPT,
   },
   {
     key: 'investigate_pr',
     label: 'Investigate PR',
-    description: 'Prompt for analyzing GitHub pull requests loaded into the context.',
+    description:
+      'Prompt for analyzing GitHub pull requests loaded into the context.',
     variables: [
       { name: '{prRefs}', description: 'PR numbers (e.g., #123, #456)' },
-      { name: '{prWord}', description: '"pull request" or "pull requests" based on count' },
+      {
+        name: '{prWord}',
+        description: '"pull request" or "pull requests" based on count',
+      },
     ],
     defaultValue: DEFAULT_INVESTIGATE_PR_PROMPT,
   },
@@ -55,7 +62,10 @@ const PROMPT_CONFIGS: PromptConfig[] = [
     description: 'Prompt for generating pull request titles and descriptions.',
     variables: [
       { name: '{current_branch}', description: 'Name of the feature branch' },
-      { name: '{target_branch}', description: 'Branch to merge into (e.g., main)' },
+      {
+        name: '{target_branch}',
+        description: 'Branch to merge into (e.g., main)',
+      },
       { name: '{commit_count}', description: 'Number of commits in the PR' },
       { name: '{commits}', description: 'List of commit messages' },
       { name: '{diff}', description: 'Git diff of all changes' },
@@ -69,7 +79,10 @@ const PROMPT_CONFIGS: PromptConfig[] = [
     variables: [
       { name: '{status}', description: 'Git status output' },
       { name: '{diff}', description: 'Staged changes diff' },
-      { name: '{recent_commits}', description: 'Recent commit messages for style' },
+      {
+        name: '{recent_commits}',
+        description: 'Recent commit messages for style',
+      },
       { name: '{remote_info}', description: 'Remote repository info' },
     ],
     defaultValue: DEFAULT_COMMIT_MESSAGE_PROMPT,
@@ -102,18 +115,29 @@ const PROMPT_CONFIGS: PromptConfig[] = [
 export const MagicPromptsPane: React.FC = () => {
   const { data: preferences } = usePreferences()
   const savePreferences = useSavePreferences()
-  const [selectedKey, setSelectedKey] = useState<keyof MagicPrompts>('investigate_issue')
+  const [selectedKey, setSelectedKey] =
+    useState<keyof MagicPrompts>('investigate_issue')
   const [localValue, setLocalValue] = useState('')
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   const currentPrompts = preferences?.magic_prompts ?? DEFAULT_MAGIC_PROMPTS
-  const selectedConfig = PROMPT_CONFIGS.find(c => c.key === selectedKey)!
-  const currentValue = currentPrompts[selectedKey] ?? selectedConfig.defaultValue
+  const selectedConfig = PROMPT_CONFIGS.find(c => c.key === selectedKey) ??
+    PROMPT_CONFIGS[0] ?? {
+      key: 'investigate_issue',
+      label: 'Investigate Issue',
+      description: 'Default prompt.',
+      variables: [],
+      defaultValue: DEFAULT_INVESTIGATE_ISSUE_PROMPT,
+    }
+  const currentValue =
+    currentPrompts[selectedKey] ?? selectedConfig.defaultValue
   const isModified = currentValue !== selectedConfig.defaultValue
 
   // Sync local value when selection changes or external value updates
   useEffect(() => {
-    setLocalValue(currentValue)
+    queueMicrotask(() => {
+      setLocalValue(currentValue)
+    })
   }, [currentValue, selectedKey])
 
   // Cleanup timeout on unmount
@@ -163,7 +187,14 @@ export const MagicPromptsPane: React.FC = () => {
         },
       })
     }
-  }, [localValue, currentValue, preferences, savePreferences, currentPrompts, selectedKey])
+  }, [
+    localValue,
+    currentValue,
+    preferences,
+    savePreferences,
+    currentPrompts,
+    selectedKey,
+  ])
 
   const handleReset = useCallback(() => {
     if (!preferences) return
@@ -174,14 +205,21 @@ export const MagicPromptsPane: React.FC = () => {
         [selectedKey]: selectedConfig.defaultValue,
       },
     })
-  }, [preferences, savePreferences, currentPrompts, selectedKey, selectedConfig.defaultValue])
+  }, [
+    preferences,
+    savePreferences,
+    currentPrompts,
+    selectedKey,
+    selectedConfig.defaultValue,
+  ])
 
   return (
     <div className="flex flex-col" style={{ height: 'calc(85vh - 8rem)' }}>
       {/* Prompt selector grid */}
       <div className="grid grid-cols-3 gap-2 mb-4 shrink-0">
         {PROMPT_CONFIGS.map(config => {
-          const promptIsModified = currentPrompts[config.key] !== config.defaultValue
+          const promptIsModified =
+            currentPrompts[config.key] !== config.defaultValue
           return (
             <button
               key={config.key}

@@ -95,7 +95,8 @@ function sortFindingsBySeverity(
   return findings
     .map((finding, originalIndex) => ({ finding, originalIndex }))
     .sort(
-      (a, b) => SEVERITY_ORDER[a.finding.severity] - SEVERITY_ORDER[b.finding.severity]
+      (a, b) =>
+        SEVERITY_ORDER[a.finding.severity] - SEVERITY_ORDER[b.finding.severity]
     )
 }
 
@@ -138,7 +139,11 @@ interface FindingCardProps {
   index: number
   isFixed: boolean
   isFixing: boolean
-  onFix: (finding: ReviewFinding, index: number, customSuggestion?: string) => void
+  onFix: (
+    finding: ReviewFinding,
+    index: number,
+    customSuggestion?: string
+  ) => void
 }
 
 /** Interactive finding card with fix functionality - memoized to prevent re-renders */

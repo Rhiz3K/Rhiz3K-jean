@@ -1,7 +1,12 @@
 import { create } from 'zustand'
 import { devtools } from 'zustand/middleware'
 
-export type PreferencePane = 'general' | 'appearance' | 'keybindings' | 'magic-prompts' | 'experimental'
+export type PreferencePane =
+  | 'general'
+  | 'appearance'
+  | 'keybindings'
+  | 'magic-prompts'
+  | 'experimental'
 
 export type OnboardingStartStep = 'claude' | 'gh' | null
 
@@ -23,11 +28,11 @@ export interface PathConflictData {
     number: number
     title: string
     body?: string
-    comments: Array<{
+    comments: {
       author: { login: string }
       body: string
       createdAt: string
-    }>
+    }[]
   }
 }
 
@@ -41,11 +46,11 @@ export interface BranchConflictData {
     number: number
     title: string
     body?: string
-    comments: Array<{
+    comments: {
       author: { login: string }
       body: string
       createdAt: string
-    }>
+    }[]
   }
   /** PR context to pass when creating a new worktree */
   prContext?: {
@@ -54,17 +59,17 @@ export interface BranchConflictData {
     body?: string
     headRefName: string
     baseRefName: string
-    comments: Array<{
+    comments: {
       author: { login: string }
       body: string
       createdAt: string
-    }>
-    reviews: Array<{
+    }[]
+    reviews: {
       author: { login: string }
       body: string
       state: string
       submittedAt: string
-    }>
+    }[]
     diff?: string
   }
 }
@@ -234,7 +239,11 @@ export const useUIStore = create<UIState>()(
         set({ magicModalOpen: open }, undefined, 'setMagicModalOpen'),
 
       setNewWorktreeModalOpen: open =>
-        set({ newWorktreeModalOpen: open }, undefined, 'setNewWorktreeModalOpen'),
+        set(
+          { newWorktreeModalOpen: open },
+          undefined,
+          'setNewWorktreeModalOpen'
+        ),
 
       openCliUpdateModal: type =>
         set(
@@ -252,14 +261,22 @@ export const useUIStore = create<UIState>()(
 
       openCliLoginModal: (type, command) =>
         set(
-          { cliLoginModalOpen: true, cliLoginModalType: type, cliLoginModalCommand: command },
+          {
+            cliLoginModalOpen: true,
+            cliLoginModalType: type,
+            cliLoginModalCommand: command,
+          },
           undefined,
           'openCliLoginModal'
         ),
 
       closeCliLoginModal: () =>
         set(
-          { cliLoginModalOpen: false, cliLoginModalType: null, cliLoginModalCommand: null },
+          {
+            cliLoginModalOpen: false,
+            cliLoginModalType: null,
+            cliLoginModalCommand: null,
+          },
           undefined,
           'closeCliLoginModal'
         ),
@@ -274,7 +291,11 @@ export const useUIStore = create<UIState>()(
         set({ branchConflictData: data }, undefined, 'openBranchConflictModal'),
 
       closeBranchConflictModal: () =>
-        set({ branchConflictData: null }, undefined, 'closeBranchConflictModal'),
+        set(
+          { branchConflictData: null },
+          undefined,
+          'closeBranchConflictModal'
+        ),
 
       markWorktreeForAutoInvestigate: worktreeId =>
         set(
@@ -335,10 +356,18 @@ export const useUIStore = create<UIState>()(
       },
 
       openSessionBoardModal: projectId =>
-        set({ sessionBoardProjectId: projectId }, undefined, 'openSessionBoardModal'),
+        set(
+          { sessionBoardProjectId: projectId },
+          undefined,
+          'openSessionBoardModal'
+        ),
 
       closeSessionBoardModal: () =>
-        set({ sessionBoardProjectId: null }, undefined, 'closeSessionBoardModal'),
+        set(
+          { sessionBoardProjectId: null },
+          undefined,
+          'closeSessionBoardModal'
+        ),
     }),
     {
       name: 'ui-store',

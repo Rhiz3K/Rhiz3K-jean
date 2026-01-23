@@ -66,7 +66,7 @@ function App() {
       // Best-effort sync cleanup for refresh scenarios
       // Note: async operations may not complete, but Rust-side RunEvent::Exit
       // will handle proper cleanup on app quit
-      invoke('kill_all_terminals').catch(() => {})
+      invoke('kill_all_terminals').catch(() => undefined)
     }
     window.addEventListener('beforeunload', handleBeforeUnload)
     return () => window.removeEventListener('beforeunload', handleBeforeUnload)
@@ -86,7 +86,9 @@ function App() {
     invoke<number>('kill_all_terminals')
       .then(killed => {
         if (killed > 0) {
-          logger.info(`Cleaned up ${killed} orphaned terminal(s) from previous session`)
+          logger.info(
+            `Cleaned up ${killed} orphaned terminal(s) from previous session`
+          )
         }
       })
       .catch(error => {

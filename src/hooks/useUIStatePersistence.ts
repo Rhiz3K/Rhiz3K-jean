@@ -174,7 +174,9 @@ export function useUIStatePersistence() {
     // Restore active project first (selectProject clears selectedWorktreeId)
     // This must happen BEFORE restoring the active worktree
     if (uiState.active_project_id) {
-      const projectExists = projects.some(p => p.id === uiState.active_project_id)
+      const projectExists = projects.some(
+        p => p.id === uiState.active_project_id
+      )
       if (projectExists) {
         logger.debug('Restoring active project', {
           id: uiState.active_project_id,
@@ -300,9 +302,11 @@ export function useUIStatePersistence() {
     // Subscribe to projects-store changes (expanded projects, folders, and selected project)
     const unsubProjects = useProjectsStore.subscribe(state => {
       // Check if expandedProjectIds, expandedFolderIds, or selectedProjectId changed
-      const projectIdsChanged = state.expandedProjectIds !== prevExpandedProjectIds
+      const projectIdsChanged =
+        state.expandedProjectIds !== prevExpandedProjectIds
       const folderIdsChanged = state.expandedFolderIds !== prevExpandedFolderIds
-      const selectedProjectChanged = state.selectedProjectId !== prevSelectedProjectId
+      const selectedProjectChanged =
+        state.selectedProjectId !== prevSelectedProjectId
 
       if (projectIdsChanged || folderIdsChanged || selectedProjectChanged) {
         prevExpandedProjectIds = state.expandedProjectIds

@@ -1,6 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { toast } from 'sonner'
-import { notify, notifications, success, error, info, warning } from './notifications'
+import {
+  notify,
+  notifications,
+  success,
+  error,
+  info,
+  warning,
+} from './notifications'
 
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(),

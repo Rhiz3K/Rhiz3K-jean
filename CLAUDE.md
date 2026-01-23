@@ -81,18 +81,21 @@ const handleAction = useCallback(() => {
 **CRITICAL:** There are two patterns for Rust-TypeScript serialization. Pick ONE per struct and be consistent.
 
 **Pattern A: snake_case (for persisted/settings data)**
+
 - Used for: `AppPreferences`, `UIState`, and other persisted data
 - Rust structs use snake_case by default (e.g., `active_worktree_id`)
 - TypeScript interfaces must match exactly (e.g., `active_worktree_id`, NOT `activeWorktreeId`)
 - See `src/types/preferences.ts` and `src/types/ui-state.ts` for examples
 
 **Pattern B: camelCase with `#[serde(rename_all = "camelCase")]` (for API/command data)**
+
 - Used for: Data passed between frontend and Tauri commands (e.g., `IssueContext`, `PullRequestContext`)
 - Add `#[serde(rename_all = "camelCase")]` to Rust struct
 - TypeScript uses standard camelCase (e.g., `headRefName`, `baseRefName`)
 - See `src-tauri/src/projects/github_issues.rs` for examples
 
 **Common error:** `invalid args for command: missing field 'field_name'`
+
 - This means Rust expects snake_case but frontend sent camelCase (or vice versa)
 - Fix: Add `#[serde(rename_all = "camelCase")]` to the Rust struct, OR change TypeScript to snake_case
 

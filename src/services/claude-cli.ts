@@ -194,7 +194,10 @@ export function useInstallProgress(): [InstallProgress | null, () => void] {
           }
         )
       } catch (error) {
-        logger.error('[useInstallProgress] Failed to setup listener', { listenerId, error })
+        logger.error('[useInstallProgress] Failed to setup listener', {
+          listenerId,
+          error,
+        })
       }
     }
 
@@ -235,7 +238,9 @@ export function useClaudeCliSetup() {
     // Reset progress before starting new installation to prevent stale state
     resetProgress()
 
-    logger.info('[useClaudeCliSetup] Calling installMutation.mutate()', { version })
+    logger.info('[useClaudeCliSetup] Calling installMutation.mutate()', {
+      version,
+    })
     installMutation.mutate(version, {
       onSuccess: () => {
         logger.info('[useClaudeCliSetup] mutate onSuccess callback')

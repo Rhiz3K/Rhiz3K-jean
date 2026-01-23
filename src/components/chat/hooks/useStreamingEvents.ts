@@ -208,22 +208,33 @@ export default function useStreamingEvents({
       const isCurrentlyViewing = isActiveWorktree && isActiveSession
 
       // Check if session recap is enabled in preferences
-      const preferences = queryClient.getQueryData<AppPreferences>(preferencesQueryKeys.preferences())
+      const preferences = queryClient.getQueryData<AppPreferences>(
+        preferencesQueryKeys.preferences()
+      )
       const sessionRecapEnabled = preferences?.session_recap_enabled ?? false
 
       if (!isCurrentlyViewing && sessionRecapEnabled) {
         // Mark for digest and generate it in the background immediately
         markSessionNeedsDigest(sessionId)
-        console.log('[useStreamingEvents] Session completed while not viewing, generating digest:', sessionId)
+        console.log(
+          '[useStreamingEvents] Session completed while not viewing, generating digest:',
+          sessionId
+        )
 
         // Generate digest in background (fire and forget)
         invoke<SessionDigest>('generate_session_digest', { sessionId })
           .then(digest => {
             useChatStore.getState().setSessionDigest(sessionId, digest)
-            console.log('[useStreamingEvents] Digest generated for session:', sessionId)
+            console.log(
+              '[useStreamingEvents] Digest generated for session:',
+              sessionId
+            )
           })
           .catch(err => {
-            console.error('[useStreamingEvents] Failed to generate digest:', err)
+            console.error(
+              '[useStreamingEvents] Failed to generate digest:',
+              err
+            )
           })
       }
 
@@ -391,7 +402,8 @@ export default function useStreamingEvents({
 
       // Check if this session is currently being viewed
       // Look up the worktree from sessionWorktreeMap since ErrorEvent may not have it
-      const sessionWorktreeId = useChatStore.getState().sessionWorktreeMap[session_id]
+      const sessionWorktreeId =
+        useChatStore.getState().sessionWorktreeMap[session_id]
       const isActiveWorktree = sessionWorktreeId === activeWorktreeId
       const isActiveSession = sessionWorktreeId
         ? activeSessionIds[sessionWorktreeId] === session_id
@@ -399,20 +411,30 @@ export default function useStreamingEvents({
       const isCurrentlyViewing = isActiveWorktree && isActiveSession
 
       // Check if session recap is enabled in preferences
-      const preferences = queryClient.getQueryData<AppPreferences>(preferencesQueryKeys.preferences())
+      const preferences = queryClient.getQueryData<AppPreferences>(
+        preferencesQueryKeys.preferences()
+      )
       const sessionRecapEnabled = preferences?.session_recap_enabled ?? false
 
       if (!isCurrentlyViewing && sessionRecapEnabled) {
         // Mark for digest and generate it in the background immediately
         markSessionNeedsDigest(session_id)
-        console.log('[useStreamingEvents] Session errored while not viewing, generating digest:', session_id)
+        console.log(
+          '[useStreamingEvents] Session errored while not viewing, generating digest:',
+          session_id
+        )
 
-        invoke<SessionDigest>('generate_session_digest', { sessionId: session_id })
+        invoke<SessionDigest>('generate_session_digest', {
+          sessionId: session_id,
+        })
           .then(digest => {
             useChatStore.getState().setSessionDigest(session_id, digest)
           })
           .catch(err => {
-            console.error('[useStreamingEvents] Failed to generate digest:', err)
+            console.error(
+              '[useStreamingEvents] Failed to generate digest:',
+              err
+            )
           })
       }
 
@@ -435,7 +457,8 @@ export default function useStreamingEvents({
       setWaitingForInput(session_id, false)
 
       // Clear executing planning mode and set reviewing state
-      const { clearExecutingMode, setSessionReviewing } = useChatStore.getState()
+      const { clearExecutingMode, setSessionReviewing } =
+        useChatStore.getState()
       clearExecutingMode(session_id)
       setSessionReviewing(session_id, true)
 
@@ -468,7 +491,8 @@ export default function useStreamingEvents({
         const contentBlocks = streamingContentBlocks[session_id]
 
         // Check if this session is currently being viewed
-        const sessionWorktreeId = useChatStore.getState().sessionWorktreeMap[session_id]
+        const sessionWorktreeId =
+          useChatStore.getState().sessionWorktreeMap[session_id]
         const isActiveWorktree = sessionWorktreeId === activeWorktreeId
         const isActiveSession = sessionWorktreeId
           ? activeSessionIds[sessionWorktreeId] === session_id
@@ -476,20 +500,30 @@ export default function useStreamingEvents({
         const isCurrentlyViewing = isActiveWorktree && isActiveSession
 
         // Check if session recap is enabled in preferences
-        const preferences = queryClient.getQueryData<AppPreferences>(preferencesQueryKeys.preferences())
+        const preferences = queryClient.getQueryData<AppPreferences>(
+          preferencesQueryKeys.preferences()
+        )
         const sessionRecapEnabled = preferences?.session_recap_enabled ?? false
 
         if (!isCurrentlyViewing && sessionRecapEnabled) {
           // Mark for digest and generate it in the background immediately
           markSessionNeedsDigest(session_id)
-          console.log('[useStreamingEvents] Session cancelled while not viewing, generating digest:', session_id)
+          console.log(
+            '[useStreamingEvents] Session cancelled while not viewing, generating digest:',
+            session_id
+          )
 
-          invoke<SessionDigest>('generate_session_digest', { sessionId: session_id })
+          invoke<SessionDigest>('generate_session_digest', {
+            sessionId: session_id,
+          })
             .then(digest => {
               useChatStore.getState().setSessionDigest(session_id, digest)
             })
             .catch(err => {
-              console.error('[useStreamingEvents] Failed to generate digest:', err)
+              console.error(
+                '[useStreamingEvents] Failed to generate digest:',
+                err
+              )
             })
         }
 

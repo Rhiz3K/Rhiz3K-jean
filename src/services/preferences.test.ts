@@ -2,7 +2,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { renderHook, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createElement } from 'react'
-import { usePreferences, useSavePreferences, preferencesQueryKeys } from './preferences'
+import {
+  usePreferences,
+  useSavePreferences,
+  preferencesQueryKeys,
+} from './preferences'
 import type { AppPreferences } from '@/types/preferences'
 import { FONT_SIZE_DEFAULT, DEFAULT_MAGIC_PROMPTS } from '@/types/preferences'
 import { DEFAULT_KEYBINDINGS } from '@/types/keybindings'
@@ -37,8 +41,10 @@ const createTestQueryClient = () =>
   })
 
 const createWrapper = (queryClient: QueryClient) => {
-  return ({ children }: { children: React.ReactNode }) =>
+  const Wrapper = ({ children }: { children: React.ReactNode }) =>
     createElement(QueryClientProvider, { client: queryClient }, children)
+  Wrapper.displayName = 'TestQueryClientProviderWrapper'
+  return Wrapper
 }
 
 describe('preferences service', () => {
@@ -184,7 +190,9 @@ describe('preferences service', () => {
       await waitFor(() => expect(result.current.isSuccess).toBe(true))
 
       // Should migrate to new default
-      expect(result.current.data?.keybindings?.toggle_left_sidebar).toBe('mod+b')
+      expect(result.current.data?.keybindings?.toggle_left_sidebar).toBe(
+        'mod+b'
+      )
     })
   })
 
@@ -235,7 +243,9 @@ describe('preferences service', () => {
 
       await waitFor(() => expect(result.current.isSuccess).toBe(true))
 
-      expect(invoke).toHaveBeenCalledWith('save_preferences', { preferences: newPrefs })
+      expect(invoke).toHaveBeenCalledWith('save_preferences', {
+        preferences: newPrefs,
+      })
       expect(toast.success).toHaveBeenCalledWith('Preferences saved')
     })
 
@@ -284,7 +294,9 @@ describe('preferences service', () => {
 
       await waitFor(() => expect(result.current.isSuccess).toBe(true))
 
-      const cached = queryClient.getQueryData(preferencesQueryKeys.preferences())
+      const cached = queryClient.getQueryData(
+        preferencesQueryKeys.preferences()
+      )
       expect(cached).toEqual(newPrefs)
     })
 

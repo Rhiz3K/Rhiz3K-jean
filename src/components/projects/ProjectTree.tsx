@@ -176,9 +176,7 @@ function RootDropZone({ isOver }: { isOver: boolean }) {
       ref={setNodeRef}
       className={cn(
         'h-8 mx-2 mt-1 rounded border-2 border-dashed transition-colors',
-        isOver
-          ? 'border-primary/50 bg-primary/5'
-          : 'border-transparent'
+        isOver ? 'border-primary/50 bg-primary/5' : 'border-transparent'
       )}
     />
   )
@@ -264,7 +262,10 @@ export function ProjectTree({ projects }: ProjectTreeProps) {
       // Dropping on root drop zone = move to root
       if (over.id === 'root-drop-zone') {
         if (activeItem.parent_id !== undefined) {
-          moveItem.mutate({ itemId: active.id as string, newParentId: undefined })
+          moveItem.mutate({
+            itemId: active.id as string,
+            newParentId: undefined,
+          })
         }
         return
       }
@@ -368,7 +369,10 @@ export function ProjectTree({ projects }: ProjectTreeProps) {
             </span>
           </div>
         )}
-        <SortableContext items={allItemIds} strategy={verticalListSortingStrategy}>
+        <SortableContext
+          items={allItemIds}
+          strategy={verticalListSortingStrategy}
+        >
           {rootFolders.map(item => (
             <SortableItem
               key={item.id}
@@ -404,9 +408,10 @@ export function ProjectTree({ projects }: ProjectTreeProps) {
         </SortableContext>
 
         {/* Root drop zone - visible when dragging an item that's inside a folder */}
-        {activeId && projects.find(p => p.id === activeId)?.parent_id !== undefined && (
-          <RootDropZone isOver={isOverRoot} />
-        )}
+        {activeId &&
+          projects.find(p => p.id === activeId)?.parent_id !== undefined && (
+            <RootDropZone isOver={isOverRoot} />
+          )}
       </DndContext>
     </div>
   )

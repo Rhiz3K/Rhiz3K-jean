@@ -13,7 +13,11 @@ import { useProjectsStore } from '@/store/projects-store'
 import { useAddProject, useInitProject, isTauri } from '@/services/projects'
 
 export function AddProjectDialog() {
-  const { addProjectDialogOpen, addProjectParentFolderId, setAddProjectDialogOpen } = useProjectsStore()
+  const {
+    addProjectDialogOpen,
+    addProjectParentFolderId,
+    setAddProjectDialogOpen,
+  } = useProjectsStore()
   const addProject = useAddProject()
   const initProject = useInitProject()
 

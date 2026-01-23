@@ -12,7 +12,11 @@ interface FolderTreeItemProps {
   depth: number
 }
 
-export function FolderTreeItem({ folder, children, depth }: FolderTreeItemProps) {
+export function FolderTreeItem({
+  folder,
+  children,
+  depth,
+}: FolderTreeItemProps) {
   const {
     expandedFolderIds,
     toggleFolderExpanded,
@@ -31,7 +35,9 @@ export function FolderTreeItem({ folder, children, depth }: FolderTreeItemProps)
   // Sync editName when folder name changes or editing starts
   useEffect(() => {
     if (isEditing) {
-      setEditName(folder.name)
+      queueMicrotask(() => {
+        setEditName(folder.name)
+      })
       editStartTimeRef.current = Date.now()
     }
   }, [isEditing, folder.name])

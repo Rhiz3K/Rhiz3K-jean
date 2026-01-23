@@ -144,7 +144,9 @@ export const VirtualizedMessageList = memo(
       const prevSessionRef = useRef(sessionId)
       useEffect(() => {
         if (sessionId !== prevSessionRef.current) {
-          setVisibleCount(INITIAL_VISIBLE_COUNT)
+          queueMicrotask(() => {
+            setVisibleCount(INITIAL_VISIBLE_COUNT)
+          })
           prevSessionRef.current = sessionId
         }
       }, [sessionId])

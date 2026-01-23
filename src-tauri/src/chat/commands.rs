@@ -1773,10 +1773,7 @@ pub async fn write_file_content(path: String, content: String) -> Result<(), Str
 ///
 /// Uses the editor preference (vscode, cursor, xcode) to open files.
 #[tauri::command]
-pub async fn open_file_in_default_app(
-    path: String,
-    editor: Option<String>,
-) -> Result<(), String> {
+pub async fn open_file_in_default_app(path: String, editor: Option<String>) -> Result<(), String> {
     let editor_app = editor.unwrap_or_else(|| "vscode".to_string());
     log::trace!("Opening file in {editor_app}: {path}");
 

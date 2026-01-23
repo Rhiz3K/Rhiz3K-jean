@@ -90,9 +90,11 @@ export function useSyntaxHighlighting(
 
   useEffect(() => {
     if (!code) {
-      setHtml(null)
-      setIsLoading(false)
-      setError(null)
+      queueMicrotask(() => {
+        setHtml(null)
+        setIsLoading(false)
+        setError(null)
+      })
       return
     }
 
@@ -100,8 +102,10 @@ export function useSyntaxHighlighting(
     const codeToHighlight = code
 
     let cancelled = false
-    setIsLoading(true)
-    setError(null)
+    queueMicrotask(() => {
+      setIsLoading(true)
+      setError(null)
+    })
 
     async function highlight() {
       try {

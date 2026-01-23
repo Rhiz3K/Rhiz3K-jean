@@ -65,7 +65,9 @@ export function TitleBar({ className, title = 'Jean' }: TitleBarProps) {
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
-                onClick={() => executeCommand('open-preferences', commandContext)}
+                onClick={() =>
+                  executeCommand('open-preferences', commandContext)
+                }
                 variant="ghost"
                 size="icon"
                 className="h-6 w-6 text-foreground/70 hover:text-foreground"

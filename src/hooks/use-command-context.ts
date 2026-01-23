@@ -21,7 +21,9 @@ import { gitPull, triggerImmediateGitPoll } from '@/services/git-status'
  * Command context hook - provides essential actions for commands
  * @param preferences - Optional preferences for terminal/editor selection
  */
-export function useCommandContext(preferences?: AppPreferences): CommandContext {
+export function useCommandContext(
+  preferences?: AppPreferences
+): CommandContext {
   const queryClient = useQueryClient()
   const themeContext = useContext(ThemeProviderContext)
 
@@ -265,6 +267,9 @@ export function useCommandContext(preferences?: AppPreferences): CommandContext 
     }
   }, [getTargetPath])
 
+  const terminalPreference = preferences?.terminal
+  const editorPreference = preferences?.editor
+
   // Open In - Terminal
   const openInTerminal = useCallback(async () => {
     const worktreePath = getTargetPath()
@@ -276,13 +281,13 @@ export function useCommandContext(preferences?: AppPreferences): CommandContext 
     try {
       await invoke('open_worktree_in_terminal', {
         worktreePath,
-        terminal: preferences?.terminal,
+        terminal: terminalPreference,
       })
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       notify(message, undefined, { type: 'error' })
     }
-  }, [getTargetPath, preferences?.terminal])
+  }, [getTargetPath, terminalPreference])
 
   // Open In - Editor
   const openInEditor = useCallback(async () => {
@@ -295,13 +300,13 @@ export function useCommandContext(preferences?: AppPreferences): CommandContext 
     try {
       await invoke('open_worktree_in_editor', {
         worktreePath,
-        editor: preferences?.editor,
+        editor: editorPreference,
       })
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       notify(message, undefined, { type: 'error' })
     }
-  }, [getTargetPath, preferences?.editor])
+  }, [getTargetPath, editorPreference])
 
   // Open In - GitHub
   const openOnGitHub = useCallback(async () => {
@@ -533,6 +538,8 @@ export function useCommandContext(preferences?: AppPreferences): CommandContext 
   }, [])
 
   // AI - Run code review
+  const codeReviewPrompt = preferences?.magic_prompts?.code_review
+
   const runAIReview = useCallback(async () => {
     const { activeWorktreeId, activeWorktreePath } = useChatStore.getState()
     if (!activeWorktreeId || !activeWorktreePath) {
@@ -544,7 +551,7 @@ export function useCommandContext(preferences?: AppPreferences): CommandContext 
     try {
       const result = await invoke<ReviewResponse>('run_review_with_ai', {
         worktreePath: activeWorktreePath,
-        customPrompt: preferences?.magic_prompts?.code_review,
+        customPrompt: codeReviewPrompt,
       })
 
       // Store review results in Zustand (also activates review tab)
@@ -566,7 +573,7 @@ export function useCommandContext(preferences?: AppPreferences): CommandContext 
     } catch (error) {
       toast.error(`Failed to review: ${error}`, { id: toastId })
     }
-  }, [preferences?.magic_prompts?.code_review])
+  }, [codeReviewPrompt])
 
   // Terminal - Open terminal panel
   const openTerminalPanel = useCallback(() => {
@@ -578,7 +585,9 @@ export function useCommandContext(preferences?: AppPreferences): CommandContext 
 
     const { addTerminal, setTerminalPanelOpen, setTerminalVisible } =
       useTerminalStore.getState()
-    const terminals = useTerminalStore.getState().getTerminals(selectedWorktreeId)
+    const terminals = useTerminalStore
+      .getState()
+      .getTerminals(selectedWorktreeId)
 
     // Create a new terminal if none exists
     if (terminals.length === 0) {

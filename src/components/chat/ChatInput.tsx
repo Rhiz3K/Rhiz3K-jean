@@ -77,7 +77,10 @@ export const ChatInput = memo(function ChatInput({
     top: number
     left: number
   } | null>(null)
-  const [slashTriggerIndex, setSlashTriggerIndex] = useState<number | null>(null)
+  const [slashTriggerIndex, setSlashTriggerIndex] = useState<number | null>(
+    null
+  )
+  const [slashAtPromptStart, setSlashAtPromptStart] = useState(false)
 
   // Refs to expose navigation methods from popovers
   const fileMentionHandleRef = useRef<FileMentionPopoverHandle | null>(null)
@@ -98,6 +101,9 @@ export const ChatInput = memo(function ChatInput({
     const draft =
       useChatStore.getState().inputDrafts[activeSessionId ?? ''] ?? ''
     valueRef.current = draft
+
+    // Reset slash state for new session
+    queueMicrotask(() => setSlashAtPromptStart(false))
 
     // Notify parent of current value (on mount AND session change)
     onHasValueChange?.(Boolean(draft.trim()))
@@ -264,6 +270,7 @@ export const ChatInput = memo(function ChatInput({
             charBeforeSlash === '\n'
           ) {
             setSlashTriggerIndex(cursorPos - 1)
+            setSlashAtPromptStart(value.slice(0, cursorPos - 1).trim() === '')
             setSlashQuery('')
             setSlashPopoverOpen(true)
 
@@ -280,6 +287,8 @@ export const ChatInput = memo(function ChatInput({
             }
           }
         } else if (slashTriggerIndex !== null && slashPopoverOpen) {
+          setSlashAtPromptStart(value.slice(0, slashTriggerIndex).trim() === '')
+
           // Continuing to type after /, update query
           const query = value.slice(slashTriggerIndex + 1, cursorPos)
 
@@ -291,6 +300,7 @@ export const ChatInput = memo(function ChatInput({
           ) {
             setSlashPopoverOpen(false)
             setSlashTriggerIndex(null)
+            setSlashAtPromptStart(false)
             setSlashQuery('')
           } else {
             setSlashQuery(query)
@@ -327,7 +337,10 @@ export const ChatInput = memo(function ChatInput({
 
       // When file mention popover is open, handle navigation
       if (fileMentionOpen) {
-        console.log('[ChatInput] File mention popover open, handling key:', e.key)
+        console.log(
+          '[ChatInput] File mention popover open, handling key:',
+          e.key
+        )
         switch (e.key) {
           case 'ArrowDown':
             e.preventDefault()
@@ -342,7 +355,9 @@ export const ChatInput = memo(function ChatInput({
           case 'Enter':
           case 'Tab':
             e.preventDefault()
-            console.log('[ChatInput] Calling fileMentionHandleRef.selectCurrent()')
+            console.log(
+              '[ChatInput] Calling fileMentionHandleRef.selectCurrent()'
+            )
             fileMentionHandleRef.current?.selectCurrent()
             return
           case 'Escape':
@@ -370,13 +385,16 @@ export const ChatInput = memo(function ChatInput({
           case 'Enter':
           case 'Tab':
             e.preventDefault()
-            console.log('[ChatInput] Calling slashPopoverHandleRef.selectCurrent()')
+            console.log(
+              '[ChatInput] Calling slashPopoverHandleRef.selectCurrent()'
+            )
             slashPopoverHandleRef.current?.selectCurrent()
             return
           case 'Escape':
             e.preventDefault()
             setSlashPopoverOpen(false)
             setSlashTriggerIndex(null)
+            setSlashAtPromptStart(false)
             setSlashQuery('')
             return
         }
@@ -414,7 +432,14 @@ export const ChatInput = memo(function ChatInput({
       }
       // Shift+Enter adds a new line (default behavior)
     },
-    [activeSessionId, fileMentionOpen, slashPopoverOpen, isSending, onCancel, onSubmit]
+    [
+      activeSessionId,
+      fileMentionOpen,
+      slashPopoverOpen,
+      isSending,
+      onCancel,
+      onSubmit,
+    ]
   )
 
   // Handle paste events
@@ -605,6 +630,7 @@ export const ChatInput = memo(function ChatInput({
       // Reset slash popover state
       setSlashPopoverOpen(false)
       setSlashTriggerIndex(null)
+      setSlashAtPromptStart(false)
       setSlashQuery('')
 
       // Refocus input
@@ -626,6 +652,7 @@ export const ChatInput = memo(function ChatInput({
       // Reset slash popover state
       setSlashPopoverOpen(false)
       setSlashTriggerIndex(null)
+      setSlashAtPromptStart(false)
       setSlashQuery('')
       setShowHint(true)
 
@@ -636,10 +663,7 @@ export const ChatInput = memo(function ChatInput({
   )
 
   // Determine if slash is at prompt start (for enabling commands)
-  const isSlashAtPromptStart =
-    slashTriggerIndex !== null &&
-    (slashTriggerIndex === 0 ||
-      valueRef.current.slice(0, slashTriggerIndex).trim() === '')
+  const isSlashAtPromptStart = slashTriggerIndex !== null && slashAtPromptStart
 
   return (
     <div className="relative">

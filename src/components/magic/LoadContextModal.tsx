@@ -125,7 +125,9 @@ export function LoadContextModal({
   const [removingNumbers, setRemovingNumbers] = useState<Set<number>>(new Set())
 
   // Context tab state
-  const [generatingSessionId, setGeneratingSessionId] = useState<string | null>(null)
+  const [generatingSessionId, setGeneratingSessionId] = useState<string | null>(
+    null
+  )
   const [editingFilename, setEditingFilename] = useState<string | null>(null)
   const [editValue, setEditValue] = useState('')
   const editInputRef = useRef<HTMLInputElement>(null)
@@ -225,7 +227,9 @@ export function LoadContextModal({
     const attachedSlugs = new Set(attachedSavedContexts?.map(c => c.slug) ?? [])
 
     // Filter out already-attached contexts
-    let filtered = contextsData.contexts.filter(ctx => !attachedSlugs.has(ctx.slug))
+    const filtered = contextsData.contexts.filter(
+      ctx => !attachedSlugs.has(ctx.slug)
+    )
 
     if (!searchQuery) return filtered
 
@@ -343,7 +347,15 @@ export function LoadContextModal({
       queryClient.invalidateQueries({ queryKey: ['session-context'] })
     }
     prevOpenRef.current = open
-  }, [open, worktreePath, worktreeId, queryClient, loadedIssueContexts?.length, loadedPRContexts?.length, attachedSavedContexts?.length])
+  }, [
+    open,
+    worktreePath,
+    worktreeId,
+    queryClient,
+    loadedIssueContexts?.length,
+    loadedPRContexts?.length,
+    attachedSavedContexts?.length,
+  ])
 
   // Focus search input when modal opens or tab changes
   useEffect(() => {
@@ -379,7 +391,7 @@ export function LoadContextModal({
 
   // Handle loading/refreshing an issue
   const handleLoadIssue = useCallback(
-    async (issueNumber: number, isRefresh: boolean = false) => {
+    async (issueNumber: number, isRefresh = false) => {
       if (!worktreeId || !worktreePath) {
         toast.error('No active worktree')
         return
@@ -387,11 +399,17 @@ export function LoadContextModal({
 
       setLoadingNumbers(prev => new Set(prev).add(issueNumber))
       const toastId = toast.loading(
-        isRefresh ? `Refreshing issue #${issueNumber}...` : `Loading issue #${issueNumber}...`
+        isRefresh
+          ? `Refreshing issue #${issueNumber}...`
+          : `Loading issue #${issueNumber}...`
       )
 
       try {
-        const result = await loadIssueContext(worktreeId, issueNumber, worktreePath)
+        const result = await loadIssueContext(
+          worktreeId,
+          issueNumber,
+          worktreePath
+        )
 
         // Refresh loaded contexts list
         await refetchIssueContexts()
@@ -415,7 +433,7 @@ export function LoadContextModal({
 
   // Handle loading/refreshing a PR
   const handleLoadPR = useCallback(
-    async (prNumber: number, isRefresh: boolean = false) => {
+    async (prNumber: number, isRefresh = false) => {
       if (!worktreeId || !worktreePath) {
         toast.error('No active worktree')
         return
@@ -423,7 +441,9 @@ export function LoadContextModal({
 
       setLoadingNumbers(prev => new Set(prev).add(prNumber))
       const toastId = toast.loading(
-        isRefresh ? `Refreshing PR #${prNumber}...` : `Loading PR #${prNumber}...`
+        isRefresh
+          ? `Refreshing PR #${prNumber}...`
+          : `Loading PR #${prNumber}...`
       )
 
       try {
@@ -503,7 +523,11 @@ export function LoadContextModal({
       if (!worktreeId || !worktreePath) return
 
       try {
-        const content = await getIssueContextContent(worktreeId, ctx.number, worktreePath)
+        const content = await getIssueContextContent(
+          worktreeId,
+          ctx.number,
+          worktreePath
+        )
         setViewingContext({
           type: 'issue',
           number: ctx.number,
@@ -523,7 +547,11 @@ export function LoadContextModal({
       if (!worktreeId || !worktreePath) return
 
       try {
-        const content = await getPRContextContent(worktreeId, ctx.number, worktreePath)
+        const content = await getPRContextContent(
+          worktreeId,
+          ctx.number,
+          worktreePath
+        )
         setViewingContext({
           type: 'pr',
           number: ctx.number,
@@ -580,7 +608,9 @@ export function LoadContextModal({
       }
 
       setLoadingSlugs(prev => new Set(prev).add(context.slug))
-      const toastId = toast.loading(`Attaching context "${context.name || context.slug}"...`)
+      const toastId = toast.loading(
+        `Attaching context "${context.name || context.slug}"...`
+      )
 
       try {
         await attachSavedContext(worktreeId, context.path, context.slug)
@@ -588,7 +618,9 @@ export function LoadContextModal({
         // Refresh attached contexts list
         await refetchAttachedContexts()
 
-        toast.success(`Context "${context.name || context.slug}" attached`, { id: toastId })
+        toast.success(`Context "${context.name || context.slug}" attached`, {
+          id: toastId,
+        })
         setSearchQuery('')
         setSelectedIndex(0)
       } catch (error) {
@@ -683,8 +715,12 @@ export function LoadContextModal({
 
   const handleSessionClick = useCallback(
     async (sessionWithContext: SessionWithContext) => {
-      const { session, worktreeId: sessionWorktreeId, worktreePath: sessionWorktreePath, projectName: sessionProjectName } =
-        sessionWithContext
+      const {
+        session,
+        worktreeId: sessionWorktreeId,
+        worktreePath: sessionWorktreePath,
+        projectName: sessionProjectName,
+      } = sessionWithContext
 
       if (!worktreeId) {
         toast.error('No active worktree')
@@ -730,7 +766,12 @@ export function LoadContextModal({
         setGeneratingSessionId(null)
       }
     },
-    [worktreeId, refetchContexts, refetchAttachedContexts, preferences?.magic_prompts?.context_summary]
+    [
+      worktreeId,
+      refetchContexts,
+      refetchAttachedContexts,
+      preferences?.magic_prompts?.context_summary,
+    ]
   )
 
   // Keyboard navigation
@@ -785,9 +826,7 @@ export function LoadContextModal({
       if (activeTab === 'prs' && filteredPRs.length > 0) {
         if (key === 'arrowdown') {
           e.preventDefault()
-          setSelectedIndex(prev =>
-            Math.min(prev + 1, filteredPRs.length - 1)
-          )
+          setSelectedIndex(prev => Math.min(prev + 1, filteredPRs.length - 1))
           return
         }
         if (key === 'arrowup') {
@@ -804,7 +843,9 @@ export function LoadContextModal({
 
       // List navigation for contexts tab (saved contexts + sessions)
       if (activeTab === 'contexts') {
-        const totalItems = filteredContexts.length + filteredEntries.reduce((acc, e) => acc + e.sessions.length, 0)
+        const totalItems =
+          filteredContexts.length +
+          filteredEntries.reduce((acc, e) => acc + e.sessions.length, 0)
         if (totalItems > 0) {
           if (key === 'arrowdown') {
             e.preventDefault()
@@ -846,7 +887,18 @@ export function LoadContextModal({
         }
       }
     },
-    [activeTab, filteredIssues, filteredPRs, filteredContexts, filteredEntries, selectedIndex, handleSelectIssue, handleSelectPR, handleAttachContext, handleSessionClick]
+    [
+      activeTab,
+      filteredIssues,
+      filteredPRs,
+      filteredContexts,
+      filteredEntries,
+      selectedIndex,
+      handleSelectIssue,
+      handleSelectPR,
+      handleAttachContext,
+      handleSessionClick,
+    ]
   )
 
   // Scroll selected item into view
@@ -919,7 +971,9 @@ export function LoadContextModal({
               onSelectItem={handleSelectIssue}
               loadingNumbers={loadingNumbers}
               removingNumbers={removingNumbers}
-              onLoadItem={(num: number, refresh: boolean) => handleLoadIssue(num, refresh)}
+              onLoadItem={(num: number, refresh: boolean) =>
+                handleLoadIssue(num, refresh)
+              }
               onRemoveItem={handleRemoveIssue}
               onViewItem={handleViewIssue}
               hasLoadedContexts={hasLoadedIssueContexts}
@@ -945,7 +999,9 @@ export function LoadContextModal({
               onSelectItem={handleSelectPR}
               loadingNumbers={loadingNumbers}
               removingNumbers={removingNumbers}
-              onLoadItem={(num: number, refresh: boolean) => handleLoadPR(num, refresh)}
+              onLoadItem={(num: number, refresh: boolean) =>
+                handleLoadPR(num, refresh)
+              }
               onRemoveItem={handleRemovePR}
               onViewItem={handleViewPR}
               hasLoadedContexts={hasLoadedPRContexts}
@@ -1004,7 +1060,8 @@ export function LoadContextModal({
                   {viewingContext.type === 'saved' && (
                     <FolderOpen className="h-4 w-4 text-blue-500" />
                   )}
-                  {viewingContext.number ? `#${viewingContext.number}: ` : ''}{viewingContext.title}
+                  {viewingContext.number ? `#${viewingContext.number}: ` : ''}
+                  {viewingContext.title}
                 </DialogTitle>
               </DialogHeader>
               <ScrollArea className="flex-1 min-h-0">
@@ -1455,10 +1512,11 @@ function ContextsTab({
   onDeleteContext,
   onSessionClick,
 }: ContextsTabProps) {
-  const isEmpty = !hasContexts && !hasSessions && !hasAttachedContexts && !isLoading && !error
+  const isEmpty =
+    !hasContexts && !hasSessions && !hasAttachedContexts && !isLoading && !error
 
   // Calculate flat index for sessions
-  let sessionStartIndex = filteredContexts.length
+  const sessionStartIndex = filteredContexts.length
 
   return (
     <div className="flex flex-col flex-1 min-h-0">
@@ -1557,21 +1615,29 @@ function ContextsTab({
                 <div className="px-3 py-2 text-xs font-medium text-muted-foreground bg-muted/30 mt-2">
                   Generate from Session
                 </div>
-                {filteredEntries.map(entry => {
-                  const entryElement = (
-                    <SessionGroup
-                      key={entry.worktree_id}
-                      entry={entry}
-                      generatingSessionId={generatingSessionId}
-                      onSessionClick={onSessionClick}
-                      selectedIndex={selectedIndex}
-                      sessionStartIndex={sessionStartIndex}
-                      setSelectedIndex={setSelectedIndex}
-                    />
-                  )
-                  sessionStartIndex += entry.sessions.length
-                  return entryElement
-                })}
+                {
+                  filteredEntries.reduce<{
+                    elements: React.ReactNode[]
+                    offset: number
+                  }>(
+                    (acc, entry) => {
+                      acc.elements.push(
+                        <SessionGroup
+                          key={entry.worktree_id}
+                          entry={entry}
+                          generatingSessionId={generatingSessionId}
+                          onSessionClick={onSessionClick}
+                          selectedIndex={selectedIndex}
+                          sessionStartIndex={sessionStartIndex + acc.offset}
+                          setSelectedIndex={setSelectedIndex}
+                        />
+                      )
+                      acc.offset += entry.sessions.length
+                      return acc
+                    },
+                    { elements: [], offset: 0 }
+                  ).elements
+                }
               </>
             )}
           </div>
@@ -1645,7 +1711,9 @@ function SessionGroup({
                 <MessageSquare className="h-4 w-4 mt-0.5 text-muted-foreground flex-shrink-0" />
               )}
               <div className="flex-1 min-w-0">
-                <div className="text-sm font-medium truncate">{session.name}</div>
+                <div className="text-sm font-medium truncate">
+                  {session.name}
+                </div>
                 <div className="text-xs text-muted-foreground mt-0.5">
                   {hasMessages
                     ? `${session.messages.length} messages`
@@ -1689,7 +1757,9 @@ function LoadedIssueItem({
       <CircleDot className="h-4 w-4 text-green-500 flex-shrink-0" />
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
-          <span className="text-xs text-muted-foreground">#{context.number}</span>
+          <span className="text-xs text-muted-foreground">
+            #{context.number}
+          </span>
           <span className="text-sm truncate">{context.title}</span>
           {context.commentCount > 0 && (
             <span className="text-xs text-muted-foreground">
@@ -1774,7 +1844,9 @@ function LoadedPRItem({
       <GitPullRequest className="h-4 w-4 text-green-500 flex-shrink-0" />
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
-          <span className="text-xs text-muted-foreground">#{context.number}</span>
+          <span className="text-xs text-muted-foreground">
+            #{context.number}
+          </span>
           <span className="text-sm truncate">{context.title}</span>
           {(context.commentCount > 0 || context.reviewCount > 0) && (
             <span className="text-xs text-muted-foreground">
@@ -1938,7 +2010,11 @@ function PRItem({
         <GitPullRequest
           className={cn(
             'h-4 w-4 mt-0.5 flex-shrink-0',
-            pr.state === 'OPEN' ? 'text-green-500' : pr.state === 'MERGED' ? 'text-purple-500' : 'text-red-500'
+            pr.state === 'OPEN'
+              ? 'text-green-500'
+              : pr.state === 'MERGED'
+                ? 'text-purple-500'
+                : 'text-red-500'
           )}
         />
       )}
@@ -2128,7 +2204,9 @@ function AttachedContextItem({
       <FolderOpen className="h-4 w-4 text-blue-500 flex-shrink-0" />
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
-          <span className="text-sm truncate">{context.name || context.slug}</span>
+          <span className="text-sm truncate">
+            {context.name || context.slug}
+          </span>
           <span className="text-xs text-muted-foreground">
             {formatSize(context.size)}
           </span>
