@@ -295,7 +295,8 @@ export default function useStreamingEvents({
 
           // Play waiting sound if not currently viewing this session
           if (!isCurrentlyViewing) {
-            const waitingSound = (preferences?.waiting_sound ?? 'none') as NotificationSound
+            const waitingSound = (preferences?.waiting_sound ??
+              'none') as NotificationSound
             playNotificationSound(waitingSound)
           }
         }
@@ -312,7 +313,8 @@ export default function useStreamingEvents({
 
         // Play review sound if not currently viewing this session
         if (!isCurrentlyViewing) {
-          const reviewSound = (preferences?.review_sound ?? 'none') as NotificationSound
+          const reviewSound = (preferences?.review_sound ??
+            'none') as NotificationSound
           playNotificationSound(reviewSound)
         }
       }

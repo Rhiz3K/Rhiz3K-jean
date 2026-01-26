@@ -1,6 +1,10 @@
 import { memo, useCallback, useState } from 'react'
 import { toast } from 'sonner'
-import { gitPull, gitPush, triggerImmediateGitPoll } from '@/services/git-status'
+import {
+  gitPull,
+  gitPush,
+  triggerImmediateGitPoll,
+} from '@/services/git-status'
 import { useChatStore } from '@/store/chat-store'
 import {
   ArrowDown,
@@ -82,11 +86,11 @@ const THINKING_LEVEL_OPTIONS: {
   label: string
   tokens: string
 }[] = [
-    { value: 'off', label: 'Off', tokens: 'Disabled' },
-    { value: 'think', label: 'Think', tokens: '4K' },
-    { value: 'megathink', label: 'Megathink', tokens: '10K' },
-    { value: 'ultrathink', label: 'Ultrathink', tokens: '32K' },
-  ]
+  { value: 'off', label: 'Off', tokens: 'Disabled' },
+  { value: 'think', label: 'Think', tokens: '4K' },
+  { value: 'megathink', label: 'Megathink', tokens: '10K' },
+  { value: 'ultrathink', label: 'Ultrathink', tokens: '32K' },
+]
 
 /** Get display label and color for PR status */
 function getPrStatusDisplay(status: PrDisplayStatus): {
@@ -273,7 +277,7 @@ export const ChatToolbar = memo(function ChatToolbar({
       setIsPulling(false)
       clearWorktreeLoading(worktreeId)
     }
-  }, [activeWorktreePath, baseBranch])
+  }, [activeWorktreePath, baseBranch, worktreeId])
 
   const [isPushing, setIsPushing] = useState(false)
   const handlePushClick = useCallback(async () => {
@@ -289,7 +293,7 @@ export const ChatToolbar = memo(function ChatToolbar({
     } finally {
       setIsPushing(false)
     }
-  }, [activeWorktreePath, baseBranch, worktreeId])
+  }, [activeWorktreePath])
 
   const handleUncommittedDiffClick = useCallback(() => {
     onSetDiffRequest({
@@ -320,8 +324,17 @@ export const ChatToolbar = memo(function ChatToolbar({
     async (ctx: LoadedIssueContext) => {
       if (!worktreeId || !activeWorktreePath) return
       try {
-        const content = await getIssueContextContent(worktreeId, ctx.number, activeWorktreePath)
-        setViewingContext({ type: 'issue', number: ctx.number, title: ctx.title, content })
+        const content = await getIssueContextContent(
+          worktreeId,
+          ctx.number,
+          activeWorktreePath
+        )
+        setViewingContext({
+          type: 'issue',
+          number: ctx.number,
+          title: ctx.title,
+          content,
+        })
       } catch (error) {
         toast.error(`Failed to load context: ${error}`)
       }
@@ -333,8 +346,17 @@ export const ChatToolbar = memo(function ChatToolbar({
     async (ctx: LoadedPullRequestContext) => {
       if (!worktreeId || !activeWorktreePath) return
       try {
-        const content = await getPRContextContent(worktreeId, ctx.number, activeWorktreePath)
-        setViewingContext({ type: 'pr', number: ctx.number, title: ctx.title, content })
+        const content = await getPRContextContent(
+          worktreeId,
+          ctx.number,
+          activeWorktreePath
+        )
+        setViewingContext({
+          type: 'pr',
+          number: ctx.number,
+          title: ctx.title,
+          content,
+        })
       } catch (error) {
         toast.error(`Failed to load context: ${error}`)
       }
@@ -395,7 +417,9 @@ export const ChatToolbar = memo(function ChatToolbar({
             <DropdownMenuItem onClick={onLoadContext}>
               <FolderOpen className="h-4 w-4" />
               Load Context
-              {(loadedIssueCount > 0 || loadedPRCount > 0 || loadedContextCount > 0) && (
+              {(loadedIssueCount > 0 ||
+                loadedPRCount > 0 ||
+                loadedContextCount > 0) && (
                 <span className="ml-auto text-xs text-muted-foreground">
                   {loadedIssueCount + loadedPRCount + loadedContextCount} loaded
                 </span>
@@ -544,8 +568,8 @@ export const ChatToolbar = memo(function ChatToolbar({
                   {thinkingOverrideActive
                     ? 'Off'
                     : THINKING_LEVEL_OPTIONS.find(
-                      o => o.value === selectedThinkingLevel
-                    )?.label}
+                        o => o.value === selectedThinkingLevel
+                      )?.label}
                 </span>
               </DropdownMenuSubTrigger>
               <DropdownMenuSubContent>
@@ -635,7 +659,9 @@ export const ChatToolbar = memo(function ChatToolbar({
         </button>
 
         {/* Issue/PR/Context dropdown - desktop only */}
-        {(loadedIssueCount > 0 || loadedPRCount > 0 || loadedContextCount > 0) && (
+        {(loadedIssueCount > 0 ||
+          loadedPRCount > 0 ||
+          loadedContextCount > 0) && (
           <>
             <div className="hidden @md:block h-4 w-px bg-border/50" />
             <DropdownMenu>
@@ -648,8 +674,11 @@ export const ChatToolbar = memo(function ChatToolbar({
                   <span>
                     {loadedIssueCount > 0 &&
                       `${loadedIssueCount} Issue${loadedIssueCount > 1 ? 's' : ''}`}
-                    {loadedIssueCount > 0 && (loadedPRCount > 0 || loadedContextCount > 0) && ', '}
-                    {loadedPRCount > 0 && `${loadedPRCount} PR${loadedPRCount > 1 ? 's' : ''}`}
+                    {loadedIssueCount > 0 &&
+                      (loadedPRCount > 0 || loadedContextCount > 0) &&
+                      ', '}
+                    {loadedPRCount > 0 &&
+                      `${loadedPRCount} PR${loadedPRCount > 1 ? 's' : ''}`}
                     {loadedPRCount > 0 && loadedContextCount > 0 && ', '}
                     {loadedContextCount > 0 &&
                       `${loadedContextCount} Context${loadedContextCount > 1 ? 's' : ''}`}
@@ -664,8 +693,11 @@ export const ChatToolbar = memo(function ChatToolbar({
                     <DropdownMenuLabel className="text-xs text-muted-foreground">
                       Issues
                     </DropdownMenuLabel>
-                    {loadedIssueContexts.map((ctx) => (
-                      <DropdownMenuItem key={ctx.number} onClick={() => handleViewIssue(ctx)}>
+                    {loadedIssueContexts.map(ctx => (
+                      <DropdownMenuItem
+                        key={ctx.number}
+                        onClick={() => handleViewIssue(ctx)}
+                      >
                         <CircleDot className="h-4 w-4 text-green-500" />
                         <span className="truncate">
                           #{ctx.number} {ctx.title}
@@ -678,12 +710,17 @@ export const ChatToolbar = memo(function ChatToolbar({
                 {/* PRs section */}
                 {loadedPRContexts.length > 0 && (
                   <>
-                    {loadedIssueContexts.length > 0 && <DropdownMenuSeparator />}
+                    {loadedIssueContexts.length > 0 && (
+                      <DropdownMenuSeparator />
+                    )}
                     <DropdownMenuLabel className="text-xs text-muted-foreground">
                       Pull Requests
                     </DropdownMenuLabel>
-                    {loadedPRContexts.map((ctx) => (
-                      <DropdownMenuItem key={ctx.number} onClick={() => handleViewPR(ctx)}>
+                    {loadedPRContexts.map(ctx => (
+                      <DropdownMenuItem
+                        key={ctx.number}
+                        onClick={() => handleViewPR(ctx)}
+                      >
                         <GitPullRequest className="h-4 w-4 text-green-500" />
                         <span className="truncate">
                           #{ctx.number} {ctx.title}
@@ -696,13 +733,12 @@ export const ChatToolbar = memo(function ChatToolbar({
                 {/* Saved contexts section */}
                 {attachedSavedContexts.length > 0 && (
                   <>
-                    {(loadedIssueContexts.length > 0 || loadedPRContexts.length > 0) && (
-                      <DropdownMenuSeparator />
-                    )}
+                    {(loadedIssueContexts.length > 0 ||
+                      loadedPRContexts.length > 0) && <DropdownMenuSeparator />}
                     <DropdownMenuLabel className="text-xs text-muted-foreground">
                       Contexts
                     </DropdownMenuLabel>
-                    {attachedSavedContexts.map((ctx) => (
+                    {attachedSavedContexts.map(ctx => (
                       <DropdownMenuItem
                         key={ctx.slug}
                         onClick={() => handleViewSavedContext(ctx)}
@@ -861,8 +897,8 @@ export const ChatToolbar = memo(function ChatToolbar({
               className={cn(
                 'hidden @md:flex h-8 items-center gap-1.5 px-3 text-sm text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground disabled:pointer-events-none disabled:opacity-50',
                 selectedThinkingLevel !== 'off' &&
-                !thinkingOverrideActive &&
-                'border border-purple-500/50 bg-purple-500/10 text-purple-700 dark:border-purple-400/40 dark:bg-purple-500/10 dark:text-purple-400'
+                  !thinkingOverrideActive &&
+                  'border border-purple-500/50 bg-purple-500/10 text-purple-700 dark:border-purple-400/40 dark:bg-purple-500/10 dark:text-purple-400'
               )}
               title={
                 thinkingOverrideActive
@@ -875,8 +911,8 @@ export const ChatToolbar = memo(function ChatToolbar({
                 {thinkingOverrideActive
                   ? 'Off'
                   : THINKING_LEVEL_OPTIONS.find(
-                    o => o.value === selectedThinkingLevel
-                  )?.label}
+                      o => o.value === selectedThinkingLevel
+                    )?.label}
               </span>
               <ChevronDown className="h-3 w-3 opacity-50" />
             </button>
@@ -911,9 +947,9 @@ export const ChatToolbar = memo(function ChatToolbar({
               className={cn(
                 'hidden @md:flex h-8 items-center gap-1.5 px-3 text-sm text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground disabled:pointer-events-none disabled:opacity-50',
                 executionMode === 'plan' &&
-                'border border-yellow-600/50 bg-yellow-500/10 text-yellow-700 dark:border-yellow-500/40 dark:bg-yellow-500/10 dark:text-yellow-400',
+                  'border border-yellow-600/50 bg-yellow-500/10 text-yellow-700 dark:border-yellow-500/40 dark:bg-yellow-500/10 dark:text-yellow-400',
                 executionMode === 'yolo' &&
-                'border border-red-500/50 bg-red-500/10 text-red-600 dark:border-red-400/40 dark:text-red-400'
+                  'border border-red-500/50 bg-red-500/10 text-red-600 dark:border-red-400/40 dark:text-red-400'
               )}
               title={`${executionMode.charAt(0).toUpperCase() + executionMode.slice(1)} mode (Shift+Tab to cycle)`}
             >

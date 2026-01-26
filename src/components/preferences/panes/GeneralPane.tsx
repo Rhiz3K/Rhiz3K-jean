@@ -8,7 +8,11 @@ import { Separator } from '@/components/ui/separator'
 import { Switch } from '@/components/ui/switch'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { useClaudeCliStatus, useClaudeCliAuth, claudeCliQueryKeys } from '@/services/claude-cli'
+import {
+  useClaudeCliStatus,
+  useClaudeCliAuth,
+  claudeCliQueryKeys,
+} from '@/services/claude-cli'
 import { useGhCliStatus, useGhCliAuth, ghCliQueryKeys } from '@/services/gh-cli'
 import { useUIStore } from '@/store/ui-store'
 import type { ClaudeAuthStatus } from '@/types/claude-cli'
@@ -102,9 +106,11 @@ export const GeneralPane: React.FC = () => {
   const { data: ghStatus, isLoading: isGhLoading } = useGhCliStatus()
 
   // Auth status queries - only enabled when CLI is installed
-  const { data: claudeAuth, isLoading: isClaudeAuthLoading } = useClaudeCliAuth({
-    enabled: !!cliStatus?.installed,
-  })
+  const { data: claudeAuth, isLoading: isClaudeAuthLoading } = useClaudeCliAuth(
+    {
+      enabled: !!cliStatus?.installed,
+    }
+  )
   const { data: ghAuth, isLoading: isGhAuthLoading } = useGhCliAuth({
     enabled: !!ghStatus?.installed,
   })
@@ -237,8 +243,12 @@ export const GeneralPane: React.FC = () => {
     setCheckingClaudeAuth(true)
     try {
       // Invalidate cache and refetch to get fresh status
-      await queryClient.invalidateQueries({ queryKey: claudeCliQueryKeys.auth() })
-      const result = await queryClient.fetchQuery<ClaudeAuthStatus>({ queryKey: claudeCliQueryKeys.auth() })
+      await queryClient.invalidateQueries({
+        queryKey: claudeCliQueryKeys.auth(),
+      })
+      const result = await queryClient.fetchQuery<ClaudeAuthStatus>({
+        queryKey: claudeCliQueryKeys.auth(),
+      })
 
       if (result?.authenticated) {
         toast.success('Claude CLI is already authenticated')
@@ -261,7 +271,9 @@ export const GeneralPane: React.FC = () => {
     try {
       // Invalidate cache and refetch to get fresh status
       await queryClient.invalidateQueries({ queryKey: ghCliQueryKeys.auth() })
-      const result = await queryClient.fetchQuery<GhAuthStatus>({ queryKey: ghCliQueryKeys.auth() })
+      const result = await queryClient.fetchQuery<GhAuthStatus>({
+        queryKey: ghCliQueryKeys.auth(),
+      })
 
       if (result?.authenticated) {
         toast.success('GitHub CLI is already authenticated')
@@ -304,11 +316,7 @@ export const GeneralPane: React.FC = () => {
             ) : claudeAuth?.authenticated ? (
               <span className="text-sm text-muted-foreground">Logged in</span>
             ) : (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleClaudeLogin}
-              >
+              <Button variant="outline" size="sm" onClick={handleClaudeLogin}>
                 Login
               </Button>
             )
@@ -369,11 +377,7 @@ export const GeneralPane: React.FC = () => {
             ) : ghAuth?.authenticated ? (
               <span className="text-sm text-muted-foreground">Logged in</span>
             ) : (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleGhLogin}
-              >
+              <Button variant="outline" size="sm" onClick={handleGhLogin}>
                 Login
               </Button>
             )
@@ -411,10 +415,7 @@ export const GeneralPane: React.FC = () => {
                 <ChevronDown className="size-3" />
               </Button>
             ) : (
-              <Button
-                className="w-40"
-                onClick={() => openCliUpdateModal('gh')}
-              >
+              <Button className="w-40" onClick={() => openCliUpdateModal('gh')}>
                 Install
               </Button>
             )}
@@ -596,7 +597,6 @@ export const GeneralPane: React.FC = () => {
               </SelectContent>
             </Select>
           </InlineField>
-
         </div>
       </SettingsSection>
 
@@ -708,7 +708,10 @@ export const GeneralPane: React.FC = () => {
         </div>
       </SettingsSection>
 
-      <AlertDialog open={showDeleteAllDialog} onOpenChange={setShowDeleteAllDialog}>
+      <AlertDialog
+        open={showDeleteAllDialog}
+        onOpenChange={setShowDeleteAllDialog}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete all archives?</AlertDialogTitle>

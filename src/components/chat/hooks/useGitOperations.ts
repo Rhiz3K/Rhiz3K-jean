@@ -102,7 +102,11 @@ export function useGitOperations({
     } finally {
       clearWorktreeLoading(activeWorktreeId)
     }
-  }, [activeWorktreeId, activeWorktreePath, preferences?.magic_prompts?.commit_message])
+  }, [
+    activeWorktreeId,
+    activeWorktreePath,
+    preferences?.magic_prompts?.commit_message,
+  ])
 
   // Handle Commit & Push - creates commit with AI-generated message and pushes
   const handleCommitAndPush = useCallback(async () => {
@@ -133,7 +137,11 @@ export function useGitOperations({
     } finally {
       clearWorktreeLoading(activeWorktreeId)
     }
-  }, [activeWorktreeId, activeWorktreePath, preferences?.magic_prompts?.commit_message])
+  }, [
+    activeWorktreeId,
+    activeWorktreePath,
+    preferences?.magic_prompts?.commit_message,
+  ])
 
   // Handle Open PR - creates PR with AI-generated title and description in background
   const handleOpenPr = useCallback(async () => {
@@ -175,7 +183,13 @@ export function useGitOperations({
     } finally {
       clearWorktreeLoading(activeWorktreeId)
     }
-  }, [activeWorktreeId, activeWorktreePath, worktree, queryClient, preferences?.magic_prompts?.pr_content])
+  }, [
+    activeWorktreeId,
+    activeWorktreePath,
+    worktree,
+    queryClient,
+    preferences?.magic_prompts?.pr_content,
+  ])
 
   // Handle Review - runs AI code review in background
   const handleReview = useCallback(async () => {
@@ -214,7 +228,11 @@ export function useGitOperations({
     } finally {
       clearWorktreeLoading(activeWorktreeId)
     }
-  }, [activeWorktreeId, activeWorktreePath, preferences?.magic_prompts?.code_review])
+  }, [
+    activeWorktreeId,
+    activeWorktreePath,
+    preferences?.magic_prompts?.code_review,
+  ])
 
   // Handle Merge - validates and shows merge options dialog
   const handleMerge = useCallback(async () => {
@@ -269,13 +287,10 @@ export function useGitOperations({
         return
       }
 
-      toast.warning(
-        `Found conflicts in ${result.conflicts.length} file(s)`,
-        {
-          id: toastId,
-          description: 'Opening conflict resolution session...',
-        }
-      )
+      toast.warning(`Found conflicts in ${result.conflicts.length} file(s)`, {
+        id: toastId,
+        description: 'Opening conflict resolution session...',
+      })
 
       const { setActiveSession, setInputDraft } = useChatStore.getState()
 
@@ -329,7 +344,8 @@ Please help me resolve these conflicts. Analyze the diff above, explain what's c
       setShowMergeDialog(false)
       setPendingMergeWorktree(null)
 
-      const { setWorktreeLoading, clearWorktreeLoading } = useChatStore.getState()
+      const { setWorktreeLoading, clearWorktreeLoading } =
+        useChatStore.getState()
       setWorktreeLoading(activeWorktreeId, 'merge')
       const toastId = toast.loading('Checking for uncommitted changes...')
       const featureBranch = worktreeData.branch

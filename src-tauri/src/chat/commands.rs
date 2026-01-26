@@ -1457,8 +1457,8 @@ pub async fn save_dropped_image(
     }
 
     // Check file size
-    let metadata = std::fs::metadata(&source)
-        .map_err(|e| format!("Failed to read file metadata: {e}"))?;
+    let metadata =
+        std::fs::metadata(&source).map_err(|e| format!("Failed to read file metadata: {e}"))?;
 
     if metadata.len() as usize > MAX_IMAGE_SIZE {
         return Err(format!(
@@ -1472,7 +1472,11 @@ pub async fn save_dropped_image(
     let images_dir = get_images_dir(&app)?;
 
     // Generate unique filename (normalize jpeg to jpg)
-    let normalized_ext = if extension == "jpeg" { "jpg" } else { &extension };
+    let normalized_ext = if extension == "jpeg" {
+        "jpg"
+    } else {
+        &extension
+    };
     let timestamp = now();
     let short_uuid = &Uuid::new_v4().to_string()[..8];
     let filename = format!("image-{timestamp}-{short_uuid}.{normalized_ext}");
@@ -1480,8 +1484,7 @@ pub async fn save_dropped_image(
 
     // Copy file atomically (copy to temp, then rename)
     let temp_path = dest_path.with_extension("tmp");
-    std::fs::copy(&source, &temp_path)
-        .map_err(|e| format!("Failed to copy image file: {e}"))?;
+    std::fs::copy(&source, &temp_path).map_err(|e| format!("Failed to copy image file: {e}"))?;
 
     std::fs::rename(&temp_path, &dest_path)
         .map_err(|e| format!("Failed to finalize image file: {e}"))?;

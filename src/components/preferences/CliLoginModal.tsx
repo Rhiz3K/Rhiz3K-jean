@@ -6,7 +6,7 @@
  * interactive terminal access.
  */
 
-import { useCallback, useEffect, useRef, useMemo } from 'react'
+import { useCallback, useEffect, useRef, useId } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import {
   Dialog,
@@ -43,19 +43,26 @@ interface CliLoginModalContentProps {
   onClose: () => void
 }
 
-function CliLoginModalContent({ cliType, command, onClose }: CliLoginModalContentProps) {
+function CliLoginModalContent({
+  cliType,
+  command,
+  onClose,
+}: CliLoginModalContentProps) {
   const initialized = useRef(false)
   const observerRef = useRef<ResizeObserver | null>(null)
   const cliName = cliType === 'claude' ? 'Claude CLI' : 'GitHub CLI'
 
   // Generate unique terminal ID for this login session
-  const terminalId = useMemo(() => {
-    const id = `cli-login-${Date.now()}`
-    console.log('[CliLoginModal] Generated terminalId:', id)
-    return id
-  }, [])
+  const baseId = useId()
+  const terminalId = `cli-login-${baseId.replace(/:/g, '-')}`
+  console.log('[CliLoginModal] Generated terminalId:', terminalId)
 
-  console.log('[CliLoginModal] Render - terminalId:', terminalId, 'command:', command)
+  console.log(
+    '[CliLoginModal] Render - terminalId:',
+    terminalId,
+    'command:',
+    command
+  )
 
   // Use a synthetic worktreeId for CLI login (not associated with any real worktree)
   const { initTerminal, fit } = useTerminal({
@@ -68,7 +75,12 @@ function CliLoginModalContent({ cliType, command, onClose }: CliLoginModalConten
   // Use callback ref to detect when container is mounted (Dialog uses portal)
   const containerCallbackRef = useCallback(
     (container: HTMLDivElement | null) => {
-      console.log('[CliLoginModal] containerCallbackRef called, container:', !!container, 'initialized:', initialized.current)
+      console.log(
+        '[CliLoginModal] containerCallbackRef called, container:',
+        !!container,
+        'initialized:',
+        initialized.current
+      )
 
       // Cleanup previous observer if any
       if (observerRef.current) {
@@ -80,7 +92,12 @@ function CliLoginModalContent({ cliType, command, onClose }: CliLoginModalConten
 
       const observer = new ResizeObserver(entries => {
         const entry = entries[0]
-        console.log('[CliLoginModal] ResizeObserver fired, width:', entry?.contentRect.width, 'initialized:', initialized.current)
+        console.log(
+          '[CliLoginModal] ResizeObserver fired, width:',
+          entry?.contentRect.width,
+          'initialized:',
+          initialized.current
+        )
 
         if (!entry || entry.contentRect.width === 0) {
           console.log('[CliLoginModal] No entry or width=0, skipping')

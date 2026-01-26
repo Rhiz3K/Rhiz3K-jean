@@ -81,7 +81,10 @@ function playSystemBeep(): void {
 }
 
 // Cache for preloaded audio elements
-const audioCache: Map<NotificationSound, HTMLAudioElement> = new Map()
+const audioCache: Map<NotificationSound, HTMLAudioElement> = new Map<
+  NotificationSound,
+  HTMLAudioElement
+>()
 
 /**
  * Preload all sound files to ensure instant playback.
