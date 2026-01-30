@@ -346,6 +346,7 @@ describe('ChatStore', () => {
   describe('message queue', () => {
     const createMockMessage = (id: string, message: string): QueuedMessage => ({
       id,
+      agent: 'claude',
       message,
       pendingImages: [],
       pendingFiles: [],

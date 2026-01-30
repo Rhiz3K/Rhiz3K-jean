@@ -14,6 +14,7 @@ import {
   type Todo,
   type QueuedMessage,
   type PermissionDenial,
+  type ChatAgent,
   type ExecutionMode,
   type SessionDigest,
   EXECUTION_MODE_CYCLE,
@@ -87,6 +88,9 @@ interface ChatUIState {
   // Selected model per session (for tracking what model was used)
   selectedModels: Record<string, string>
 
+  // Selected agent per session (Claude vs Codex)
+  agents: Record<string, ChatAgent>
+
   // Answered questions per session (to make them read-only after answering)
   answeredQuestions: Record<string, Set<string>>
 
@@ -140,6 +144,7 @@ interface ChatUIState {
     {
       message: string
       model?: string
+      agent?: ChatAgent
       executionMode?: ExecutionMode
       thinkingLevel?: ThinkingLevel
     }
@@ -247,6 +252,10 @@ interface ChatUIState {
   // Actions - Selected model (session-based)
   setSelectedModel: (sessionId: string, model: string) => void
 
+  // Actions - Selected agent (session-based)
+  setAgent: (sessionId: string, agent: ChatAgent) => void
+  getAgent: (sessionId: string) => ChatAgent
+
   // Actions - Question answering (session-based)
   markQuestionAnswered: (
     sessionId: string,
@@ -343,6 +352,7 @@ interface ChatUIState {
     context: {
       message: string
       model?: string
+      agent?: ChatAgent
       executionMode?: ExecutionMode
       thinkingLevel?: ThinkingLevel
     }
@@ -352,6 +362,7 @@ interface ChatUIState {
     | {
         message: string
         model?: string
+        agent?: ChatAgent
         executionMode?: ExecutionMode
         thinkingLevel?: ThinkingLevel
       }
@@ -413,6 +424,7 @@ export const useChatStore = create<ChatUIState>()(
       thinkingLevels: {},
       manualThinkingOverrides: {},
       selectedModels: {},
+      agents: {},
       answeredQuestions: {},
       submittedAnswers: {},
       errors: {},
@@ -968,6 +980,21 @@ export const useChatStore = create<ChatUIState>()(
           'setSelectedModel'
         ),
 
+      // Selected agent (session-based)
+      setAgent: (sessionId, agent) =>
+        set(
+          state => ({
+            agents: {
+              ...state.agents,
+              [sessionId]: agent,
+            },
+          }),
+          undefined,
+          'setAgent'
+        ),
+
+      getAgent: sessionId => get().agents[sessionId] ?? 'claude',
+
       // Question answering (session-based)
       markQuestionAnswered: (sessionId, toolCallId, answers) =>
         set(
@@ -1499,6 +1526,7 @@ export const useChatStore = create<ChatUIState>()(
             const { [sessionId]: _submitted, ...restSubmitted } = state.submittedAnswers
             const { [sessionId]: _fixed, ...restFixed } = state.fixedFindings
             const { [sessionId]: _manual, ...restManual } = state.manualThinkingOverrides
+            const { [sessionId]: _agent, ...restAgents } = state.agents
 
             return {
               approvedTools: restApproved,
@@ -1510,6 +1538,7 @@ export const useChatStore = create<ChatUIState>()(
               submittedAnswers: restSubmitted,
               fixedFindings: restFixed,
               manualThinkingOverrides: restManual,
+              agents: restAgents,
             }
           },
           undefined,

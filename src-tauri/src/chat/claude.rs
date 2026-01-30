@@ -1,5 +1,9 @@
 use tauri::{Emitter, Manager};
 
+use super::events::{
+    ChunkEvent, DoneEvent, ErrorEvent, ThinkingEvent, ToolBlockEvent, ToolResultEvent,
+    ToolUseEvent,
+};
 use super::types::{ContentBlock, ThinkingLevel, ToolCall, UsageData};
 use crate::projects::github_issues::{
     get_github_contexts_dir, get_worktree_issue_refs, get_worktree_pr_refs,
@@ -23,77 +27,6 @@ pub struct ClaudeResponse {
     pub cancelled: bool,
     /// Token usage for this response
     pub usage: Option<UsageData>,
-}
-
-/// Payload for text chunk events sent to frontend
-#[derive(serde::Serialize, Clone)]
-struct ChunkEvent {
-    session_id: String,
-    worktree_id: String, // Kept for backward compatibility
-    content: String,
-}
-
-/// Payload for tool use events sent to frontend
-#[derive(serde::Serialize, Clone)]
-struct ToolUseEvent {
-    session_id: String,
-    worktree_id: String, // Kept for backward compatibility
-    id: String,
-    name: String,
-    input: serde_json::Value,
-    /// Parent tool use ID for sub-agent tool calls (for parallel task attribution)
-    #[serde(skip_serializing_if = "Option::is_none")]
-    parent_tool_use_id: Option<String>,
-}
-
-/// Payload for done events sent to frontend
-#[derive(serde::Serialize, Clone)]
-struct DoneEvent {
-    session_id: String,
-    worktree_id: String, // Kept for backward compatibility
-}
-
-/// Payload for error events sent to frontend
-#[derive(serde::Serialize, Clone)]
-pub struct ErrorEvent {
-    pub session_id: String,
-    pub worktree_id: String, // Kept for backward compatibility
-    pub error: String,
-}
-
-/// Payload for cancelled events sent to frontend
-#[derive(serde::Serialize, Clone)]
-pub struct CancelledEvent {
-    pub session_id: String,
-    pub worktree_id: String, // Kept for backward compatibility
-    pub undo_send: bool, // True if user message should be restored to input (instant cancellation)
-}
-
-/// Payload for tool block position events sent to frontend
-/// Signals where a tool_use block appears in the content stream
-#[derive(serde::Serialize, Clone)]
-struct ToolBlockEvent {
-    session_id: String,
-    worktree_id: String, // Kept for backward compatibility
-    tool_call_id: String,
-}
-
-/// Payload for thinking events sent to frontend (extended thinking)
-#[derive(serde::Serialize, Clone)]
-struct ThinkingEvent {
-    session_id: String,
-    worktree_id: String, // Kept for backward compatibility
-    content: String,
-}
-
-/// Payload for tool result events sent to frontend
-/// Contains the output from a tool execution
-#[derive(serde::Serialize, Clone)]
-struct ToolResultEvent {
-    session_id: String,
-    worktree_id: String, // Kept for backward compatibility
-    tool_use_id: String,
-    output: String,
 }
 
 /// A single permission denial from Claude CLI

@@ -163,6 +163,7 @@ export default function useStreamingEvents({
           executionModes,
           thinkingLevels,
           selectedModels,
+          agents,
         } = useChatStore.getState()
 
         // Store the denials for the approval UI
@@ -174,6 +175,7 @@ export default function useStreamingEvents({
           setDeniedMessageContext(session_id, {
             message: originalMessage,
             model: selectedModels[session_id],
+            agent: agents[session_id] ?? 'claude',
             executionMode: executionModes[session_id] ?? 'plan',
             thinkingLevel: thinkingLevels[session_id] ?? 'off',
           })
@@ -336,6 +338,10 @@ export default function useStreamingEvents({
         )
       }
 
+      // Ensure the persisted run log becomes the source of truth (prevents stale placeholder
+      // messages like "Response lost..." from lingering after resume/recovery).
+      queryClient.invalidateQueries({ queryKey: chatQueryKeys.session(sessionId) })
+
       // Detect PR_CREATED marker and save PR info (async, after main flow)
       // Format: PR_CREATED: #<number> <url>
       if (content) {
@@ -391,7 +397,15 @@ export default function useStreamingEvents({
         activeWorktreeId,
         activeSessionIds,
         markSessionNeedsDigest,
+        streamingContents,
+        activeToolCalls,
+        streamingContentBlocks,
       } = useChatStore.getState()
+
+      // Capture streaming state BEFORE clearing so we can preserve partial output
+      const content = streamingContents[session_id]
+      const toolCalls = activeToolCalls[session_id]
+      const contentBlocks = streamingContentBlocks[session_id]
 
       // Check if this session is currently being viewed
       // Look up the worktree from sessionWorktreeMap since ErrorEvent may not have it
@@ -436,6 +450,7 @@ export default function useStreamingEvents({
       // Clear streaming state for this session
       clearStreamingContent(session_id)
       clearToolCalls(session_id)
+      clearStreamingContentBlocks(session_id)
       removeSendingSession(session_id)
 
       // Clear waiting state (in case error occurred while waiting for input)
@@ -445,6 +460,32 @@ export default function useStreamingEvents({
       const { clearExecutingMode, setSessionReviewing } = useChatStore.getState()
       clearExecutingMode(session_id)
       setSessionReviewing(session_id, true)
+
+      // Preserve partial assistant output (if any) so it doesn't disappear on error.
+      // The backend will also persist whatever it received to the run log.
+      if (content || (toolCalls && toolCalls.length > 0)) {
+        queryClient.setQueryData<Session>(
+          chatQueryKeys.session(session_id),
+          old => {
+            if (!old) return old
+            return {
+              ...old,
+              messages: [
+                ...old.messages,
+                {
+                  id: crypto.randomUUID(),
+                  session_id,
+                  role: 'assistant' as const,
+                  content: content ?? '',
+                  timestamp: Math.floor(Date.now() / 1000),
+                  tool_calls: toolCalls ?? [],
+                  content_blocks: contentBlocks ?? [],
+                },
+              ],
+            }
+          }
+        )
+      }
 
       // Show error toast with longer duration
       toast.error('Request failed', {

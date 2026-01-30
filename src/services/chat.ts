@@ -8,6 +8,7 @@ import type {
   ArchivedSessionEntry,
   ChatMessage,
   ChatHistory,
+  ChatAgent,
   Session,
   WorktreeSessions,
   Question,
@@ -1032,7 +1033,7 @@ export function useSetActiveSession() {
 // ============================================================================
 
 /**
- * Hook to send a message to Claude (session-based)
+ * Hook to send a message to the chat agent (session-based)
  */
 export function useSendMessage() {
   const queryClient = useQueryClient()
@@ -1045,6 +1046,7 @@ export function useSendMessage() {
       sessionId,
       worktreeId,
       worktreePath,
+      agent,
       message,
       model,
       executionMode,
@@ -1057,6 +1059,7 @@ export function useSendMessage() {
       sessionId: string
       worktreeId: string
       worktreePath: string
+      agent?: ChatAgent
       message: string
       model?: string
       executionMode?: ExecutionMode
@@ -1073,6 +1076,7 @@ export function useSendMessage() {
       logger.debug('Sending chat message', {
         sessionId,
         worktreeId,
+        agent,
         model,
         executionMode,
         thinkingLevel,
@@ -1085,6 +1089,7 @@ export function useSendMessage() {
         sessionId,
         worktreeId,
         worktreePath,
+        agent,
         message,
         model,
         executionMode,

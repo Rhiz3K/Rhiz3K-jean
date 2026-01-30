@@ -9,7 +9,14 @@ import { ThemeProviderContext, type Theme } from '@/lib/theme-context'
 import { notify } from '@/lib/notifications'
 import { logger } from '@/lib/logger'
 import type { CommandContext } from '@/lib/commands/types'
-import type { AppPreferences, ClaudeModel } from '@/types/preferences'
+import {
+  DEFAULT_MAGIC_PROMPT_AGENTS,
+  DEFAULT_MAGIC_PROMPT_CODEX_MODELS,
+  DEFAULT_MAGIC_PROMPT_CODEX_REASONING_EFFORTS,
+  DEFAULT_MAGIC_PROMPT_MODELS,
+  type AppPreferences,
+  type ClaudeModel,
+} from '@/types/preferences'
 import type { ThinkingLevel, ExecutionMode } from '@/types/chat'
 import type { Project, ReviewResponse } from '@/types/projects'
 import { useQueryClient } from '@tanstack/react-query'
@@ -542,10 +549,29 @@ export function useCommandContext(preferences?: AppPreferences): CommandContext 
 
     const toastId = toast.loading('Running AI code review...')
     try {
+      const agent =
+        preferences?.magic_prompt_agents?.code_review_model ??
+        DEFAULT_MAGIC_PROMPT_AGENTS.code_review_model
+
+      const model =
+        agent === 'codex'
+          ? (preferences?.magic_prompt_codex_models?.code_review_model ??
+              DEFAULT_MAGIC_PROMPT_CODEX_MODELS.code_review_model)
+          : (preferences?.magic_prompt_models?.code_review_model ??
+              DEFAULT_MAGIC_PROMPT_MODELS.code_review_model)
+
+      const codexReasoningEffort =
+        agent === 'codex'
+          ? (preferences?.magic_prompt_codex_reasoning_efforts?.code_review_model ??
+              DEFAULT_MAGIC_PROMPT_CODEX_REASONING_EFFORTS.code_review_model)
+          : undefined
+
       const result = await invoke<ReviewResponse>('run_review_with_ai', {
         worktreePath: activeWorktreePath,
         customPrompt: preferences?.magic_prompts?.code_review,
-        model: preferences?.magic_prompt_models?.code_review_model,
+        agent,
+        model,
+        codexReasoningEffort,
       })
 
       // Store review results in Zustand (also activates review tab)
@@ -567,7 +593,7 @@ export function useCommandContext(preferences?: AppPreferences): CommandContext 
     } catch (error) {
       toast.error(`Failed to review: ${error}`, { id: toastId })
     }
-  }, [preferences?.magic_prompts?.code_review, preferences?.magic_prompt_models?.code_review_model])
+  }, [preferences])
 
   // Terminal - Open terminal panel
   const openTerminalPanel = useCallback(() => {

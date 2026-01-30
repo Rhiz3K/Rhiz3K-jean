@@ -82,7 +82,7 @@ import { useUIStore } from '@/store/ui-store'
 import { useGitStatus } from '@/services/git-status'
 import { usePrStatus, usePrStatusEvents } from '@/services/pr-status'
 import type { PrDisplayStatus, CheckStatus } from '@/types/pr-status'
-import type { QueuedMessage, ExecutionMode } from '@/types/chat'
+import type { QueuedMessage, ExecutionMode, ChatAgent } from '@/types/chat'
 import type { DiffRequest } from '@/types/git-diff'
 import { isBaseSession } from '@/types/projects'
 import { GitDiffModal } from './GitDiffModal'
@@ -118,6 +118,25 @@ const EMPTY_PENDING_TEXT_FILES: PendingTextFile[] = []
 const EMPTY_PENDING_FILES: PendingFile[] = []
 const EMPTY_PENDING_SKILLS: PendingSkill[] = []
 const EMPTY_QUEUED_MESSAGES: QueuedMessage[] = []
+
+const CLAUDE_MODEL_VALUES = new Set(['sonnet', 'opus', 'haiku'])
+const CODEX_MODEL_VALUES = new Set(['gpt-5.2-codex', 'gpt-5.2'])
+const DEFAULT_CODEX_MODEL = 'gpt-5.2'
+
+const CLAUDE_THINKING_LEVEL_VALUES = new Set<ThinkingLevel>([
+  'off',
+  'think',
+  'megathink',
+  'ultrathink',
+])
+const CODEX_REASONING_EFFORT_VALUES = new Set<ThinkingLevel>([
+  'minimal',
+  'low',
+  'medium',
+  'high',
+  'xhigh',
+])
+const DEFAULT_CODEX_REASONING_EFFORT: ThinkingLevel = 'medium'
 const EMPTY_PERMISSION_DENIALS: PermissionDenial[] = []
 
 export function ChatWindow() {
@@ -351,22 +370,63 @@ export function ChatWindow() {
   // Run script for this worktree (used by CMD+R keybinding)
   const { data: runScript } = useRunScript(activeWorktreePath ?? null)
 
-  // Per-session model selection, falls back to preferences default
-  const defaultModel =
+  // Per-session agent selection (defaults to Claude)
+  const storedAgent = useChatStore(state =>
+    deferredSessionId ? state.agents[deferredSessionId] : undefined
+  )
+  const selectedAgent: ChatAgent =
+    storedAgent ??
+    (session?.codex_session_id && !session?.claude_session_id ? 'codex' : 'claude')
+
+  // Per-session model selection
+  // - Claude: uses preferences default (sonnet/opus/haiku) unless overridden per-session
+  // - Codex: uses a Codex model name unless overridden per-session
+  const defaultClaudeModel =
     (preferences?.selected_model as ClaudeModel) ?? DEFAULT_MODEL
-  const selectedModel = (session?.selected_model as ClaudeModel) ?? defaultModel
+  const preferredCodexModel = preferences?.codex_selected_model
+  const defaultCodexModel =
+    preferredCodexModel && CODEX_MODEL_VALUES.has(preferredCodexModel)
+      ? preferredCodexModel
+      : DEFAULT_CODEX_MODEL
+  const storedModel = session?.selected_model?.trim() || null
+  const selectedModel =
+    selectedAgent === 'codex'
+      ? storedModel && CODEX_MODEL_VALUES.has(storedModel)
+        ? storedModel
+        : defaultCodexModel
+      : storedModel && CLAUDE_MODEL_VALUES.has(storedModel)
+        ? storedModel
+        : defaultClaudeModel
 
   // Per-session thinking level, falls back to preferences default
-  const defaultThinkingLevel =
+  const defaultClaudeThinkingLevel =
     (preferences?.thinking_level as ThinkingLevel) ?? DEFAULT_THINKING_LEVEL
+  const preferredCodexReasoningEffort = preferences?.codex_reasoning_effort as
+    | ThinkingLevel
+    | undefined
+  const defaultCodexReasoningEffort: ThinkingLevel =
+    preferredCodexReasoningEffort &&
+    CODEX_REASONING_EFFORT_VALUES.has(preferredCodexReasoningEffort)
+      ? preferredCodexReasoningEffort
+      : DEFAULT_CODEX_REASONING_EFFORT
   // PERFORMANCE: Use deferredSessionId for content selectors to prevent sync cascade on tab switch
   const sessionThinkingLevel = useChatStore(state =>
     deferredSessionId ? state.thinkingLevels[deferredSessionId] : undefined
   )
-  const selectedThinkingLevel =
-    (session?.selected_thinking_level as ThinkingLevel) ??
+  const storedThinkingLevel: ThinkingLevel | null =
+    (session?.selected_thinking_level as ThinkingLevel | undefined) ??
     sessionThinkingLevel ??
-    defaultThinkingLevel
+    null
+  const selectedThinkingLevel: ThinkingLevel =
+    selectedAgent === 'codex'
+      ? storedThinkingLevel &&
+        CODEX_REASONING_EFFORT_VALUES.has(storedThinkingLevel)
+        ? storedThinkingLevel
+        : defaultCodexReasoningEffort
+      : storedThinkingLevel &&
+          CLAUDE_THINKING_LEVEL_VALUES.has(storedThinkingLevel)
+        ? storedThinkingLevel
+        : defaultClaudeThinkingLevel
 
   // Only show "Thinking..." for this specific session (uses activeSessionId for immediate feedback)
   const isSending = activeSessionId ? checkIsSending(activeSessionId) : false
@@ -499,6 +559,7 @@ export function ChatWindow() {
   const activeSessionIdRef = useRef(activeSessionId)
   const activeWorktreeIdRef = useRef(activeWorktreeId)
   const activeWorktreePathRef = useRef(activeWorktreePath)
+  const selectedAgentRef = useRef(selectedAgent)
   const selectedModelRef = useRef(selectedModel)
   const selectedThinkingLevelRef = useRef(selectedThinkingLevel)
   const executionModeRef = useRef(executionMode)
@@ -507,6 +568,7 @@ export function ChatWindow() {
   activeSessionIdRef.current = activeSessionId
   activeWorktreeIdRef.current = activeWorktreeId
   activeWorktreePathRef.current = activeWorktreePath
+  selectedAgentRef.current = selectedAgent
   selectedModelRef.current = selectedModel
   selectedThinkingLevelRef.current = selectedThinkingLevel
   executionModeRef.current = executionMode
@@ -793,6 +855,7 @@ export function ChatWindow() {
         setError,
         setExecutingMode,
         setSelectedModel,
+        setAgent,
         getApprovedTools,
         clearStreamingContent,
         clearToolCalls,
@@ -815,6 +878,8 @@ export function ChatWindow() {
       setExecutingMode(activeSessionId, queuedMsg.executionMode)
       // Track the model being used for this session (needed for permission approval flow)
       setSelectedModel(activeSessionId, queuedMsg.model)
+      // Track the agent being used for this session (Claude vs Codex)
+      setAgent(activeSessionId, queuedMsg.agent)
 
       // Get session-approved tools to include
       const sessionApprovedTools = getApprovedTools(activeSessionId)
@@ -840,6 +905,7 @@ export function ChatWindow() {
           sessionId: activeSessionId,
           worktreeId: activeWorktreeId,
           worktreePath: activeWorktreePath,
+          agent: queuedMsg.agent,
           message: fullMessage,
           model: queuedMsg.model,
           executionMode: queuedMsg.executionMode,
@@ -883,6 +949,7 @@ export function ChatWindow() {
         setLastSentMessage,
         setError,
         setSelectedModel,
+        setAgent,
         setExecutingMode,
         clearInputDraft,
       } = useChatStore.getState()
@@ -891,6 +958,7 @@ export function ChatWindow() {
       const message = `${currentInput}${separator}${reference}`
 
       // Use refs for model/thinking level to get current values and avoid stale closures
+      const agent = selectedAgentRef.current
       const model = selectedModelRef.current
       const thinkingLevel = selectedThinkingLevelRef.current
 
@@ -900,21 +968,28 @@ export function ChatWindow() {
       clearInputDraft(activeSessionId)
       addSendingSession(activeSessionId)
       setSelectedModel(activeSessionId, model)
+      setAgent(activeSessionId, agent)
       setExecutingMode(activeSessionId, 'build')
 
       const hasManualOverride = useChatStore.getState().hasManualThinkingOverride(activeSessionId)
+      const disableByPreference =
+        agent === 'claude'
+          ? (preferences?.disable_thinking_in_non_plan_modes ?? true)
+          : (preferences?.codex_disable_reasoning_in_non_plan_modes ?? true)
       sendMessage.mutate(
         {
           sessionId: activeSessionId,
           worktreeId: activeWorktreeId,
           worktreePath: activeWorktreePath,
+          agent,
           message,
           model,
           executionMode: 'build',
           thinkingLevel,
           disableThinkingForMode:
-            thinkingLevel !== 'off' &&
-            !hasManualOverride,
+            disableByPreference &&
+            !hasManualOverride &&
+            (agent === 'claude' ? thinkingLevel !== 'off' : thinkingLevel !== 'minimal'),
           parallelExecutionPromptEnabled:
             preferences?.parallel_execution_prompt_enabled ?? false,
           aiLanguage: preferences?.ai_language,
@@ -922,7 +997,13 @@ export function ChatWindow() {
         { onSettled: () => inputRef.current?.focus() }
       )
     },
-    [activeSessionId, activeWorktreeId, activeWorktreePath, preferences, sendMessage]
+    [
+      activeSessionId,
+      activeWorktreeId,
+      activeWorktreePath,
+      preferences,
+      sendMessage,
+    ]
   )
 
   const handleSubmit = useCallback(
@@ -992,10 +1073,16 @@ export function ChatWindow() {
       // Create queued message object with current settings
       // Use refs to avoid recreating callback when these settings change
       const mode = executionModeRef.current
+      const agent = selectedAgentRef.current
       const thinkingLvl = selectedThinkingLevelRef.current
       const hasManualOverride = useChatStore.getState().hasManualThinkingOverride(activeSessionId)
+      const disableByPreference =
+        agent === 'claude'
+          ? (preferences?.disable_thinking_in_non_plan_modes ?? true)
+          : (preferences?.codex_disable_reasoning_in_non_plan_modes ?? true)
       const queuedMessage: QueuedMessage = {
         id: crypto.randomUUID(),
+        agent,
         message,
         pendingImages: images,
         pendingFiles: files,
@@ -1005,9 +1092,10 @@ export function ChatWindow() {
         executionMode: mode,
         thinkingLevel: thinkingLvl,
         disableThinkingForMode:
+          disableByPreference &&
           mode !== 'plan' &&
-          thinkingLvl !== 'off' &&
-          !hasManualOverride,
+          !hasManualOverride &&
+          (agent === 'claude' ? thinkingLvl !== 'off' : thinkingLvl !== 'minimal'),
         queuedAt: Date.now(),
       }
 
@@ -1027,6 +1115,8 @@ export function ChatWindow() {
       clearInputDraft,
       sendMessageNow,
       sessionsData,
+      preferences?.disable_thinking_in_non_plan_modes,
+      preferences?.codex_disable_reasoning_in_non_plan_modes,
     ]
   )
 
@@ -1093,8 +1183,14 @@ export function ChatWindow() {
   })
 
   // PERFORMANCE: Stable callbacks for ChatToolbar to prevent re-renders
+  const handleToolbarAgentChange = useCallback((agent: ChatAgent) => {
+    const sessionId = activeSessionIdRef.current
+    if (!sessionId) return
+    useChatStore.getState().setAgent(sessionId, agent)
+  }, [])
+
   const handleToolbarModelChange = useCallback(
-    (model: ClaudeModel) => {
+    (model: string) => {
       if (activeSessionId && activeWorktreeId && activeWorktreePath) {
         setSessionModel.mutate({
           sessionId: activeSessionId,
@@ -1300,13 +1396,36 @@ Begin your investigation now.`
     const prompt = promptParts.join('\n\n---\n\n')
 
     // Send message
-    const investigateModel = preferences?.magic_prompt_models?.investigate_model ?? selectedModelRef.current
+    const agent =
+      (preferences?.magic_prompt_agents?.investigate_model as ChatAgent | undefined) ??
+      selectedAgentRef.current
+
+    const investigateModel =
+      agent === 'claude'
+        ? preferences?.magic_prompt_models?.investigate_model ??
+          selectedModelRef.current
+        : preferences?.magic_prompt_codex_models?.investigate_model ??
+          selectedModelRef.current
+
+    const mode = executionModeRef.current
+    const thinkingLevel: ThinkingLevel =
+      agent === 'codex'
+        ? ((preferences?.magic_prompt_codex_reasoning_efforts?.investigate_model ??
+            'high') as ThinkingLevel)
+        : selectedThinkingLevelRef.current
+    const modelForSend = investigateModel
+    const hasManualOverride = useChatStore.getState().hasManualThinkingOverride(sessionId)
+    const disableByPreference =
+      agent === 'claude'
+        ? (preferences?.disable_thinking_in_non_plan_modes ?? true)
+        : (preferences?.codex_disable_reasoning_in_non_plan_modes ?? true)
 
     const {
       addSendingSession,
       setLastSentMessage,
       setError,
       setSelectedModel,
+      setAgent,
       setExecutingMode,
     } = useChatStore.getState()
 
@@ -1314,6 +1433,7 @@ Begin your investigation now.`
     setError(sessionId, null)
     addSendingSession(sessionId)
     setSelectedModel(sessionId, investigateModel)
+    setAgent(sessionId, agent)
     setExecutingMode(sessionId, executionModeRef.current)
 
     sendMessage.mutate(
@@ -1321,17 +1441,37 @@ Begin your investigation now.`
         sessionId,
         worktreeId,
         worktreePath,
+        agent,
         message: prompt,
-        model: investigateModel,
-        executionMode: executionModeRef.current,
-        thinkingLevel: selectedThinkingLevelRef.current,
+        model: modelForSend,
+        executionMode: mode,
+        thinkingLevel,
+        disableThinkingForMode:
+          disableByPreference &&
+          mode !== 'plan' &&
+          !hasManualOverride &&
+          (agent === 'claude' ? thinkingLevel !== 'off' : thinkingLevel !== 'minimal'),
         parallelExecutionPromptEnabled:
           preferences?.parallel_execution_prompt_enabled ?? false,
         aiLanguage: preferences?.ai_language,
       },
       { onSettled: () => inputRef.current?.focus() }
     )
-  }, [queryClient, sendMessage, setLoadContextModalOpen, preferences?.magic_prompts?.investigate_issue, preferences?.magic_prompts?.investigate_pr, preferences?.magic_prompt_models?.investigate_model, preferences?.parallel_execution_prompt_enabled, preferences?.ai_language])
+  }, [
+    queryClient,
+    sendMessage,
+    setLoadContextModalOpen,
+    preferences?.magic_prompts?.investigate_issue,
+    preferences?.magic_prompts?.investigate_pr,
+    preferences?.magic_prompt_agents?.investigate_model,
+    preferences?.magic_prompt_models?.investigate_model,
+    preferences?.magic_prompt_codex_models?.investigate_model,
+    preferences?.magic_prompt_codex_reasoning_efforts?.investigate_model,
+    preferences?.disable_thinking_in_non_plan_modes,
+    preferences?.codex_disable_reasoning_in_non_plan_modes,
+    preferences?.parallel_execution_prompt_enabled,
+    preferences?.ai_language,
+  ])
 
   // Wraps modal open/close to auto-trigger investigation after user loads context
   const handleLoadContextModalChange = useCallback(async (open: boolean) => {
@@ -1439,6 +1579,7 @@ Begin your investigation now.`
     activeSessionIdRef,
     activeWorktreeIdRef,
     activeWorktreePathRef,
+    selectedAgentRef,
     selectedModelRef,
     executionModeRef,
     selectedThinkingLevelRef,
@@ -1484,6 +1625,7 @@ Begin your investigation now.`
         const {
           addSendingSession,
           setSelectedModel,
+          setAgent,
           setViewingReviewTab,
           setExecutingMode,
           setLastSentMessage,
@@ -1498,20 +1640,32 @@ Begin your investigation now.`
         setError(targetSessionId, null)
         addSendingSession(targetSessionId)
         setSelectedModel(targetSessionId, selectedModelRef.current)
+        setAgent(targetSessionId, selectedAgentRef.current)
         setExecutingMode(targetSessionId, 'build') // Always use build mode for fixes
+        const agent = selectedAgentRef.current
         const thinkingLvl = selectedThinkingLevelRef.current
         const hasManualOverride = useChatStore.getState().hasManualThinkingOverride(targetSessionId)
+        const disableByPreference =
+          agent === 'claude'
+            ? (preferences?.disable_thinking_in_non_plan_modes ?? true)
+            : (preferences?.codex_disable_reasoning_in_non_plan_modes ?? true)
         sendMessage.mutate(
           {
             sessionId: targetSessionId,
             worktreeId,
             worktreePath,
+            agent,
             message,
             model: selectedModelRef.current,
             executionMode: 'build', // Always use build mode for fixes
             thinkingLevel: thinkingLvl,
-            // Build mode: disable thinking if preference enabled and no manual override
-            disableThinkingForMode: thinkingLvl !== 'off' && !hasManualOverride,
+            // Build mode: reduce thinking/reasoning if preference enabled and no manual override
+            disableThinkingForMode:
+              disableByPreference &&
+              !hasManualOverride &&
+              (agent === 'claude'
+                ? thinkingLvl !== 'off'
+                : thinkingLvl !== 'minimal'),
             parallelExecutionPromptEnabled:
               preferences?.parallel_execution_prompt_enabled ?? false,
             aiLanguage: preferences?.ai_language,
@@ -1553,7 +1707,14 @@ Begin your investigation now.`
         'review-fix-message',
         handleReviewFixMessage as EventListener
       )
-  }, [sendMessage, createSession])
+  }, [
+    sendMessage,
+    createSession,
+    preferences?.disable_thinking_in_non_plan_modes,
+    preferences?.codex_disable_reasoning_in_non_plan_modes,
+    preferences?.parallel_execution_prompt_enabled,
+    preferences?.ai_language,
+  ])
 
   // Handle removing a queued message
   const handleRemoveQueuedMessage = useCallback(
@@ -1614,6 +1775,7 @@ Begin your investigation now.`
       // The command name (e.g., "/commit") is sent directly, Claude CLI interprets it
       const queuedMessage: QueuedMessage = {
         id: crypto.randomUUID(),
+        agent: selectedAgentRef.current,
         message: commandName,
         pendingImages: [],
         pendingFiles: [],
@@ -1965,22 +2127,29 @@ Begin your investigation now.`
                       </div>
 
                       {/* Bottom toolbar - memoized to prevent re-renders */}
-                      <ChatToolbar
-                        isSending={isSending}
-                        hasPendingQuestions={hasPendingQuestions}
-                        hasPendingAttachments={hasPendingAttachments}
-                        hasInputValue={hasInputValue}
-                        executionMode={executionMode}
-                        selectedModel={selectedModel}
-                        selectedThinkingLevel={selectedThinkingLevel}
-                        thinkingOverrideActive={
-                          executionMode !== 'plan' &&
-                          selectedThinkingLevel !== 'off' &&
-                          !hasManualThinkingOverride
-                        }
-                        queuedMessageCount={currentQueuedMessages.length}
-                        hasBranchUpdates={hasBranchUpdates}
-                        behindCount={behindCount}
+                        <ChatToolbar
+                          isSending={isSending}
+                          hasPendingQuestions={hasPendingQuestions}
+                          hasPendingAttachments={hasPendingAttachments}
+                          hasInputValue={hasInputValue}
+                          executionMode={executionMode}
+                          selectedAgent={selectedAgent}
+                          selectedModel={selectedModel}
+                          selectedThinkingLevel={selectedThinkingLevel}
+                          thinkingOverrideActive={
+                            selectedAgent === 'claude'
+                              ? (preferences?.disable_thinking_in_non_plan_modes ?? true) &&
+                                executionMode !== 'plan' &&
+                                selectedThinkingLevel !== 'off' &&
+                                !hasManualThinkingOverride
+                              : (preferences?.codex_disable_reasoning_in_non_plan_modes ?? true) &&
+                                executionMode !== 'plan' &&
+                                selectedThinkingLevel !== 'minimal' &&
+                                !hasManualThinkingOverride
+                          }
+                          queuedMessageCount={currentQueuedMessages.length}
+                          hasBranchUpdates={hasBranchUpdates}
+                          behindCount={behindCount}
                         aheadCount={aheadCount}
                         baseBranch={gitStatus?.base_branch ?? 'main'}
                         uncommittedAdded={uncommittedAdded}
@@ -2010,6 +2179,7 @@ Begin your investigation now.`
                         isBaseSession={worktree ? isBaseSession(worktree) : true}
                         hasOpenPr={Boolean(worktree?.pr_url)}
                         onSetDiffRequest={setDiffRequest}
+                        onAgentChange={handleToolbarAgentChange}
                         onModelChange={handleToolbarModelChange}
                         onThinkingLevelChange={handleToolbarThinkingLevelChange}
                         onSetExecutionMode={handleToolbarSetExecutionMode}

@@ -52,6 +52,16 @@ export function useContextOperations({
     const toastId = toast.loading('Saving context...')
 
     try {
+      const agent = preferences?.magic_prompt_agents?.context_summary_model ?? 'claude'
+      const model =
+        agent === 'codex'
+          ? preferences?.magic_prompt_codex_models?.context_summary_model
+          : preferences?.magic_prompt_models?.context_summary_model
+      const codexReasoningEffort =
+        agent === 'codex'
+          ? preferences?.magic_prompt_codex_reasoning_efforts?.context_summary_model
+          : undefined
+
       // Call background summarization command
       const result = await invoke<SaveContextResponse>(
         'generate_context_from_session',
@@ -61,7 +71,9 @@ export function useContextOperations({
           sourceSessionId: activeSessionId,
           projectName,
           customPrompt: preferences?.magic_prompts?.context_summary,
-          model: preferences?.magic_prompt_models?.context_summary_model,
+          agent,
+          model,
+          codexReasoningEffort,
         }
       )
 
@@ -79,8 +91,7 @@ export function useContextOperations({
     activeWorktreePath,
     worktree?.name,
     queryClient,
-    preferences?.magic_prompts?.context_summary,
-    preferences?.magic_prompt_models?.context_summary_model,
+    preferences,
   ])
 
   // Handle Load Context - opens modal to select saved context

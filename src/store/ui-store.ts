@@ -5,9 +5,9 @@ export type PreferencePane = 'general' | 'appearance' | 'keybindings' | 'magic-p
 
 export type OnboardingStartStep = 'claude' | 'gh' | null
 
-export type CliUpdateModalType = 'claude' | 'gh' | null
+export type CliUpdateModalType = 'claude' | 'gh' | 'codex' | null
 
-export type CliLoginModalType = 'claude' | 'gh' | null
+export type CliLoginModalType = 'claude' | 'gh' | 'codex' | null
 
 /** Data for the path conflict modal when worktree creation finds an existing directory */
 export interface PathConflictData {
@@ -116,9 +116,9 @@ interface UIState {
   setMagicModalOpen: (open: boolean) => void
   setNewWorktreeModalOpen: (open: boolean) => void
   setCheckoutPRModalOpen: (open: boolean) => void
-  openCliUpdateModal: (type: 'claude' | 'gh') => void
+  openCliUpdateModal: (type: 'claude' | 'gh' | 'codex') => void
   closeCliUpdateModal: () => void
-  openCliLoginModal: (type: 'claude' | 'gh', command: string) => void
+  openCliLoginModal: (type: 'claude' | 'gh' | 'codex', command: string) => void
   closeCliLoginModal: () => void
   openPathConflictModal: (data: PathConflictData) => void
   closePathConflictModal: () => void

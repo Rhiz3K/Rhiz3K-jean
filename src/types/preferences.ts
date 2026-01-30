@@ -221,6 +221,43 @@ export interface MagicPromptModels {
   resolve_conflicts_model: ClaudeModel
 }
 
+/**
+ * Per-prompt Codex model overrides (when the active agent is Codex).
+ * Field names use snake_case to match Rust struct exactly.
+ */
+export interface MagicPromptCodexModels {
+  investigate_model: CodexModel
+  pr_content_model: CodexModel
+  commit_message_model: CodexModel
+  code_review_model: CodexModel
+  context_summary_model: CodexModel
+  resolve_conflicts_model: CodexModel
+}
+
+/**
+ * Per-prompt Codex reasoning effort overrides (when the active agent is Codex).
+ * Field names use snake_case to match Rust struct exactly.
+ */
+export interface MagicPromptCodexReasoningEfforts {
+  investigate_model: ThinkingLevel
+  pr_content_model: ThinkingLevel
+  commit_message_model: ThinkingLevel
+  code_review_model: ThinkingLevel
+  context_summary_model: ThinkingLevel
+  resolve_conflicts_model: ThinkingLevel
+}
+
+export type MagicPromptAgent = 'claude' | 'codex'
+
+export interface MagicPromptAgents {
+  investigate_model: MagicPromptAgent
+  pr_content_model: MagicPromptAgent
+  commit_message_model: MagicPromptAgent
+  code_review_model: MagicPromptAgent
+  context_summary_model: MagicPromptAgent
+  resolve_conflicts_model: MagicPromptAgent
+}
+
 /** Default models for each magic prompt */
 export const DEFAULT_MAGIC_PROMPT_MODELS: MagicPromptModels = {
   investigate_model: 'opus',
@@ -231,13 +268,47 @@ export const DEFAULT_MAGIC_PROMPT_MODELS: MagicPromptModels = {
   resolve_conflicts_model: 'opus',
 }
 
+export const DEFAULT_MAGIC_PROMPT_CODEX_MODELS: MagicPromptCodexModels = {
+  investigate_model: 'gpt-5.2',
+  pr_content_model: 'gpt-5.2',
+  commit_message_model: 'gpt-5.2',
+  code_review_model: 'gpt-5.2',
+  context_summary_model: 'gpt-5.2',
+  resolve_conflicts_model: 'gpt-5.2',
+}
+
+// Claude -> Codex reasoning-effort analog:
+// - haiku  -> low
+// - sonnet -> medium
+// - opus   -> high
+export const DEFAULT_MAGIC_PROMPT_CODEX_REASONING_EFFORTS: MagicPromptCodexReasoningEfforts =
+  {
+    investigate_model: 'high', // opus
+    pr_content_model: 'low', // haiku
+    commit_message_model: 'low', // haiku
+    code_review_model: 'low', // haiku
+    context_summary_model: 'high', // opus
+    resolve_conflicts_model: 'high', // opus
+  }
+
+export const DEFAULT_MAGIC_PROMPT_AGENTS: MagicPromptAgents = {
+  investigate_model: 'claude',
+  pr_content_model: 'claude',
+  commit_message_model: 'claude',
+  code_review_model: 'claude',
+  context_summary_model: 'claude',
+  resolve_conflicts_model: 'claude',
+}
+
 // Types that match the Rust AppPreferences struct
 // Only contains settings that should be persisted to disk
 // Note: Field names use snake_case to match Rust struct exactly
 export interface AppPreferences {
   theme: string
   selected_model: ClaudeModel // Claude model: 'opus' | 'sonnet' | 'haiku'
+  codex_selected_model: CodexModel // Codex model: 'gpt-5.2-codex' | 'gpt-5.2'
   thinking_level: ThinkingLevel // Thinking level: 'off' | 'think' | 'megathink' | 'ultrathink'
+  codex_reasoning_effort: ThinkingLevel // Reasoning effort: 'minimal' | 'low' | 'medium' | 'high' | 'xhigh'
   terminal: TerminalApp // Terminal app: 'terminal' | 'warp' | 'ghostty'
   editor: EditorApp // Editor app: 'vscode' | 'cursor' | 'xcode'
   auto_branch_naming: boolean // Automatically generate branch names from first message
@@ -256,11 +327,15 @@ export interface AppPreferences {
   syntax_theme_dark: SyntaxTheme // Syntax highlighting theme for dark mode
   syntax_theme_light: SyntaxTheme // Syntax highlighting theme for light mode
   disable_thinking_in_non_plan_modes: boolean // Disable thinking in build/yolo modes (only plan uses thinking)
+  codex_disable_reasoning_in_non_plan_modes: boolean // Reduce reasoning effort in build/yolo modes (only plan uses higher effort)
   session_recap_enabled: boolean // Show session recap when returning to unfocused sessions
   session_recap_model: ClaudeModel // Model for generating session recaps
   parallel_execution_prompt_enabled: boolean // Add system prompt to encourage parallel sub-agent execution
   magic_prompts: MagicPrompts // Customizable prompts for AI-powered features
+  magic_prompt_agents: MagicPromptAgents // Per-prompt agent selection (Claude or Codex)
   magic_prompt_models: MagicPromptModels // Per-prompt model overrides
+  magic_prompt_codex_models: MagicPromptCodexModels // Per-prompt model overrides (Codex)
+  magic_prompt_codex_reasoning_efforts: MagicPromptCodexReasoningEfforts // Per-prompt reasoning effort overrides (Codex)
   file_edit_mode: FileEditMode // How to edit files: inline (CodeMirror) or external (VS Code, etc.)
   ai_language: string // Preferred language for AI responses (empty = default)
   allow_web_tools_in_plan_mode: boolean // Allow WebFetch/WebSearch in plan mode without prompts
@@ -283,12 +358,28 @@ export const modelOptions: { value: ClaudeModel; label: string }[] = [
   { value: 'haiku', label: 'Claude Haiku' },
 ]
 
+export type CodexModel = 'gpt-5.2-codex' | 'gpt-5.2'
+
+export const codexModelOptions: { value: CodexModel; label: string }[] = [
+  { value: 'gpt-5.2-codex', label: 'gpt-5.2-codex' },
+  { value: 'gpt-5.2', label: 'gpt-5.2' },
+]
+
 export const thinkingLevelOptions: { value: ThinkingLevel; label: string }[] = [
   { value: 'off', label: 'Off' },
   { value: 'think', label: 'Think (4K)' },
   { value: 'megathink', label: 'Megathink (10K)' },
   { value: 'ultrathink', label: 'Ultrathink (32K)' },
 ]
+
+export const codexReasoningEffortOptions: { value: ThinkingLevel; label: string }[] =
+  [
+    { value: 'minimal', label: 'Minimal' },
+    { value: 'low', label: 'Low' },
+    { value: 'medium', label: 'Medium' },
+    { value: 'high', label: 'High' },
+    { value: 'xhigh', label: 'xhigh' },
+  ]
 
 export type TerminalApp = 'terminal' | 'warp' | 'ghostty' | 'windows-terminal' | 'powershell' | 'cmd'
 
@@ -439,7 +530,9 @@ export function getEditorLabel(editor: EditorApp | undefined): string {
 export const defaultPreferences: AppPreferences = {
   theme: 'system',
   selected_model: 'opus',
+  codex_selected_model: 'gpt-5.2',
   thinking_level: 'ultrathink',
+  codex_reasoning_effort: 'medium',
   terminal: 'terminal',
   editor: 'vscode',
   auto_branch_naming: true,
@@ -458,11 +551,16 @@ export const defaultPreferences: AppPreferences = {
   syntax_theme_dark: 'vitesse-black',
   syntax_theme_light: 'github-light',
   disable_thinking_in_non_plan_modes: true, // Default: only plan mode uses thinking
+  codex_disable_reasoning_in_non_plan_modes: true, // Default: only plan mode uses higher reasoning effort
   session_recap_enabled: false, // Default: disabled (experimental)
   session_recap_model: 'haiku', // Default: haiku for fast recaps
   parallel_execution_prompt_enabled: false, // Default: disabled (experimental)
   magic_prompts: DEFAULT_MAGIC_PROMPTS,
+  magic_prompt_agents: DEFAULT_MAGIC_PROMPT_AGENTS,
   magic_prompt_models: DEFAULT_MAGIC_PROMPT_MODELS,
+  magic_prompt_codex_models: DEFAULT_MAGIC_PROMPT_CODEX_MODELS,
+  magic_prompt_codex_reasoning_efforts:
+    DEFAULT_MAGIC_PROMPT_CODEX_REASONING_EFFORTS,
   file_edit_mode: 'external',
   ai_language: '', // Default: empty (Claude's default behavior)
   allow_web_tools_in_plan_mode: true, // Default: enabled

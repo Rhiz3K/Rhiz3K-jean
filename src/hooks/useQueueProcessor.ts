@@ -97,6 +97,7 @@ export function useQueueProcessor(): void {
         addSendingSession,
         setLastSentMessage,
         setError,
+        setAgent,
         setExecutingMode,
         setSelectedModel,
         getApprovedTools,
@@ -141,6 +142,7 @@ export function useQueueProcessor(): void {
       setLastSentMessage(sessionId, queuedMsg.message)
       setError(sessionId, null)
       addSendingSession(sessionId)
+      setAgent(sessionId, queuedMsg.agent)
       setExecutingMode(sessionId, queuedMsg.executionMode)
       setSelectedModel(sessionId, queuedMsg.model)
 
@@ -160,6 +162,7 @@ export function useQueueProcessor(): void {
           sessionId,
           worktreeId,
           worktreePath,
+          agent: queuedMsg.agent,
           message: fullMessage,
           model: queuedMsg.model,
           executionMode: queuedMsg.executionMode,

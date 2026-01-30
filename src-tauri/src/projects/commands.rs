@@ -25,6 +25,8 @@ use super::types::{
     WorktreePermanentlyDeletedEvent, WorktreeUnarchivedEvent,
 };
 use crate::claude_cli::get_cli_binary_path;
+use crate::chat::types::ChatAgent;
+use crate::codex_cli::run_codex_prompt;
 use crate::gh_cli::config::resolve_gh_binary;
 use crate::platform::silent_command;
 
@@ -3563,6 +3565,40 @@ fn extract_structured_output(output: &str) -> Result<String, String> {
     Err("No structured output found in Claude response".to_string())
 }
 
+/// Best-effort JSON extraction from a model-generated text response.
+fn extract_json_from_text(text: &str) -> Result<serde_json::Value, String> {
+    let trimmed = text.trim();
+    if trimmed.is_empty() {
+        return Err("Empty response".to_string());
+    }
+
+    if let Ok(v) = serde_json::from_str::<serde_json::Value>(trimmed) {
+        return Ok(v);
+    }
+
+    // Prefer fenced JSON blocks if present.
+    if let Some(start) = trimmed.find("```json") {
+        let rest = &trimmed[start + "```json".len()..];
+        if let Some(end) = rest.find("```") {
+            let inside = rest[..end].trim();
+            if let Ok(v) = serde_json::from_str::<serde_json::Value>(inside) {
+                return Ok(v);
+            }
+        }
+    }
+
+    // Fall back to parsing the first JSON value after the first '{'.
+    if let Some(start) = trimmed.find('{') {
+        let slice = &trimmed[start..];
+        let mut deserializer = serde_json::Deserializer::from_str(slice);
+        let v = serde_json::Value::deserialize(&mut deserializer)
+            .map_err(|e| format!("Failed to parse JSON from response: {e}"))?;
+        return Ok(v);
+    }
+
+    Err("No JSON found in response".to_string())
+}
+
 /// Get git diff between current branch and target branch
 fn get_branch_diff(repo_path: &str, target_branch: &str) -> Result<String, String> {
     let output = silent_command("git")
@@ -3732,6 +3768,53 @@ fn generate_pr_content(
     })
 }
 
+/// Generate PR content using Codex CLI (best-effort JSON output).
+fn generate_pr_content_codex(
+    app: &AppHandle,
+    repo_path: &str,
+    current_branch: &str,
+    target_branch: &str,
+    custom_prompt: Option<&str>,
+    model: Option<&str>,
+    reasoning_effort: Option<&str>,
+) -> Result<PrContentResponse, String> {
+    // Get diff and commits
+    let diff = get_branch_diff(repo_path, target_branch)?;
+    if diff.trim().is_empty() {
+        return Err("No changes to create PR for".to_string());
+    }
+
+    let commits = get_branch_commits(repo_path, target_branch)?;
+    let commit_count = count_branch_commits(repo_path, target_branch)?;
+
+    let prompt_template = custom_prompt
+        .filter(|p| !p.trim().is_empty())
+        .unwrap_or(PR_CONTENT_PROMPT);
+
+    let base_prompt = prompt_template
+        .replace("{current_branch}", current_branch)
+        .replace("{target_branch}", target_branch)
+        .replace("{commit_count}", &commit_count.to_string())
+        .replace("{commits}", &commits)
+        .replace("{diff}", &diff);
+
+    let prompt = format!(
+        r#"{base_prompt}
+
+Return ONLY valid JSON with keys "title" and "body". Do not include markdown fences or extra text.
+
+Schema (for reference):
+{schema}
+"#,
+        schema = PR_CONTENT_SCHEMA
+    );
+
+    let text = run_codex_prompt(app, repo_path, &prompt, model, reasoning_effort)?;
+    let json = extract_json_from_text(&text)?;
+    serde_json::from_value::<PrContentResponse>(json)
+        .map_err(|e| format!("Failed to parse PR content: {e}"))
+}
+
 /// Parse PR number and URL from gh pr create output
 fn parse_pr_output(output: &str) -> Result<(u32, String), String> {
     // gh pr create outputs the URL like: https://github.com/owner/repo/pull/123
@@ -3759,7 +3842,9 @@ pub async fn create_pr_with_ai_content(
     app: AppHandle,
     worktree_path: String,
     custom_prompt: Option<String>,
+    agent: Option<ChatAgent>,
     model: Option<String>,
+    codex_reasoning_effort: Option<String>,
 ) -> Result<CreatePrResponse, String> {
     log::trace!("Creating PR for: {worktree_path}");
 
@@ -3833,16 +3918,27 @@ pub async fn create_pr_with_ai_content(
         }
     }
 
-    // Generate PR content using Claude CLI
+    // Generate PR content using Claude or Codex
     log::trace!("Generating PR content with AI");
-    let pr_content = generate_pr_content(
-        &app,
-        &worktree_path,
-        &current_branch,
-        target_branch,
-        custom_prompt.as_deref(),
-        model.as_deref(),
-    )?;
+    let pr_content = match agent.unwrap_or(ChatAgent::Claude) {
+        ChatAgent::Claude => generate_pr_content(
+            &app,
+            &worktree_path,
+            &current_branch,
+            target_branch,
+            custom_prompt.as_deref(),
+            model.as_deref(),
+        )?,
+        ChatAgent::Codex => generate_pr_content_codex(
+            &app,
+            &worktree_path,
+            &current_branch,
+            target_branch,
+            custom_prompt.as_deref(),
+            model.as_deref(),
+            codex_reasoning_effort.as_deref(),
+        )?,
+    };
 
     log::trace!("Generated PR title: {}", pr_content.title);
 
@@ -4113,6 +4209,29 @@ fn generate_commit_message(
         .map_err(|e| format!("Failed to parse commit message response: {e}"))
 }
 
+fn generate_commit_message_codex(
+    app: &AppHandle,
+    repo_path: &str,
+    prompt: &str,
+    model: Option<&str>,
+    reasoning_effort: Option<&str>,
+) -> Result<CommitMessageResponse, String> {
+    let wrapped = format!(
+        r#"{prompt}
+
+Return ONLY valid JSON with key "message". Do not include markdown fences or extra text.
+
+Schema (for reference):
+{schema}
+"#,
+        schema = COMMIT_MESSAGE_SCHEMA
+    );
+    let text = run_codex_prompt(app, repo_path, &wrapped, model, reasoning_effort)?;
+    let json = extract_json_from_text(&text)?;
+    serde_json::from_value::<CommitMessageResponse>(json)
+        .map_err(|e| format!("Failed to parse commit message response: {e}"))
+}
+
 /// Create a commit with AI-generated message
 #[tauri::command]
 pub async fn create_commit_with_ai(
@@ -4120,7 +4239,9 @@ pub async fn create_commit_with_ai(
     worktree_path: String,
     custom_prompt: Option<String>,
     push: bool,
+    agent: Option<ChatAgent>,
     model: Option<String>,
+    codex_reasoning_effort: Option<String>,
 ) -> Result<CreateCommitResponse, String> {
     log::trace!("Creating commit for: {worktree_path}");
 
@@ -4156,8 +4277,17 @@ pub async fn create_commit_with_ai(
         .replace("{recent_commits}", &recent_commits)
         .replace("{remote_info}", &remote_info);
 
-    // 6. Generate commit message with Claude CLI
-    let response = generate_commit_message(&app, &prompt, model.as_deref())?;
+    // 6. Generate commit message with Claude or Codex
+    let response = match agent.unwrap_or(ChatAgent::Claude) {
+        ChatAgent::Claude => generate_commit_message(&app, &prompt, model.as_deref())?,
+        ChatAgent::Codex => generate_commit_message_codex(
+            &app,
+            &worktree_path,
+            &prompt,
+            model.as_deref(),
+            codex_reasoning_effort.as_deref(),
+        )?,
+    };
 
     log::trace!(
         "Generated commit message: {}",
@@ -4316,13 +4446,38 @@ fn generate_review(
         .map_err(|e| format!("Failed to parse review response: {e}"))
 }
 
+fn generate_review_codex(
+    app: &AppHandle,
+    repo_path: &str,
+    prompt: &str,
+    model: Option<&str>,
+    reasoning_effort: Option<&str>,
+) -> Result<ReviewResponse, String> {
+    let wrapped = format!(
+        r#"{prompt}
+
+Return ONLY valid JSON matching the review schema. Do not include markdown fences or extra text.
+
+Schema (for reference):
+{schema}
+"#,
+        schema = REVIEW_SCHEMA
+    );
+    let text = run_codex_prompt(app, repo_path, &wrapped, model, reasoning_effort)?;
+    let json = extract_json_from_text(&text)?;
+    serde_json::from_value::<ReviewResponse>(json)
+        .map_err(|e| format!("Failed to parse review response: {e}"))
+}
+
 /// Run AI code review on the current branch
 #[tauri::command]
 pub async fn run_review_with_ai(
     app: AppHandle,
     worktree_path: String,
     custom_prompt: Option<String>,
+    agent: Option<ChatAgent>,
     model: Option<String>,
+    codex_reasoning_effort: Option<String>,
 ) -> Result<ReviewResponse, String> {
     log::trace!("Running AI code review for: {worktree_path}");
 
@@ -4392,8 +4547,16 @@ pub async fn run_review_with_ai(
         .replace("{diff}", &diff)
         .replace("{uncommitted_section}", &uncommitted_section);
 
-    // Run review with Claude CLI
-    let response = generate_review(&app, &prompt, model.as_deref())?;
+    let response = match agent.unwrap_or(ChatAgent::Claude) {
+        ChatAgent::Claude => generate_review(&app, &prompt, model.as_deref())?,
+        ChatAgent::Codex => generate_review_codex(
+            &app,
+            &worktree_path,
+            &prompt,
+            model.as_deref(),
+            codex_reasoning_effort.as_deref(),
+        )?,
+    };
 
     log::trace!(
         "Review complete: {} findings, status: {}",

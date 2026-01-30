@@ -19,7 +19,7 @@ import type {
   Worktree,
   Project,
 } from '@/types/projects'
-import type { Session } from '@/types/chat'
+import type { Session, ChatAgent, ThinkingLevel } from '@/types/chat'
 import { DEFAULT_RESOLVE_CONFLICTS_PROMPT, type AppPreferences } from '@/types/preferences'
 
 interface UseGitOperationsParams {
@@ -84,13 +84,26 @@ export function useGitOperations({
     const toastId = toast.loading('Creating commit...')
 
     try {
+      const agent =
+        preferences?.magic_prompt_agents?.commit_message_model ?? 'claude'
+      const model =
+        agent === 'codex'
+          ? preferences?.magic_prompt_codex_models?.commit_message_model
+          : preferences?.magic_prompt_models?.commit_message_model
+      const codexReasoningEffort =
+        agent === 'codex'
+          ? preferences?.magic_prompt_codex_reasoning_efforts?.commit_message_model
+          : undefined
+
       const result = await invoke<CreateCommitResponse>(
         'create_commit_with_ai',
         {
           worktreePath: activeWorktreePath,
           customPrompt: preferences?.magic_prompts?.commit_message,
           push: false,
-          model: preferences?.magic_prompt_models?.commit_message_model,
+          agent,
+          model,
+          codexReasoningEffort,
         }
       )
 
@@ -105,7 +118,15 @@ export function useGitOperations({
     } finally {
       clearWorktreeLoading(activeWorktreeId)
     }
-  }, [activeWorktreeId, activeWorktreePath, preferences?.magic_prompts?.commit_message, preferences?.magic_prompt_models?.commit_message_model])
+  }, [
+    activeWorktreeId,
+    activeWorktreePath,
+    preferences?.magic_prompts?.commit_message,
+    preferences?.magic_prompt_agents?.commit_message_model,
+    preferences?.magic_prompt_models?.commit_message_model,
+    preferences?.magic_prompt_codex_models?.commit_message_model,
+    preferences?.magic_prompt_codex_reasoning_efforts?.commit_message_model,
+  ])
 
   // Handle Commit & Push - creates commit with AI-generated message and pushes
   const handleCommitAndPush = useCallback(async () => {
@@ -116,13 +137,26 @@ export function useGitOperations({
     const toastId = toast.loading('Committing and pushing...')
 
     try {
+      const agent =
+        preferences?.magic_prompt_agents?.commit_message_model ?? 'claude'
+      const model =
+        agent === 'codex'
+          ? preferences?.magic_prompt_codex_models?.commit_message_model
+          : preferences?.magic_prompt_models?.commit_message_model
+      const codexReasoningEffort =
+        agent === 'codex'
+          ? preferences?.magic_prompt_codex_reasoning_efforts?.commit_message_model
+          : undefined
+
       const result = await invoke<CreateCommitResponse>(
         'create_commit_with_ai',
         {
           worktreePath: activeWorktreePath,
           customPrompt: preferences?.magic_prompts?.commit_message,
           push: true,
-          model: preferences?.magic_prompt_models?.commit_message_model,
+          agent,
+          model,
+          codexReasoningEffort,
         }
       )
 
@@ -137,7 +171,15 @@ export function useGitOperations({
     } finally {
       clearWorktreeLoading(activeWorktreeId)
     }
-  }, [activeWorktreeId, activeWorktreePath, preferences?.magic_prompts?.commit_message, preferences?.magic_prompt_models?.commit_message_model])
+  }, [
+    activeWorktreeId,
+    activeWorktreePath,
+    preferences?.magic_prompts?.commit_message,
+    preferences?.magic_prompt_agents?.commit_message_model,
+    preferences?.magic_prompt_models?.commit_message_model,
+    preferences?.magic_prompt_codex_models?.commit_message_model,
+    preferences?.magic_prompt_codex_reasoning_efforts?.commit_message_model,
+  ])
 
   // Handle Open PR - creates PR with AI-generated title and description in background
   const handleOpenPr = useCallback(async () => {
@@ -148,12 +190,24 @@ export function useGitOperations({
     const toastId = toast.loading('Creating PR...')
 
     try {
+      const agent = preferences?.magic_prompt_agents?.pr_content_model ?? 'claude'
+      const model =
+        agent === 'codex'
+          ? preferences?.magic_prompt_codex_models?.pr_content_model
+          : preferences?.magic_prompt_models?.pr_content_model
+      const codexReasoningEffort =
+        agent === 'codex'
+          ? preferences?.magic_prompt_codex_reasoning_efforts?.pr_content_model
+          : undefined
+
       const result = await invoke<CreatePrResponse>(
         'create_pr_with_ai_content',
         {
           worktreePath: activeWorktreePath,
           customPrompt: preferences?.magic_prompts?.pr_content,
-          model: preferences?.magic_prompt_models?.pr_content_model,
+          agent,
+          model,
+          codexReasoningEffort,
         }
       )
 
@@ -180,7 +234,17 @@ export function useGitOperations({
     } finally {
       clearWorktreeLoading(activeWorktreeId)
     }
-  }, [activeWorktreeId, activeWorktreePath, worktree, queryClient, preferences?.magic_prompts?.pr_content, preferences?.magic_prompt_models?.pr_content_model])
+  }, [
+    activeWorktreeId,
+    activeWorktreePath,
+    worktree,
+    queryClient,
+    preferences?.magic_prompts?.pr_content,
+    preferences?.magic_prompt_agents?.pr_content_model,
+    preferences?.magic_prompt_models?.pr_content_model,
+    preferences?.magic_prompt_codex_models?.pr_content_model,
+    preferences?.magic_prompt_codex_reasoning_efforts?.pr_content_model,
+  ])
 
   // Handle Review - runs AI code review in background
   const handleReview = useCallback(async () => {
@@ -191,10 +255,23 @@ export function useGitOperations({
     const toastId = toast.loading('Running AI code review...')
 
     try {
+      const agent =
+        preferences?.magic_prompt_agents?.code_review_model ?? 'claude'
+      const model =
+        agent === 'codex'
+          ? preferences?.magic_prompt_codex_models?.code_review_model
+          : preferences?.magic_prompt_models?.code_review_model
+      const codexReasoningEffort =
+        agent === 'codex'
+          ? preferences?.magic_prompt_codex_reasoning_efforts?.code_review_model
+          : undefined
+
       const result = await invoke<ReviewResponse>('run_review_with_ai', {
         worktreePath: activeWorktreePath,
         customPrompt: preferences?.magic_prompts?.code_review,
-        model: preferences?.magic_prompt_models?.code_review_model,
+        agent,
+        model,
+        codexReasoningEffort,
       })
 
       // Store review results in Zustand (also activates review tab)
@@ -220,7 +297,15 @@ export function useGitOperations({
     } finally {
       clearWorktreeLoading(activeWorktreeId)
     }
-  }, [activeWorktreeId, activeWorktreePath, preferences?.magic_prompts?.code_review, preferences?.magic_prompt_models?.code_review_model])
+  }, [
+    activeWorktreeId,
+    activeWorktreePath,
+    preferences?.magic_prompts?.code_review,
+    preferences?.magic_prompt_agents?.code_review_model,
+    preferences?.magic_prompt_models?.code_review_model,
+    preferences?.magic_prompt_codex_models?.code_review_model,
+    preferences?.magic_prompt_codex_reasoning_efforts?.code_review_model,
+  ])
 
   // Handle Merge - validates and shows merge options dialog
   const handleMerge = useCallback(async () => {
@@ -295,6 +380,40 @@ export function useGitOperations({
       // Set the new session as active
       setActiveSession(activeWorktreeId, newSession.id)
 
+      // Apply per-magic agent/model defaults for this new session
+      const agentForPrompt =
+        (preferences?.magic_prompt_agents?.resolve_conflicts_model ??
+          'claude') as ChatAgent
+      const {
+        setAgent,
+        setSelectedModel,
+        setThinkingLevel,
+        setExecutingMode,
+      } = useChatStore.getState()
+      setAgent(newSession.id, agentForPrompt)
+      setExecutingMode(newSession.id, 'plan')
+      if (agentForPrompt === 'codex') {
+        setSelectedModel(
+          newSession.id,
+          preferences?.magic_prompt_codex_models?.resolve_conflicts_model ??
+            preferences?.codex_selected_model ??
+            'gpt-5.2'
+        )
+        setThinkingLevel(
+          newSession.id,
+          (preferences?.magic_prompt_codex_reasoning_efforts
+            ?.resolve_conflicts_model ??
+            'high') as ThinkingLevel
+        )
+      } else {
+        setSelectedModel(
+          newSession.id,
+          preferences?.magic_prompt_models?.resolve_conflicts_model ??
+            preferences?.selected_model ??
+            'opus'
+        )
+      }
+
       // Build conflict resolution prompt with diff details
       const conflictFiles = result.conflicts.join('\n- ')
       const diffSection = result.conflict_diff
@@ -364,6 +483,40 @@ ${resolveInstructions}`
 
       // Set the new session as active
       setActiveSession(activeWorktreeId, newSession.id)
+
+      // Apply per-magic agent/model defaults for this new session
+      const agentForPrompt =
+        (preferences?.magic_prompt_agents?.resolve_conflicts_model ??
+          'claude') as ChatAgent
+      const {
+        setAgent,
+        setSelectedModel,
+        setThinkingLevel,
+        setExecutingMode,
+      } = useChatStore.getState()
+      setAgent(newSession.id, agentForPrompt)
+      setExecutingMode(newSession.id, 'plan')
+      if (agentForPrompt === 'codex') {
+        setSelectedModel(
+          newSession.id,
+          preferences?.magic_prompt_codex_models?.resolve_conflicts_model ??
+            preferences?.codex_selected_model ??
+            'gpt-5.2'
+        )
+        setThinkingLevel(
+          newSession.id,
+          (preferences?.magic_prompt_codex_reasoning_efforts
+            ?.resolve_conflicts_model ??
+            'high') as ThinkingLevel
+        )
+      } else {
+        setSelectedModel(
+          newSession.id,
+          preferences?.magic_prompt_models?.resolve_conflicts_model ??
+            preferences?.selected_model ??
+            'opus'
+        )
+      }
 
       // Build conflict resolution prompt with diff details
       const conflictFiles = result.conflicts.join('\n- ')

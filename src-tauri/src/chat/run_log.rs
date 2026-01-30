@@ -14,7 +14,7 @@ use super::storage::{
     get_session_dir, list_all_session_ids, load_metadata, save_metadata, with_metadata_mut,
 };
 use super::types::{
-    ChatMessage, ContentBlock, MessageRole, RunEntry, RunStatus, ToolCall, UsageData,
+    ChatAgent, ChatMessage, ContentBlock, MessageRole, RunEntry, RunStatus, ToolCall, UsageData,
 };
 
 // ============================================================================
@@ -62,12 +62,13 @@ impl RunLogWriter {
     pub fn complete(
         &mut self,
         assistant_message_id: &str,
-        claude_session_id: Option<&str>,
+        agent: ChatAgent,
+        agent_session_id: Option<&str>,
         usage: Option<UsageData>,
     ) -> Result<(), String> {
         let now = now_timestamp();
         let run_id = self.run_id.clone();
-        let claude_sid = claude_session_id.map(|s| s.to_string());
+        let session_id_for_run = agent_session_id.map(|s| s.to_string());
 
         with_metadata_mut(
             &self.app,
@@ -80,13 +81,20 @@ impl RunLogWriter {
                     run.status = RunStatus::Completed;
                     run.ended_at = Some(now);
                     run.assistant_message_id = Some(assistant_message_id.to_string());
-                    run.claude_session_id = claude_sid.clone();
+                    run.agent = agent.clone();
+                    match agent {
+                        ChatAgent::Claude => run.claude_session_id = session_id_for_run.clone(),
+                        ChatAgent::Codex => run.codex_session_id = session_id_for_run.clone(),
+                    }
                     run.usage = usage.clone();
                 }
 
-                // Update metadata's claude_session_id for resumption
-                if let Some(sid) = claude_sid {
-                    metadata.claude_session_id = Some(sid);
+                // Update metadata's session ID for resumption
+                if let Some(sid) = session_id_for_run {
+                    match agent {
+                        ChatAgent::Claude => metadata.claude_session_id = Some(sid),
+                        ChatAgent::Codex => metadata.codex_session_id = Some(sid),
+                    }
                 }
 
                 Ok(())
@@ -261,8 +269,10 @@ pub fn start_run(
     model: Option<&str>,
     execution_mode: Option<&str>,
     thinking_level: Option<&str>,
+    agent: ChatAgent,
 ) -> Result<RunLogWriter, String> {
     let run_id = Uuid::new_v4().to_string();
+    let assistant_message_id = Uuid::new_v4().to_string();
     let now = now_timestamp();
 
     // Ensure session directory exists
@@ -285,6 +295,7 @@ pub fn start_run(
         "session_id": session_id,
         "worktree_id": worktree_id,
         "user_message_id": user_message_id,
+        "agent": agent,
         "model": model,
         "execution_mode": execution_mode,
         "thinking_level": thinking_level,
@@ -306,10 +317,14 @@ pub fn start_run(
         started_at: now,
         ended_at: None,
         status: RunStatus::Running,
-        assistant_message_id: None,
+        // Assign upfront so resumable runs have a stable assistant message ID
+        // (avoids the UI message flickering/disappearing across reloads).
+        assistant_message_id: Some(assistant_message_id),
         cancelled: false,
         recovered: false,
+        agent,
         claude_session_id: None,
+        codex_session_id: None,
         pid: None,   // Set later via set_pid() after spawning detached process
         usage: None, // Set on completion via complete()
     };
@@ -381,6 +396,50 @@ pub fn write_input_file(
     Ok(input_path)
 }
 
+/// Write the input file for a detached Codex CLI run.
+///
+/// Codex accepts the prompt from stdin when you pass `-` as the PROMPT argument.
+/// We write the prompt content verbatim to the input file.
+pub fn write_codex_input_file(
+    app: &tauri::AppHandle,
+    session_id: &str,
+    run_id: &str,
+    message: &str,
+    ai_language: Option<&str>,
+    parallel_execution_prompt_enabled: bool,
+) -> Result<PathBuf, String> {
+    let session_dir = get_session_dir(app, session_id)?;
+    let input_path = session_dir.join(format!("{run_id}.input.jsonl"));
+
+    log::trace!("Writing Codex input file at: {input_path:?}");
+
+    let mut prompt = String::new();
+
+    if let Some(lang) = ai_language {
+        let lang = lang.trim();
+        if !lang.is_empty() {
+            prompt.push_str(&format!("Respond to the user in {}.\n\n", lang));
+        }
+    }
+
+    if parallel_execution_prompt_enabled {
+        prompt.push_str(
+            "In plan mode, structure plans so tasks can be done simultaneously. \
+In build/execute mode, try to parallelize work for faster implementation.\n\n",
+        );
+    }
+
+    prompt.push_str(message);
+    if !prompt.ends_with('\n') {
+        prompt.push('\n');
+    }
+
+    std::fs::write(&input_path, prompt)
+        .map_err(|e| format!("Failed to write Codex input file: {e}"))?;
+
+    Ok(input_path)
+}
+
 /// Delete the input file for a run (cleanup after completion).
 pub fn delete_input_file(
     app: &tauri::AppHandle,
@@ -435,6 +494,13 @@ pub fn read_run_log(
 /// Parse JSONL lines and build a ChatMessage
 /// This replicates the parsing logic from execute_claude_streaming
 pub fn parse_run_to_message(lines: &[String], run: &RunEntry) -> Result<ChatMessage, String> {
+    match run.agent {
+        ChatAgent::Claude => parse_claude_run_to_message(lines, run),
+        ChatAgent::Codex => parse_codex_run_to_message(lines, run),
+    }
+}
+
+fn parse_claude_run_to_message(lines: &[String], run: &RunEntry) -> Result<ChatMessage, String> {
     let mut content = String::new();
     let mut tool_calls: Vec<ToolCall> = Vec::new();
     let mut content_blocks: Vec<ContentBlock> = Vec::new();
@@ -585,6 +651,268 @@ pub fn parse_run_to_message(lines: &[String], run: &RunEntry) -> Result<ChatMess
         recovered: run.recovered,
         usage: run.usage.clone(), // Token usage from metadata
     })
+}
+
+fn parse_codex_run_to_message(lines: &[String], run: &RunEntry) -> Result<ChatMessage, String> {
+    use super::codex_exec::CodexExecEvent;
+    use std::collections::HashMap;
+
+    let mut content = String::new();
+    let mut tool_calls: Vec<ToolCall> = Vec::new();
+    let mut content_blocks: Vec<ContentBlock> = Vec::new();
+
+    let mut agent_message_seen: HashMap<String, String> = HashMap::new();
+    let mut reasoning_seen: HashMap<String, String> = HashMap::new();
+    let mut todo_list_seen: HashMap<String, String> = HashMap::new();
+    let mut todo_list_seq: HashMap<String, usize> = HashMap::new();
+
+    for line in lines {
+        if line.trim().is_empty() {
+            continue;
+        }
+
+        if line.contains("\"_run_meta\"") {
+            continue;
+        }
+
+        let event: CodexExecEvent = match serde_json::from_str(line) {
+            Ok(e) => e,
+            Err(_) => continue,
+        };
+
+        match event {
+            CodexExecEvent::ItemStarted { item }
+            | CodexExecEvent::ItemUpdated { item }
+            | CodexExecEvent::ItemCompleted { item } => {
+                apply_codex_item_to_message(
+                    &item,
+                    &mut content,
+                    &mut tool_calls,
+                    &mut content_blocks,
+                    &mut agent_message_seen,
+                    &mut reasoning_seen,
+                    &mut todo_list_seen,
+                    &mut todo_list_seq,
+                );
+            }
+            CodexExecEvent::ThreadStarted { .. }
+            | CodexExecEvent::TurnStarted
+            | CodexExecEvent::TurnCompleted { .. }
+            | CodexExecEvent::TurnFailed { .. }
+            | CodexExecEvent::StreamError { .. } => {}
+        }
+    }
+
+    Ok(ChatMessage {
+        id: run
+            .assistant_message_id
+            .clone()
+            .unwrap_or_else(|| Uuid::new_v4().to_string()),
+        session_id: String::new(), // Will be set by caller
+        role: MessageRole::Assistant,
+        content,
+        timestamp: run.started_at,
+        tool_calls,
+        content_blocks,
+        cancelled: run.cancelled,
+        plan_approved: false,
+        model: None,
+        execution_mode: None,
+        thinking_level: None,
+        recovered: run.recovered,
+        usage: run.usage.clone(),
+    })
+}
+
+fn apply_codex_item_to_message(
+    item: &super::codex_exec::CodexThreadItem,
+    content: &mut String,
+    tool_calls: &mut Vec<ToolCall>,
+    content_blocks: &mut Vec<ContentBlock>,
+    agent_message_seen: &mut std::collections::HashMap<String, String>,
+    reasoning_seen: &mut std::collections::HashMap<String, String>,
+    todo_list_seen: &mut std::collections::HashMap<String, String>,
+    todo_list_seq: &mut std::collections::HashMap<String, usize>,
+) {
+    match item {
+        super::codex_exec::CodexThreadItem::AgentMessage(m) => {
+            let prev = agent_message_seen.entry(m.id.clone()).or_default();
+            let new_text = &m.text;
+
+            if new_text.starts_with(prev.as_str()) {
+                let delta = &new_text[prev.len()..];
+                if !delta.is_empty() {
+                    content.push_str(delta);
+                    content_blocks.push(ContentBlock::Text {
+                        text: delta.to_string(),
+                    });
+                }
+            } else if !new_text.is_empty() && new_text != prev.as_str() {
+                content.push_str(new_text);
+                content_blocks.push(ContentBlock::Text {
+                    text: new_text.to_string(),
+                });
+            }
+
+            *prev = new_text.to_string();
+        }
+        super::codex_exec::CodexThreadItem::Reasoning(r) => {
+            let prev = reasoning_seen.entry(r.id.clone()).or_default();
+            let new_text = &r.text;
+
+            if new_text.starts_with(prev.as_str()) {
+                let delta = &new_text[prev.len()..];
+                if !delta.is_empty() {
+                    content_blocks.push(ContentBlock::Thinking {
+                        thinking: delta.to_string(),
+                    });
+                }
+            } else if !new_text.is_empty() && new_text != prev.as_str() {
+                content_blocks.push(ContentBlock::Thinking {
+                    thinking: new_text.to_string(),
+                });
+            }
+
+            *prev = new_text.to_string();
+        }
+        super::codex_exec::CodexThreadItem::CommandExecution(cmd) => {
+            let tool_id = cmd.id.clone();
+            let tool_name = "Bash".to_string();
+            let input = serde_json::json!({ "command": cmd.command });
+            ensure_tool_call_for_message(tool_calls, content_blocks, &tool_id, &tool_name, input);
+
+            if let Some(tc) = tool_calls.iter_mut().find(|t| t.id == tool_id) {
+                tc.output = Some(cmd.aggregated_output.clone());
+            }
+        }
+        super::codex_exec::CodexThreadItem::FileChange(fc) => {
+            if fc.changes.len() <= 1 {
+                let tool_id = fc.id.clone();
+                let tool_name = "Edit".to_string();
+                let input = fc
+                    .changes
+                    .first()
+                    .map(|c| serde_json::json!({ "file_path": c.path, "kind": c.kind }))
+                    .unwrap_or_else(|| {
+                        let changes: Vec<serde_json::Value> = fc
+                            .changes
+                            .iter()
+                            .map(|c| serde_json::json!({ "path": c.path, "kind": c.kind }))
+                            .collect();
+                        serde_json::json!({ "changes": changes })
+                    });
+                ensure_tool_call_for_message(
+                    tool_calls,
+                    content_blocks,
+                    &tool_id,
+                    &tool_name,
+                    input,
+                );
+                if let Some(tc) = tool_calls.iter_mut().find(|t| t.id == tool_id) {
+                    tc.output = Some(format!("status: {}", fc.status));
+                }
+            } else {
+                for (idx, change) in fc.changes.iter().enumerate() {
+                    let tool_id = format!("{}:{}", fc.id, idx);
+                    let tool_name = "Edit".to_string();
+                    let input =
+                        serde_json::json!({ "file_path": change.path, "kind": change.kind });
+                    ensure_tool_call_for_message(
+                        tool_calls,
+                        content_blocks,
+                        &tool_id,
+                        &tool_name,
+                        input,
+                    );
+                    if let Some(tc) = tool_calls.iter_mut().find(|t| t.id == tool_id) {
+                        tc.output = Some(format!("status: {}", fc.status));
+                    }
+                }
+            }
+        }
+        super::codex_exec::CodexThreadItem::McpToolCall(tc) => {
+            let tool_id = tc.id.clone();
+            let tool_name = format!("MCP:{}:{}", tc.server, tc.tool);
+            let input = tc.arguments.clone();
+            ensure_tool_call_for_message(tool_calls, content_blocks, &tool_id, &tool_name, input);
+
+            if let Some(tc_msg) = tool_calls.iter_mut().find(|t| t.id == tool_id) {
+                if let Some(result) = &tc.result {
+                    tc_msg.output = Some(
+                        serde_json::to_string_pretty(&result.structured_content)
+                            .unwrap_or_else(|_| "(failed to serialize result)".to_string()),
+                    );
+                } else if let Some(err) = &tc.error {
+                    tc_msg.output = Some(format!("error: {}", err.message));
+                }
+            }
+        }
+        super::codex_exec::CodexThreadItem::WebSearch(ws) => {
+            let tool_id = ws.id.clone();
+            let tool_name = "WebSearch".to_string();
+            let input = serde_json::json!({ "query": ws.query });
+            ensure_tool_call_for_message(tool_calls, content_blocks, &tool_id, &tool_name, input);
+        }
+        super::codex_exec::CodexThreadItem::TodoList(todo) => {
+            let tool_name = "TodoWrite".to_string();
+            let mapped_todos: Vec<serde_json::Value> = todo
+                .items
+                .iter()
+                .map(|t| {
+                    serde_json::json!({
+                        "content": t.text,
+                        "activeForm": t.text,
+                        "status": if t.completed { "completed" } else { "pending" },
+                    })
+                })
+                .collect();
+            let input = serde_json::json!({ "todos": mapped_todos });
+
+            // Codex reuses the same todo_list ID while updating items. When reconstructing
+            // a message from NDJSON, preserve each distinct snapshot with a unique tool id
+            // so the UI can pick the latest TodoWrite.
+            let snapshot = serde_json::to_string(&input).unwrap_or_default();
+            if todo_list_seen
+                .get(&todo.id)
+                .map(|prev| prev == &snapshot)
+                .unwrap_or(false)
+            {
+                return;
+            }
+            todo_list_seen.insert(todo.id.clone(), snapshot);
+
+            let seq = todo_list_seq.entry(todo.id.clone()).or_insert(0);
+            *seq += 1;
+            let tool_id = format!("{}:{}", todo.id, seq);
+
+            ensure_tool_call_for_message(tool_calls, content_blocks, &tool_id, &tool_name, input);
+        }
+        super::codex_exec::CodexThreadItem::Error(_) => {}
+    }
+}
+
+fn ensure_tool_call_for_message(
+    tool_calls: &mut Vec<ToolCall>,
+    content_blocks: &mut Vec<ContentBlock>,
+    id: &str,
+    name: &str,
+    input: serde_json::Value,
+) {
+    if tool_calls.iter().any(|t| t.id == id) {
+        return;
+    }
+
+    tool_calls.push(ToolCall {
+        id: id.to_string(),
+        name: name.to_string(),
+        input,
+        output: None,
+        parent_tool_use_id: None,
+    });
+
+    content_blocks.push(ContentBlock::ToolUse {
+        tool_call_id: id.to_string(),
+    });
 }
 
 // ============================================================================
