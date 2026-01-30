@@ -12,6 +12,7 @@ import MainWindow from './components/layout/MainWindow'
 import { ThemeProvider } from './components/ThemeProvider'
 import ErrorBoundary from './components/ErrorBoundary'
 import { useClaudeCliStatus, useClaudeCliAuth } from './services/claude-cli'
+import { useCodexCliStatus, useCodexCliAuth } from './services/codex-cli'
 import { useGhCliStatus, useGhCliAuth } from './services/gh-cli'
 import { useUIStore } from './store/ui-store'
 import { useChatStore } from './store/chat-store'
@@ -44,46 +45,63 @@ function App() {
   // Check CLI installation status
   const { data: claudeStatus, isLoading: isClaudeStatusLoading } =
     useClaudeCliStatus()
+  const { data: codexStatus, isLoading: isCodexStatusLoading } =
+    useCodexCliStatus()
   const { data: ghStatus, isLoading: isGhStatusLoading } = useGhCliStatus()
 
   // Check CLI authentication status (only when installed)
-  const { data: claudeAuth, isLoading: isClaudeAuthLoading } =
-    useClaudeCliAuth({ enabled: !!claudeStatus?.installed })
+  const { data: claudeAuth, isLoading: isClaudeAuthLoading } = useClaudeCliAuth(
+    { enabled: !!claudeStatus?.installed }
+  )
   const { data: ghAuth, isLoading: isGhAuthLoading } = useGhCliAuth({
     enabled: !!ghStatus?.installed,
+  })
+  const { data: codexAuth, isLoading: isCodexAuthLoading } = useCodexCliAuth({
+    enabled: !!codexStatus?.installed,
   })
 
   // Show onboarding if either CLI is not installed or not authenticated
   useEffect(() => {
     const isLoading =
       isClaudeStatusLoading ||
+      isCodexStatusLoading ||
       isGhStatusLoading ||
       (claudeStatus?.installed && isClaudeAuthLoading) ||
-      (ghStatus?.installed && isGhAuthLoading)
+      (ghStatus?.installed && isGhAuthLoading) ||
+      (codexStatus?.installed && isCodexAuthLoading)
     if (isLoading) return
 
+    // Codex CLI is optional; don't block onboarding on it being missing.
     const needsInstall = !claudeStatus?.installed || !ghStatus?.installed
     const needsAuth =
       (claudeStatus?.installed && !claudeAuth?.authenticated) ||
       (ghStatus?.installed && !ghAuth?.authenticated)
+    // If Codex is installed, require auth to avoid 401 errors when used.
+    const needsCodexAuth = codexStatus?.installed && !codexAuth?.authenticated
 
-    if (needsInstall || needsAuth) {
+    if (needsInstall || needsAuth || needsCodexAuth) {
       logger.info('CLI setup needed, showing onboarding', {
         claudeInstalled: claudeStatus?.installed,
+        codexInstalled: codexStatus?.installed,
         ghInstalled: ghStatus?.installed,
         claudeAuth: claudeAuth?.authenticated,
+        codexAuth: codexAuth?.authenticated,
         ghAuth: ghAuth?.authenticated,
       })
       useUIStore.getState().setOnboardingOpen(true)
     }
   }, [
     claudeStatus,
+    codexStatus,
     ghStatus,
     claudeAuth,
+    codexAuth,
     ghAuth,
     isClaudeStatusLoading,
+    isCodexStatusLoading,
     isGhStatusLoading,
     isClaudeAuthLoading,
+    isCodexAuthLoading,
     isGhAuthLoading,
   ])
 
@@ -113,7 +131,9 @@ function App() {
     invoke<number>('kill_all_terminals')
       .then(killed => {
         if (killed > 0) {
-          logger.info(`Cleaned up ${killed} orphaned terminal(s) from previous session`)
+          logger.info(
+            `Cleaned up ${killed} orphaned terminal(s) from previous session`
+          )
         }
       })
       .catch(error => {
