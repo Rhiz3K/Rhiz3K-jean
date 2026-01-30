@@ -1066,6 +1066,7 @@ pub async fn send_chat_message(
                 &session_id,
                 &run_id,
                 &message,
+                execution_mode.as_deref(),
                 ai_language.as_deref(),
                 parallel_execution_prompt,
             )?;
