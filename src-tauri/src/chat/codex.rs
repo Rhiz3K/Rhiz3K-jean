@@ -73,8 +73,13 @@ fn build_codex_args(
     }
 
     // Reasoning effort override (Codex config)
+    //
+    // Note: Codex CLI can reject `reasoning.effort="minimal"` depending on enabled tools.
+    // Since Jean runs Codex with tools enabled by default, normalize `minimal` -> `low` to
+    // avoid hard failures.
     if let Some(level) = reasoning_effort {
         if let Some(effort) = level.codex_reasoning_effort() {
+            let effort = if effort == "minimal" { "low" } else { effort };
             args.push("--config".to_string());
             args.push(format!("model_reasoning_effort=\"{effort}\""));
         }
@@ -987,6 +992,21 @@ mod tests {
         assert_eq!(
             args.get(config_idx + 1).map(String::as_str),
             Some("model_reasoning_effort=\"high\"")
+        );
+    }
+
+    #[test]
+    fn codex_args_maps_minimal_to_low() {
+        let args = args_for(
+            None,
+            Some("plan"),
+            Some("gpt-5.2"),
+            Some(ThinkingLevel::Minimal),
+        );
+        let config_idx = args.iter().position(|a| a == "--config").unwrap();
+        assert_eq!(
+            args.get(config_idx + 1).map(String::as_str),
+            Some("model_reasoning_effort=\"low\"")
         );
     }
 }
