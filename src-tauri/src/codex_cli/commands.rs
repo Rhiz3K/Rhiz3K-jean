@@ -136,13 +136,21 @@ pub async fn get_available_codex_versions() -> Result<Vec<CodexReleaseInfo>, Str
         .await
         .map_err(|e| format!("Failed to parse GitHub API response: {e}"))?;
 
-    // Convert to our format, taking 5 most recent
-    let mut versions: Vec<CodexReleaseInfo> = releases
+    // Convert to our format.
+    //
+    // Important: Codex frequently ships prereleases (alpha) more often than stable.
+    // If we simply return the N most recent releases, the "stable" entry can disappear
+    // from the UI, making it impossible to pick a stable version.
+    //
+    // Strategy:
+    // - Build a candidate list from the most recent releases that have assets.
+    // - Sort newest-first.
+    // - Ensure the newest stable release (if any) is included in the returned list.
+    let mut candidates: Vec<CodexReleaseInfo> = releases
         .into_iter()
         .filter(|r| !r.assets.is_empty())
-        .take(10)
-        .filter_map(|r| {
-            // Prefer release name for version (typically "0.92.0")
+        .take(25)
+        .map(|r| {
             let version = r
                 .name
                 .clone()
@@ -150,18 +158,33 @@ pub async fn get_available_codex_versions() -> Result<Vec<CodexReleaseInfo>, Str
                 .or_else(|| r.tag_name.strip_prefix("rust-v").map(|s| s.to_string()))
                 .unwrap_or_else(|| r.tag_name.clone());
 
-            Some(CodexReleaseInfo {
+            CodexReleaseInfo {
                 version,
                 tag_name: r.tag_name,
                 published_at: r.published_at,
                 prerelease: r.prerelease,
-            })
+            }
         })
         .collect();
 
-    // Sort by published_at descending (newest first) and truncate to 5
-    versions.sort_by(|a, b| b.published_at.cmp(&a.published_at));
-    versions.truncate(5);
+    candidates.sort_by(|a, b| b.published_at.cmp(&a.published_at));
+
+    let latest_stable = candidates.iter().find(|v| !v.prerelease).cloned();
+
+    let mut versions: Vec<CodexReleaseInfo> = Vec::new();
+    if let Some(stable) = latest_stable {
+        versions.push(stable);
+    }
+
+    for v in candidates {
+        if versions.len() >= 5 {
+            break;
+        }
+        if versions.iter().any(|x| x.tag_name == v.tag_name) {
+            continue;
+        }
+        versions.push(v);
+    }
 
     log::trace!("Found {} Codex CLI versions", versions.len());
     Ok(versions)
