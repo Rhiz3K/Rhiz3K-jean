@@ -248,11 +248,10 @@ function OnboardingDialogContent() {
 
     // Auto-skip based on installation + auth status
     const claudeInstalled = claudeSetup.status?.installed
-    const ghInstalled = ghSetup.status?.installed
-    const codexComplete =
-      codexSkipped ||
-      (!!codexSetup.status?.installed && !!codexAuth.data?.authenticated)
     const claudeAuthed = claudeAuth.data?.authenticated
+    const codexInstalled = codexSetup.status?.installed
+    const codexAuthed = codexAuth.data?.authenticated
+    const ghInstalled = ghSetup.status?.installed
     const ghAuthed = ghAuth.data?.authenticated
 
     if (!claudeInstalled) {
@@ -265,9 +264,16 @@ function OnboardingDialogContent() {
       return
     }
 
-    if (!codexComplete) {
-      queueMicrotask(() => setStep('codex-setup'))
-      return
+    if (!codexSkipped) {
+      if (!codexInstalled) {
+        queueMicrotask(() => setStep('codex-setup'))
+        return
+      }
+
+      if (!codexAuthed) {
+        queueMicrotask(() => setStep('codex-auth-checking'))
+        return
+      }
     }
 
     if (!ghInstalled) {
