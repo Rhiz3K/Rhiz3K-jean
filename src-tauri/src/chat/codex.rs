@@ -46,6 +46,8 @@ fn build_codex_args(
     let mut args = Vec::new();
     let mut env_vars = Vec::new();
 
+    let mode = execution_mode.unwrap_or("plan");
+
     // Global flags (must appear before `exec`)
     //
     // Jean runs Codex in detached/non-interactive mode, so we must never block
@@ -55,6 +57,26 @@ fn build_codex_args(
 
     // Enable live web search (Codex Responses web_search tool)
     args.push("--search".to_string());
+
+    // Sandbox/network mapping
+    // - plan: read-only sandbox (network disabled)
+    // - build: workspace-write sandbox (via --full-auto) + network enabled
+    // - yolo: bypass approvals + sandbox (no sandbox; dangerous)
+    match mode {
+        "build" => {
+            args.push("--full-auto".to_string());
+            // `--full-auto` doesn't enable outbound network; allow it explicitly so `gh` works.
+            args.push("--config".to_string());
+            args.push("sandbox_workspace_write.network_access=true".to_string());
+        }
+        "yolo" => {
+            args.push("--dangerously-bypass-approvals-and-sandbox".to_string());
+        }
+        _ => {
+            args.push("--sandbox".to_string());
+            args.push("read-only".to_string());
+        }
+    }
 
     // Command: codex exec ...
     args.push("exec".to_string());
@@ -88,28 +110,7 @@ fn build_codex_args(
         }
     }
 
-    // Permission/sandbox mapping
-    // - plan: read-only sandbox
-    // - build: workspace-write sandbox
-    // - yolo: bypass approvals + sandbox (no sandbox; dangerous)
-    match execution_mode.unwrap_or("plan") {
-        "build" => {
-            args.push("--sandbox".to_string());
-            args.push("workspace-write".to_string());
-
-            // Allow outbound network in the workspace-write sandbox so common workflows like
-            // `gh` (GitHub API) work without forcing YOLO mode.
-            args.push("--config".to_string());
-            args.push("sandbox_workspace_write.network_access=true".to_string());
-        }
-        "yolo" => {
-            args.push("--dangerously-bypass-approvals-and-sandbox".to_string());
-        }
-        _ => {
-            args.push("--sandbox".to_string());
-            args.push("read-only".to_string());
-        }
-    }
+    // (Sandbox/approval mode is set up-front; do not add flags here.)
 
     // Ensure machine-readable streaming output for both `exec` and `exec resume`.
     //
@@ -905,10 +906,11 @@ mod tests {
     #[test]
     fn codex_args_global_flags_are_first() {
         let args = args_for(None, Some("plan"), Some("gpt-5.2-codex"), None);
+        let exec_idx = args.iter().position(|a| a == "exec").unwrap();
         assert_eq!(args.get(0).map(String::as_str), Some("--ask-for-approval"));
         assert_eq!(args.get(1).map(String::as_str), Some("never"));
         assert_eq!(args.get(2).map(String::as_str), Some("--search"));
-        assert_eq!(args.get(3).map(String::as_str), Some("exec"));
+        assert!(exec_idx > 2);
     }
 
     #[test]
@@ -960,13 +962,12 @@ mod tests {
     }
 
     #[test]
-    fn codex_args_build_uses_workspace_write_sandbox() {
+    fn codex_args_build_uses_full_auto_and_enables_network() {
         let args = args_for(None, Some("build"), Some("gpt-5.2-codex"), None);
-        let sandbox_idx = args.iter().position(|a| a == "--sandbox").unwrap();
-        assert_eq!(
-            args.get(sandbox_idx + 1).map(String::as_str),
-            Some("workspace-write")
-        );
+        assert!(args.iter().any(|a| a == "--full-auto"));
+        assert!(args
+            .iter()
+            .any(|a| a == "sandbox_workspace_write.network_access=true"));
     }
 
     #[test]
