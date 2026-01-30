@@ -325,25 +325,33 @@ pub async fn install_claude_cli(app: AppHandle, version: Option<String>) -> Resu
     // When installing the "latest" version, there can be brief propagation windows where the
     // `latest` pointer updates before the per-version manifest is available, leading to HTTP 404.
     // In that case, try a few recent npm versions as a fallback.
-    let requested_version = version;
+    let requested_version = version.and_then(|v| {
+        let v = v.trim().to_string();
+        if v.is_empty() {
+            None
+        } else {
+            Some(v)
+        }
+    });
     let mut candidate_versions: Vec<String> = Vec::new();
 
+    // Primary target
     if let Some(v) = requested_version.clone() {
         candidate_versions.push(v);
     } else {
         let latest = fetch_latest_version().await?;
         candidate_versions.push(latest);
+    }
 
-        match get_available_cli_versions().await {
-            Ok(versions) => {
-                for v in versions {
-                    candidate_versions.push(v.version);
-                }
+    // Fallback list from npm (best-effort)
+    match get_available_cli_versions().await {
+        Ok(versions) => {
+            for v in versions {
+                candidate_versions.push(v.version);
             }
-            Err(e) => {
-                // Fallback list is best-effort; if it fails we still try the "latest" candidate.
-                log::warn!("Failed to fetch fallback Claude CLI versions from npm: {e}");
-            }
+        }
+        Err(e) => {
+            log::warn!("Failed to fetch fallback Claude CLI versions from npm: {e}");
         }
     }
 
@@ -389,9 +397,13 @@ pub async fn install_claude_cli(app: AppHandle, version: Option<String>) -> Resu
     let version = resolved_version.ok_or_else(|| {
         let mut msg = String::new();
         if requested_version.is_some() {
-            msg.push_str("Failed to fetch Claude CLI release manifest for the selected version.");
+            msg.push_str(
+                "Failed to fetch Claude CLI release manifest for the selected version (and fallbacks).",
+            );
         } else {
-            msg.push_str("Failed to fetch Claude CLI release manifest for the latest version.");
+            msg.push_str(
+                "Failed to fetch Claude CLI release manifest for the latest version (and fallbacks).",
+            );
         }
 
         if !manifest_errors.is_empty() {
