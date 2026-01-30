@@ -53,6 +53,9 @@ fn build_codex_args(
     args.push("--ask-for-approval".to_string());
     args.push("never".to_string());
 
+    // Enable live web search (Codex Responses web_search tool)
+    args.push("--search".to_string());
+
     // Command: codex exec ...
     args.push("exec".to_string());
 
@@ -904,7 +907,8 @@ mod tests {
         let args = args_for(None, Some("plan"), Some("gpt-5.2-codex"), None);
         assert_eq!(args.get(0).map(String::as_str), Some("--ask-for-approval"));
         assert_eq!(args.get(1).map(String::as_str), Some("never"));
-        assert_eq!(args.get(2).map(String::as_str), Some("exec"));
+        assert_eq!(args.get(2).map(String::as_str), Some("--search"));
+        assert_eq!(args.get(3).map(String::as_str), Some("exec"));
     }
 
     #[test]
