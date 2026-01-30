@@ -436,14 +436,14 @@ In build/execute mode, try to parallelize work for faster implementation.\n\n",
     // outbound network access, so commands that hit GitHub APIs (e.g. `gh repo list`) will fail.
     // In yolo mode we bypass the sandbox.
     match execution_mode.unwrap_or("plan") {
-        "yolo" => {}
-        _ => {
+        "plan" => {
             prompt.push_str(
-                "Note: In this mode, outbound network access may be blocked by the sandbox. \
+                "Note: In plan mode, Codex runs in a read-only sandbox that disables outbound network. \
 Avoid using `gh`/GitHub API calls here. If GitHub data is required, ask the user to: \
-(1) switch to YOLO mode, or (2) run the command externally and paste the output.\n\n",
+(1) switch to Build/YOLO mode, or (2) run the command externally and paste the output.\n\n",
             );
         }
+        _ => {}
     }
 
     prompt.push_str(message);
