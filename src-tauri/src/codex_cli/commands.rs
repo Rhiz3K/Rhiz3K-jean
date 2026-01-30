@@ -121,8 +121,10 @@ pub async fn get_available_codex_versions() -> Result<Vec<CodexReleaseInfo>, Str
         .build()
         .map_err(|e| format!("Failed to create HTTP client: {e}"))?;
 
+    // Ask for more items per page so stable releases don't get pushed out by prereleases.
+    let url = format!("{CODEX_RELEASES_API}?per_page=100");
     let response = client
-        .get(CODEX_RELEASES_API)
+        .get(url)
         .send()
         .await
         .map_err(|e| format!("Failed to fetch releases: {e}"))?;
@@ -137,53 +139,39 @@ pub async fn get_available_codex_versions() -> Result<Vec<CodexReleaseInfo>, Str
         .map_err(|e| format!("Failed to parse GitHub API response: {e}"))?;
 
     // Convert to our format.
-    //
-    // Important: Codex frequently ships prereleases (alpha) more often than stable.
-    // If we simply return the N most recent releases, the "stable" entry can disappear
-    // from the UI, making it impossible to pick a stable version.
-    //
-    // Strategy:
-    // - Build a candidate list from the most recent releases that have assets.
-    // - Sort newest-first.
-    // - Ensure the newest stable release (if any) is included in the returned list.
-    let mut candidates: Vec<CodexReleaseInfo> = releases
-        .into_iter()
-        .filter(|r| !r.assets.is_empty())
-        .take(25)
-        .map(|r| {
-            let version = r
-                .name
-                .clone()
-                .and_then(|n| extract_version_number(&n))
-                .or_else(|| r.tag_name.strip_prefix("rust-v").map(|s| s.to_string()))
-                .unwrap_or_else(|| r.tag_name.clone());
+    // Prefer stable releases in the picker; fill remaining slots with prereleases.
+    let mut stable: Vec<CodexReleaseInfo> = Vec::new();
+    let mut prerelease: Vec<CodexReleaseInfo> = Vec::new();
 
-            CodexReleaseInfo {
-                version,
-                tag_name: r.tag_name,
-                published_at: r.published_at,
-                prerelease: r.prerelease,
-            }
-        })
-        .collect();
+    for r in releases.into_iter().filter(|r| !r.assets.is_empty()) {
+        let version = r
+            .name
+            .clone()
+            .and_then(|n| extract_version_number(&n))
+            .or_else(|| r.tag_name.strip_prefix("rust-v").map(|s| s.to_string()))
+            .unwrap_or_else(|| r.tag_name.clone());
 
-    candidates.sort_by(|a, b| b.published_at.cmp(&a.published_at));
+        let info = CodexReleaseInfo {
+            version,
+            tag_name: r.tag_name,
+            published_at: r.published_at,
+            prerelease: r.prerelease,
+        };
 
-    let latest_stable = candidates.iter().find(|v| !v.prerelease).cloned();
-
-    let mut versions: Vec<CodexReleaseInfo> = Vec::new();
-    if let Some(stable) = latest_stable {
-        versions.push(stable);
+        if info.prerelease {
+            prerelease.push(info);
+        } else {
+            stable.push(info);
+        }
     }
 
-    for v in candidates {
-        if versions.len() >= 5 {
-            break;
-        }
-        if versions.iter().any(|x| x.tag_name == v.tag_name) {
-            continue;
-        }
-        versions.push(v);
+    stable.sort_by(|a, b| b.published_at.cmp(&a.published_at));
+    prerelease.sort_by(|a, b| b.published_at.cmp(&a.published_at));
+
+    let mut versions: Vec<CodexReleaseInfo> = stable.into_iter().take(5).collect();
+    if versions.len() < 5 {
+        let remaining = 5 - versions.len();
+        versions.extend(prerelease.into_iter().take(remaining));
     }
 
     log::trace!("Found {} Codex CLI versions", versions.len());
