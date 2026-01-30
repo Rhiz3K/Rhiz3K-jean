@@ -479,6 +479,87 @@ pub struct CodexAuthStatus {
     pub error: Option<String>,
 }
 
+fn parse_codex_auth_status(stdout: &str, stderr: &str) -> CodexAuthStatus {
+    let combined = format!("{}\n{}", stdout, stderr);
+    let combined_lc = combined.to_lowercase();
+
+    // Be conservative: if we can't confidently detect an authenticated state, treat as unauth.
+    // This avoids false positives that would let the user proceed and then fail with 401.
+    let unauth_markers = [
+        "not logged",
+        "not authenticated",
+        "unauthorized",
+        "401",
+        "run codex login",
+        "please login",
+        "please log in",
+        "no credentials",
+        "no token",
+    ];
+    if unauth_markers.iter().any(|m| combined_lc.contains(m)) {
+        return CodexAuthStatus {
+            authenticated: false,
+            error: Some(if stderr.trim().is_empty() {
+                "Not authenticated".to_string()
+            } else {
+                stderr.trim().to_string()
+            }),
+        };
+    }
+
+    let auth_markers = [
+        "logged in",
+        "authenticated",
+        "you are logged",
+        "signed in",
+    ];
+    if auth_markers.iter().any(|m| combined_lc.contains(m)) {
+        return CodexAuthStatus {
+            authenticated: true,
+            error: None,
+        };
+    }
+
+    CodexAuthStatus {
+        authenticated: false,
+        error: Some("Unable to determine authentication status. Please run `codex login`.".to_string()),
+    }
+}
+
+#[cfg(test)]
+mod auth_tests {
+    use super::{parse_codex_auth_status, CodexAuthStatus};
+
+    fn assert_status(actual: &CodexAuthStatus, authenticated: bool) {
+        assert_eq!(actual.authenticated, authenticated);
+    }
+
+    #[test]
+    fn codex_auth_parsing_detects_unauth_markers() {
+        let s = parse_codex_auth_status("Not logged in. Run codex login", "");
+        assert_status(&s, false);
+
+        let s = parse_codex_auth_status("", "401 Unauthorized");
+        assert_status(&s, false);
+    }
+
+    #[test]
+    fn codex_auth_parsing_detects_auth_markers() {
+        let s = parse_codex_auth_status("Logged in as user@example.com", "");
+        assert_status(&s, true);
+
+        let s = parse_codex_auth_status("Authenticated", "");
+        assert_status(&s, true);
+    }
+
+    #[test]
+    fn codex_auth_parsing_defaults_to_unauth() {
+        let s = parse_codex_auth_status("", "");
+        assert_status(&s, false);
+        assert!(s.error.is_some());
+    }
+}
+
 /// Check if Codex CLI is authenticated by running `codex login status`
 #[tauri::command]
 pub async fn check_codex_cli_auth(app: AppHandle) -> Result<CodexAuthStatus, String> {
@@ -500,22 +581,23 @@ pub async fn check_codex_cli_auth(app: AppHandle) -> Result<CodexAuthStatus, Str
         .output()
         .map_err(|e| format!("Failed to execute Codex CLI: {e}"))?;
 
-    if output.status.success() {
-        Ok(CodexAuthStatus {
-            authenticated: true,
-            error: None,
-        })
-    } else {
-        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-        Ok(CodexAuthStatus {
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    if !output.status.success() {
+        // Prefer stderr for error display.
+        let msg = stderr.trim();
+        return Ok(CodexAuthStatus {
             authenticated: false,
-            error: Some(if stderr.is_empty() {
+            error: Some(if msg.is_empty() {
                 "Not authenticated".to_string()
             } else {
-                stderr
+                msg.to_string()
             }),
-        })
+        });
     }
+
+    Ok(parse_codex_auth_status(&stdout, &stderr))
 }
 
 /// Helper function to emit installation progress events
