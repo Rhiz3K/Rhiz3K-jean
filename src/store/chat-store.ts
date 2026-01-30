@@ -15,6 +15,7 @@ import {
   type Todo,
   type QueuedMessage,
   type PermissionDenial,
+  type ChatAgent,
   type ExecutionMode,
   type SessionDigest,
   EXECUTION_MODE_CYCLE,
@@ -97,6 +98,9 @@ interface ChatUIState {
   // Enabled MCP servers per session (server names that are active)
   enabledMcpServers: Record<string, string[]>
 
+  // Selected agent per session (Claude vs Codex)
+  agents: Record<string, ChatAgent>
+
   // Answered questions per session (to make them read-only after answering)
   answeredQuestions: Record<string, Set<string>>
 
@@ -150,6 +154,7 @@ interface ChatUIState {
     {
       message: string
       model?: string
+      agent?: ChatAgent
       executionMode?: ExecutionMode
       thinkingLevel?: ThinkingLevel
     }
@@ -289,6 +294,10 @@ interface ChatUIState {
   setEnabledMcpServers: (sessionId: string, servers: string[]) => void
   toggleMcpServer: (sessionId: string, serverName: string) => void
 
+  // Actions - Selected agent (session-based)
+  setAgent: (sessionId: string, agent: ChatAgent) => void
+  getAgent: (sessionId: string) => ChatAgent
+
   // Actions - Question answering (session-based)
   markQuestionAnswered: (
     sessionId: string,
@@ -385,6 +394,7 @@ interface ChatUIState {
     context: {
       message: string
       model?: string
+      agent?: ChatAgent
       executionMode?: ExecutionMode
       thinkingLevel?: ThinkingLevel
     }
@@ -394,6 +404,7 @@ interface ChatUIState {
     | {
         message: string
         model?: string
+        agent?: ChatAgent
         executionMode?: ExecutionMode
         thinkingLevel?: ThinkingLevel
       }
@@ -466,6 +477,7 @@ export const useChatStore = create<ChatUIState>()(
       effortLevels: {},
       selectedModels: {},
       enabledMcpServers: {},
+      agents: {},
       answeredQuestions: {},
       submittedAnswers: {},
       errors: {},
@@ -1133,6 +1145,21 @@ export const useChatStore = create<ChatUIState>()(
           'toggleMcpServer'
         ),
 
+      // Selected agent (session-based)
+      setAgent: (sessionId, agent) =>
+        set(
+          state => ({
+            agents: {
+              ...state.agents,
+              [sessionId]: agent,
+            },
+          }),
+          undefined,
+          'setAgent'
+        ),
+
+      getAgent: sessionId => get().agents[sessionId] ?? 'claude',
+
       // Question answering (session-based)
       markQuestionAnswered: (sessionId, toolCallId, answers) =>
         set(
@@ -1681,6 +1708,7 @@ export const useChatStore = create<ChatUIState>()(
               state.manualThinkingOverrides
             const { [sessionId]: _effort, ...restEffort } = state.effortLevels
             const { [sessionId]: _mcp, ...restMcp } = state.enabledMcpServers
+            const { [sessionId]: _agent, ...restAgents } = state.agents
 
             return {
               approvedTools: restApproved,
@@ -1694,6 +1722,7 @@ export const useChatStore = create<ChatUIState>()(
               manualThinkingOverrides: restManual,
               effortLevels: restEffort,
               enabledMcpServers: restMcp,
+              agents: restAgents,
             }
           },
           undefined,

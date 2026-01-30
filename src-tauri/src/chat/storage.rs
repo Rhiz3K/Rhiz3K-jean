@@ -6,6 +6,7 @@ use std::sync::{Arc, Mutex};
 
 use once_cell::sync::Lazy;
 use tauri::{AppHandle, Manager};
+use uuid::Uuid;
 
 use super::types::{
     SavedContextsMetadata, Session, SessionIndexEntry, SessionMetadata, WorktreeIndex,
@@ -248,8 +249,38 @@ fn load_metadata_internal(
         File::open(&path).map_err(|e| format!("Failed to open metadata file {path:?}: {e}"))?;
 
     let reader = BufReader::new(file);
-    let metadata: SessionMetadata = serde_json::from_reader(reader)
+    let mut metadata: SessionMetadata = serde_json::from_reader(reader)
         .map_err(|e| format!("Failed to parse metadata file {path:?}: {e}"))?;
+
+    // Best-effort repair for previously-buggy runs where we returned early before persisting
+    // the PID/crash status. A "Running" run with no PID cannot be cancelled/resumed and will
+    // otherwise leave the UI stuck in a "sending" state.
+    let mut repaired = false;
+    let ended_at = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    for run in &mut metadata.runs {
+        if (run.status == crate::chat::types::RunStatus::Running
+            || run.status == crate::chat::types::RunStatus::Resumable
+            || run.status == crate::chat::types::RunStatus::Crashed)
+            && run.assistant_message_id.is_none()
+        {
+            run.assistant_message_id = Some(Uuid::new_v4().to_string());
+            repaired = true;
+        }
+
+        if run.status == crate::chat::types::RunStatus::Running && run.pid.is_none() {
+            run.status = crate::chat::types::RunStatus::Crashed;
+            run.ended_at = run.ended_at.or(Some(ended_at));
+            repaired = true;
+        }
+    }
+    if repaired {
+        if let Err(e) = save_metadata_internal(app, &metadata) {
+            log::warn!("Failed to persist repaired metadata for {session_id}: {e}");
+        }
+    }
 
     Ok(Some(metadata))
 }
@@ -387,6 +418,7 @@ pub fn load_sessions(
                 messages: vec![],
                 message_count: Some(entry.message_count),
                 claude_session_id: None,
+                codex_session_id: None,
                 selected_model: None,
                 selected_thinking_level: None,
                 session_naming_completed: false,

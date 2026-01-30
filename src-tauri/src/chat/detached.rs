@@ -161,6 +161,131 @@ pub fn spawn_detached_claude(
     Ok(pid)
 }
 
+/// Spawn Codex CLI as a detached process that survives Jean quitting (Unix).
+///
+/// Codex reads the prompt from stdin (use `-` for PROMPT) and prints JSONL to stdout when
+/// `--json/--experimental-json` is enabled.
+///
+/// We redirect:
+/// - stdout -> the run `.jsonl` file (append, preserving the metadata header)
+/// - stderr -> a sibling `*.stderr.log` file (append) to avoid polluting JSON parsing
+#[cfg(unix)]
+#[allow(clippy::too_many_arguments)]
+pub fn spawn_detached_codex(
+    cli_path: &Path,
+    args: &[String],
+    input_file: &Path,
+    output_file: &Path,
+    working_dir: &Path,
+    env_vars: &[(&str, &str)],
+) -> Result<u32, String> {
+    let stderr_file = output_file.with_extension("stderr.log");
+
+    let cli_path_escaped =
+        shell_escape(cli_path.to_str().ok_or("CLI path contains invalid UTF-8")?);
+    let input_path_escaped = shell_escape(
+        input_file
+            .to_str()
+            .ok_or("Input file path contains invalid UTF-8")?,
+    );
+    let output_path_escaped = shell_escape(
+        output_file
+            .to_str()
+            .ok_or("Output file path contains invalid UTF-8")?,
+    );
+    let stderr_path_escaped = shell_escape(
+        stderr_file
+            .to_str()
+            .ok_or("Stderr file path contains invalid UTF-8")?,
+    );
+
+    let args_str = args
+        .iter()
+        .map(|arg| shell_escape(arg))
+        .collect::<Vec<_>>()
+        .join(" ");
+
+    let env_exports = env_vars
+        .iter()
+        .map(|(k, v)| format!("{}={}", k, shell_escape(v)))
+        .collect::<Vec<_>>()
+        .join(" ");
+
+    // The full shell command:
+    // nohup /path/to/codex [args] < input >> output 2>> stderr & echo $!
+    let shell_cmd = if env_exports.is_empty() {
+        format!(
+            "nohup {cli_path_escaped} {args_str} < {input_path_escaped} >> {output_path_escaped} 2>> {stderr_path_escaped} & echo $!"
+        )
+    } else {
+        format!(
+            "{env_exports} nohup {cli_path_escaped} {args_str} < {input_path_escaped} >> {output_path_escaped} 2>> {stderr_path_escaped} & echo $!"
+        )
+    };
+
+	    log::trace!("Spawning detached Codex CLI");
+	    log::trace!("Shell command: {shell_cmd}");
+	    log::trace!("Working directory: {working_dir:?}");
+
+	    let mut child = silent_command("sh")
+	        .arg("-c")
+	        .arg(&shell_cmd)
+	        .current_dir(working_dir)
+	        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| format!("Failed to spawn shell: {e}"))?;
+
+    let stdout = child
+        .stdout
+        .take()
+        .ok_or("Failed to capture shell stdout")?;
+    let reader = BufReader::new(stdout);
+
+    let mut pid_str = String::new();
+    for line in reader.lines() {
+        match line {
+            Ok(l) => {
+                pid_str = l.trim().to_string();
+                break;
+            }
+            Err(e) => {
+                log::warn!("Error reading PID from shell: {e}");
+            }
+        }
+    }
+
+    let stderr_handle = child.stderr.take();
+
+    let status = child
+        .wait()
+        .map_err(|e| format!("Failed to wait for shell: {e}"))?;
+
+    if !status.success() {
+        let stderr_output = stderr_handle
+            .map(|stderr| {
+                BufReader::new(stderr)
+                    .lines()
+                    .map_while(Result::ok)
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            })
+            .unwrap_or_default();
+
+        return Err(format!(
+            "Shell command failed with status: {status}\nStderr: {stderr_output}"
+        ));
+    }
+
+    let pid: u32 = pid_str
+        .parse()
+        .map_err(|e| format!("Failed to parse PID '{pid_str}': {e}"))?;
+
+	    log::trace!("Detached Codex CLI spawned with PID: {pid}");
+	    Ok(pid)
+	}
+
 /// Spawn Claude CLI as a detached native Windows process.
 ///
 /// Runs claude.exe directly with stdout/stderr redirected to the output file.
@@ -234,6 +359,57 @@ pub fn spawn_detached_claude(
     log::trace!("Detached Claude CLI spawned with Windows PID: {pid}");
 
     Ok(pid)
+}
+
+/// Spawn Codex CLI as a detached process (Windows).
+///
+/// Codex ships as a native Windows binary, so we can spawn it directly.
+/// Stdout is appended to the run `.jsonl` file, stderr to a sibling `*.stderr.log`.
+#[cfg(windows)]
+#[allow(clippy::too_many_arguments)]
+pub fn spawn_detached_codex(
+    cli_path: &Path,
+    args: &[String],
+    input_file: &Path,
+    output_file: &Path,
+    working_dir: &Path,
+    env_vars: &[(&str, &str)],
+) -> Result<u32, String> {
+    use std::fs::OpenOptions;
+    use std::os::windows::process::CommandExt;
+
+    const CREATE_NEW_PROCESS_GROUP: u32 = 0x00000200;
+    const CREATE_NO_WINDOW: u32 = 0x08000000;
+
+    let stderr_file = output_file.with_extension("stderr.log");
+
+    let stdin = std::fs::File::open(input_file)
+        .map_err(|e| format!("Failed to open input file for Codex: {e}"))?;
+    let stdout = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(output_file)
+        .map_err(|e| format!("Failed to open output file for Codex: {e}"))?;
+    let stderr = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&stderr_file)
+        .map_err(|e| format!("Failed to open stderr file for Codex: {e}"))?;
+
+    let mut cmd = Command::new(cli_path);
+    cmd.args(args)
+        .current_dir(working_dir)
+        .stdin(stdin)
+        .stdout(stdout)
+        .stderr(stderr)
+        .creation_flags(CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW);
+
+    for (k, v) in env_vars {
+        cmd.env(k, v);
+    }
+
+    let child = cmd.spawn().map_err(|e| format!("Failed to spawn Codex: {e}"))?;
+    Ok(child.id())
 }
 
 #[cfg(test)]

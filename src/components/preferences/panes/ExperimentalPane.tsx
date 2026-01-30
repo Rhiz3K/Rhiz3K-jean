@@ -54,11 +54,11 @@ export const ExperimentalPane: React.FC = () => {
         </p>
       </div>
 
-      <SettingsSection title="AI Behavior">
+      <SettingsSection title="Shared">
         <div className="space-y-4">
           <InlineField
             label="Parallel execution prompting"
-            description="Add system prompt encouraging sub-agent parallelization for faster task execution"
+            description="Add a prompt encouraging parallelization for faster task execution"
           >
             <Switch
               checked={preferences?.parallel_execution_prompt_enabled ?? false}
@@ -72,7 +72,11 @@ export const ExperimentalPane: React.FC = () => {
               }}
             />
           </InlineField>
+        </div>
+      </SettingsSection>
 
+      <SettingsSection title="Claude">
+        <div className="space-y-4">
           <InlineField
             label="Session recap"
             description="Show AI-generated summary when returning to unfocused sessions"
@@ -119,6 +123,12 @@ export const ExperimentalPane: React.FC = () => {
               </Select>
             </InlineField>
           )}
+        </div>
+      </SettingsSection>
+
+      <SettingsSection title="Codex">
+        <div className="text-sm text-muted-foreground">
+          No Codex-only experimental settings yet.
         </div>
       </SettingsSection>
 

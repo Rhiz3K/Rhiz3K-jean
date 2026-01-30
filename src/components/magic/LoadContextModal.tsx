@@ -754,6 +754,17 @@ export function LoadContextModal({
 
       setGeneratingSessionId(session.id)
       try {
+        const agent =
+          preferences?.magic_prompt_agents?.context_summary_model ?? 'claude'
+        const model =
+          agent === 'codex'
+            ? preferences?.magic_prompt_codex_models?.context_summary_model
+            : preferences?.magic_prompt_models?.context_summary_model
+        const codexReasoningEffort =
+          agent === 'codex'
+            ? preferences?.magic_prompt_codex_reasoning_efforts?.context_summary_model
+            : undefined
+
         // Call background summarization command with the session's worktree info
         const result = await invoke<SaveContextResponse>(
           'generate_context_from_session',
@@ -763,7 +774,9 @@ export function LoadContextModal({
             sourceSessionId: session.id,
             projectName: sessionProjectName,
             customPrompt: preferences?.magic_prompts?.context_summary,
-            model: preferences?.magic_prompt_models?.context_summary_model,
+            agent,
+            model,
+            codexReasoningEffort,
           }
         )
 
@@ -797,7 +810,10 @@ export function LoadContextModal({
       refetchContexts,
       refetchAttachedContexts,
       preferences?.magic_prompts?.context_summary,
+      preferences?.magic_prompt_agents?.context_summary_model,
       preferences?.magic_prompt_models?.context_summary_model,
+      preferences?.magic_prompt_codex_models?.context_summary_model,
+      preferences?.magic_prompt_codex_reasoning_efforts?.context_summary_model,
     ]
   )
 

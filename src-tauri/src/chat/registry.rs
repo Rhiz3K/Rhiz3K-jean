@@ -4,7 +4,7 @@ use std::sync::Mutex;
 use once_cell::sync::Lazy;
 use tauri::AppHandle;
 
-use super::claude::CancelledEvent;
+use super::events::CancelledEvent;
 use super::run_log;
 use super::storage;
 use crate::http_server::EmitExt;

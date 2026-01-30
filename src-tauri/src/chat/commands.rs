@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use std::process::Stdio;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use serde::Deserialize;
 use tauri::{AppHandle, Manager};
 use uuid::Uuid;
 
@@ -14,10 +15,11 @@ use super::storage::{
     load_sessions, with_sessions_mut,
 };
 use super::types::{
-    AllSessionsEntry, AllSessionsResponse, ChatMessage, ClaudeContext, EffortLevel, MessageRole,
-    RunStatus, Session, SessionDigest, ThinkingLevel, WorktreeSessions,
+    AllSessionsEntry, AllSessionsResponse, ChatAgent, ChatMessage, ClaudeContext, EffortLevel,
+    MessageRole, RunStatus, Session, SessionDigest, ThinkingLevel, WorktreeSessions,
 };
 use crate::claude_cli::get_cli_binary_path;
+use crate::codex_cli::run_codex_prompt;
 use crate::http_server::EmitExt;
 use crate::platform::silent_command;
 use crate::projects::storage::load_projects_data;
@@ -846,8 +848,9 @@ pub async fn send_chat_message(
     allowed_tools: Option<Vec<String>>,
     mcp_config: Option<String>,
     chrome_enabled: Option<bool>,
+    agent: Option<ChatAgent>,
 ) -> Result<ChatMessage, String> {
-    log::trace!("Sending chat message for session: {session_id}, worktree: {worktree_id}, model: {model:?}, execution_mode: {execution_mode:?}, thinking: {thinking_level:?}, effort: {effort_level:?}, disable_thinking_for_mode: {disable_thinking_for_mode:?}, allowed_tools: {allowed_tools:?}");
+    log::trace!("Sending chat message for session: {session_id}, worktree: {worktree_id}, agent: {agent:?}, model: {model:?}, execution_mode: {execution_mode:?}, thinking: {thinking_level:?}, effort: {effort_level:?}, disable_thinking_for_mode: {disable_thinking_for_mode:?}, allowed_tools: {allowed_tools:?}");
 
     // Validate inputs
     if message.trim().is_empty() {
@@ -857,6 +860,8 @@ pub async fn send_chat_message(
     if worktree_path.is_empty() {
         return Err("Worktree path cannot be empty".to_string());
     }
+
+    let agent = agent.unwrap_or(ChatAgent::Claude);
 
     // Load sessions
     let mut sessions = load_sessions(&app, &worktree_path, &worktree_id)?;
@@ -980,7 +985,7 @@ pub async fn send_chat_message(
 
             // Emit error event so frontend knows what happened
 
-            let error_event = super::claude::ErrorEvent {
+            let error_event = super::events::ErrorEvent {
                 session_id: session_id.clone(),
                 worktree_id: worktree_id.clone(),
                 error: "Session not found. Please refresh the page or create a new session."
@@ -1004,13 +1009,24 @@ pub async fn send_chat_message(
     // Note: User message is stored in NDJSON run entry (run.user_message),
     // not in sessions JSON. Messages are loaded from NDJSON on demand.
 
-    // Build context for Claude
+    // Build context for agent execution (workspace root)
     let context = ClaudeContext::new(worktree_path.clone());
 
-    // Get the Claude session ID for resumption
+    // Get the agent session ID for resumption
     let claude_session_id = sessions
         .find_session(&session_id)
         .and_then(|s| s.claude_session_id.clone());
+    let codex_session_id = sessions
+        .find_session(&session_id)
+        .and_then(|s| s.codex_session_id.clone());
+
+    let model_for_run = model.as_deref();
+    let thinking_for_run = match agent {
+        ChatAgent::Claude => thinking_level
+            .as_ref()
+            .map(|t| format!("{t:?}").to_lowercase()),
+        ChatAgent::Codex => None,
+    };
 
     // Start NDJSON run log for crash recovery
     let mut run_log_writer = run_log::start_run(
@@ -1021,16 +1037,14 @@ pub async fn send_chat_message(
         session_order,
         &user_message_id,
         &message,
-        model.as_deref(),
+        model_for_run,
         execution_mode.as_deref(),
-        thinking_level
-            .as_ref()
-            .map(|t| format!("{t:?}").to_lowercase())
-            .as_deref(),
+        thinking_for_run.as_deref(),
         effort_level
             .as_ref()
             .and_then(|e| e.effort_value())
             .or(None),
+        agent.clone(),
     )?;
 
     // Get file paths for detached execution
@@ -1038,94 +1052,219 @@ pub async fn send_chat_message(
     let output_file = run_log_writer.output_file_path()?;
     let run_id = run_log_writer.run_id().to_string();
 
+    // Use passed parameter for parallel execution prompt (default false - experimental)
+    let parallel_execution_prompt = parallel_execution_prompt_enabled.unwrap_or(false);
+
     // Write input file with the user message
-    run_log::write_input_file(&app, &session_id, &run_id, &message)?;
+    match agent {
+        ChatAgent::Claude => {
+            run_log::write_input_file(&app, &session_id, &run_id, &message)?;
+        }
+        ChatAgent::Codex => {
+            run_log::write_codex_input_file(
+                &app,
+                &session_id,
+                &run_id,
+                &message,
+                ai_language.as_deref(),
+                parallel_execution_prompt,
+            )?;
+        }
+    }
 
     // Use passed parameter for thinking override (computed by frontend based on preference + manual override)
     let disable_thinking_in_non_plan_modes = disable_thinking_for_mode.unwrap_or(false);
 
-    // Use passed parameter for parallel execution prompt (default false - experimental)
-    let parallel_execution_prompt = parallel_execution_prompt_enabled.unwrap_or(false);
+    // Execute agent CLI in detached mode.
+    // If resume fails with "session not found", retry without the session ID.
+    let (pid, agent_session_id_for_log, content, tool_calls, content_blocks, cancelled, usage) =
+        match agent {
+            ChatAgent::Claude => {
+                let mut claude_session_id_for_call = claude_session_id.clone();
+                let (pid, response) = loop {
+                    log::trace!("About to call execute_claude_detached...");
 
-    // Use passed parameter for Chrome browser integration (default false - beta)
-    let chrome = chrome_enabled.unwrap_or(false);
+                    // Use passed parameter for Chrome browser integration (default false - beta)
+                    let chrome = chrome_enabled.unwrap_or(false);
 
-    // Inject WebFetch/WebSearch in plan mode if preference is enabled
-    let mut final_allowed_tools = allowed_tools.unwrap_or_default();
-    if execution_mode.as_deref() == Some("plan") {
-        if let Ok(prefs) = crate::load_preferences(app.clone()).await {
-            if prefs.allow_web_tools_in_plan_mode {
-                final_allowed_tools.push("WebFetch".to_string());
-                final_allowed_tools.push("WebSearch".to_string());
-            }
-        }
-    }
-    let allowed_tools_for_cli = if final_allowed_tools.is_empty() {
-        None
-    } else {
-        Some(final_allowed_tools)
-    };
-
-    // Execute Claude CLI in detached mode
-    // If resume fails with "session not found", retry without the session ID
-    let mut claude_session_id_for_call = claude_session_id.clone();
-    let (pid, claude_response) = loop {
-        log::trace!("About to call execute_claude_detached...");
-
-        match super::claude::execute_claude_detached(
-            &app,
-            &session_id,
-            &worktree_id,
-            &input_file,
-            &output_file,
-            context.worktree_path.as_ref(),
-            claude_session_id_for_call.as_deref(),
-            model.as_deref(),
-            execution_mode.as_deref(),
-            thinking_level.as_ref(),
-            effort_level.as_ref(),
-            allowed_tools_for_cli.as_deref(),
-            disable_thinking_in_non_plan_modes,
-            parallel_execution_prompt,
-            ai_language.as_deref(),
-            mcp_config.as_deref(),
-            chrome,
-        ) {
-            Ok((pid, response)) => {
-                log::trace!("execute_claude_detached succeeded (PID: {pid})");
-                break (pid, response);
-            }
-            Err(e) => {
-                // Check if this is a session not found error and we were trying to resume
-                let is_session_not_found = e.to_lowercase().contains("session")
-                    && (e.to_lowercase().contains("not found")
-                        || e.to_lowercase().contains("invalid")
-                        || e.to_lowercase().contains("expired"));
-
-                if is_session_not_found && claude_session_id_for_call.is_some() {
-                    log::warn!(
-                        "Session not found, clearing stored session ID and retrying: {}",
-                        claude_session_id_for_call.as_deref().unwrap_or("")
-                    );
-
-                    // Clear the invalid session ID from storage (atomic update)
-                    with_sessions_mut(&app, &worktree_path, &worktree_id, |sessions| {
-                        if let Some(session) = sessions.find_session_mut(&session_id) {
-                            session.claude_session_id = None;
+                    // Inject WebFetch/WebSearch in plan mode if preference is enabled
+                    let mut final_allowed_tools = allowed_tools.clone().unwrap_or_default();
+                    if execution_mode.as_deref() == Some("plan") {
+                        if let Ok(prefs) = crate::load_preferences(app.clone()).await {
+                            if prefs.allow_web_tools_in_plan_mode {
+                                final_allowed_tools.push("WebFetch".to_string());
+                                final_allowed_tools.push("WebSearch".to_string());
+                            }
                         }
-                        Ok(())
-                    })?;
+                    }
+                    let allowed_tools_for_cli = if final_allowed_tools.is_empty() {
+                        None
+                    } else {
+                        Some(final_allowed_tools)
+                    };
 
-                    // Retry without session ID
-                    claude_session_id_for_call = None;
-                    continue;
-                }
+                    match super::claude::execute_claude_detached(
+                        &app,
+                        &session_id,
+                        &worktree_id,
+                        &input_file,
+                        &output_file,
+                        context.worktree_path.as_ref(),
+                        claude_session_id_for_call.as_deref(),
+                        model.as_deref(),
+                        execution_mode.as_deref(),
+                        thinking_level.as_ref(),
+                        effort_level.as_ref(),
+                        allowed_tools_for_cli.as_deref(),
+                        disable_thinking_in_non_plan_modes,
+                        parallel_execution_prompt,
+                        ai_language.as_deref(),
+                        mcp_config.as_deref(),
+                        chrome,
+                    ) {
+                        Ok((pid, response)) => {
+                            log::trace!("execute_claude_detached succeeded (PID: {pid})");
+                            break (pid, response);
+                        }
+                        Err(e) => {
+                            let is_session_not_found = e.to_lowercase().contains("session")
+                                && (e.to_lowercase().contains("not found")
+                                    || e.to_lowercase().contains("invalid")
+                                    || e.to_lowercase().contains("expired"));
 
-                log::error!("execute_claude_detached FAILED: {e}");
-                return Err(e);
+                            if is_session_not_found && claude_session_id_for_call.is_some() {
+                                log::warn!(
+                                    "Session not found, clearing stored session ID and retrying: {}",
+                                    claude_session_id_for_call.as_deref().unwrap_or("")
+                                );
+
+                                with_sessions_mut(&app, &worktree_path, &worktree_id, |sessions| {
+                                    if let Some(session) = sessions.find_session_mut(&session_id) {
+                                        session.claude_session_id = None;
+                                    }
+                                    Ok(())
+                                })?;
+
+                                claude_session_id_for_call = None;
+                                continue;
+                            }
+
+                            log::error!("execute_claude_detached FAILED: {e}");
+                            // Ensure the run isn't left in a "Running" limbo if the agent fails
+                            // before producing a usable response.
+                            if let Err(err) = run_log_writer.crash() {
+                                log::error!("Failed to mark run as crashed: {err}");
+                            }
+                            if let Err(err) =
+                                run_log::delete_input_file(&app, &session_id, &run_id)
+                            {
+                                log::trace!(
+                                    "Could not delete input file after crash (may not exist): {err}"
+                                );
+                            }
+                            return Err(e);
+                        }
+                    }
+                };
+
+                (
+                    pid,
+                    response.session_id,
+                    response.content,
+                    response.tool_calls,
+                    response.content_blocks,
+                    response.cancelled,
+                    response.usage,
+                )
             }
-        }
-    };
+            ChatAgent::Codex => {
+                let mut codex_session_id_for_call = codex_session_id.clone();
+                // NOTE: Codex CLI enables tools like `web_search` by default, and the API rejects
+                // `reasoning.effort="minimal"` when such tools are enabled. Use `low` as the
+                // "reduced reasoning" floor for non-plan modes.
+                let codex_low = ThinkingLevel::Low;
+                let effective_thinking_level_for_codex = if disable_thinking_in_non_plan_modes {
+                    let mode = execution_mode.as_deref().unwrap_or("plan");
+                    if mode == "build" || mode == "yolo" {
+                        Some(&codex_low)
+                    } else {
+                        thinking_level.as_ref()
+                    }
+                } else {
+                    thinking_level.as_ref()
+                };
+                let (pid, response) = loop {
+                    log::trace!("About to call execute_codex_detached...");
+
+                    match super::codex::execute_codex_detached(
+                        &app,
+                        &session_id,
+                        &worktree_id,
+                        &input_file,
+                        &output_file,
+                        context.worktree_path.as_ref(),
+                        codex_session_id_for_call.as_deref(),
+                        model.as_deref(),
+                        effective_thinking_level_for_codex,
+                        execution_mode.as_deref(),
+                        ai_language.as_deref(),
+                    ) {
+                        Ok((pid, response)) => {
+                            log::trace!("execute_codex_detached succeeded (PID: {pid})");
+                            break (pid, response);
+                        }
+                        Err(e) => {
+                            let is_session_not_found = e.to_lowercase().contains("session")
+                                && (e.to_lowercase().contains("not found")
+                                    || e.to_lowercase().contains("invalid")
+                                    || e.to_lowercase().contains("expired"));
+
+                            if is_session_not_found && codex_session_id_for_call.is_some() {
+                                log::warn!(
+                                    "Session not found, clearing stored session ID and retrying: {}",
+                                    codex_session_id_for_call.as_deref().unwrap_or("")
+                                );
+
+                                with_sessions_mut(&app, &worktree_path, &worktree_id, |sessions| {
+                                    if let Some(session) = sessions.find_session_mut(&session_id) {
+                                        session.codex_session_id = None;
+                                    }
+                                    Ok(())
+                                })?;
+
+                                codex_session_id_for_call = None;
+                                continue;
+                            }
+
+                            log::error!("execute_codex_detached FAILED: {e}");
+                            // Ensure the run isn't left in a "Running" limbo if the agent fails
+                            // before producing a usable response.
+                            if let Err(err) = run_log_writer.crash() {
+                                log::error!("Failed to mark run as crashed: {err}");
+                            }
+                            if let Err(err) =
+                                run_log::delete_input_file(&app, &session_id, &run_id)
+                            {
+                                log::trace!(
+                                    "Could not delete input file after crash (may not exist): {err}"
+                                );
+                            }
+                            return Err(e);
+                        }
+                    }
+                };
+
+                (
+                    pid,
+                    response.session_id,
+                    response.content,
+                    response.tool_calls,
+                    response.content_blocks,
+                    response.cancelled,
+                    response.usage,
+                )
+            }
+        };
 
     // Store the PID in the run log for recovery
     run_log_writer.set_pid(pid)?;
@@ -1137,22 +1276,28 @@ pub async fn send_chat_message(
 
     // Handle cancellation: only save if there's meaningful content (>10 chars) or tool calls
     // This avoids cluttering history with empty cancelled messages from instant cancellations
-    let has_meaningful_content = claude_response.content.len() >= 10;
-    let has_tool_calls = !claude_response.tool_calls.is_empty();
-    let claude_session_id_for_log = claude_response.session_id.clone();
+    let has_meaningful_content = content.len() >= 10;
+    let has_tool_calls = !tool_calls.is_empty();
 
-    if claude_response.cancelled && !has_meaningful_content && !has_tool_calls {
+    if cancelled && !has_meaningful_content && !has_tool_calls {
         // Instant cancellation with no content
         // Cancel the run log (no assistant message to save)
         if let Err(e) = run_log_writer.cancel(None) {
             log::warn!("Failed to cancel run log: {e}");
         }
 
-        // Atomically update session (store claude_session_id, remove last user message if present)
+        // Atomically update session (store agent session ID, remove last user message if present)
         with_sessions_mut(&app, &worktree_path, &worktree_id, |sessions| {
             if let Some(session) = sessions.find_session_mut(&session_id) {
-                if !claude_session_id_for_log.is_empty() {
-                    session.claude_session_id = Some(claude_session_id_for_log.clone());
+                if !agent_session_id_for_log.is_empty() {
+                    match agent {
+                        ChatAgent::Claude => {
+                            session.claude_session_id = Some(agent_session_id_for_log.clone())
+                        }
+                        ChatAgent::Codex => {
+                            session.codex_session_id = Some(agent_session_id_for_log.clone())
+                        }
+                    }
                 }
                 // Remove user message (undo send) - allows frontend to restore to input field
                 if session
@@ -1194,52 +1339,58 @@ pub async fn send_chat_message(
         id: assistant_msg_id.clone(),
         session_id: session_id.clone(),
         role: MessageRole::Assistant,
-        content: claude_response.content,
+        content,
         timestamp: now(),
-        tool_calls: claude_response.tool_calls,
-        content_blocks: claude_response.content_blocks,
-        cancelled: claude_response.cancelled,
+        tool_calls,
+        content_blocks,
+        cancelled,
         plan_approved: false,
         model: None,
         execution_mode: None,
         thinking_level: None,
         effort_level: None,
         recovered: false,
-        usage: claude_response.usage.clone(),
+        usage: usage.clone(),
     };
     // Note: Assistant message is stored in NDJSON, not sessions JSON.
     // Messages are loaded from NDJSON on demand via load_session_messages().
 
     // Finalize run log (complete or cancel based on response status)
-    if claude_response.cancelled {
+    if cancelled {
         if let Err(e) = run_log_writer.cancel(Some(&assistant_msg_id)) {
             log::warn!("Failed to cancel run log: {e}");
         }
     } else {
-        let claude_sid = if claude_session_id_for_log.is_empty() {
+        let agent_sid = if agent_session_id_for_log.is_empty() {
             None
         } else {
-            Some(claude_session_id_for_log.as_str())
+            Some(agent_session_id_for_log.as_str())
         };
-        if let Err(e) =
-            run_log_writer.complete(&assistant_msg_id, claude_sid, claude_response.usage)
+        if let Err(e) = run_log_writer.complete(&assistant_msg_id, agent.clone(), agent_sid, usage)
         {
             log::warn!("Failed to complete run log: {e}");
         }
     }
 
-    // Atomically save session metadata (claude_session_id for resumption)
+    // Atomically save session metadata (agent session ID for resumption)
     // Note: Messages are NOT saved here - they're in NDJSON only
     with_sessions_mut(&app, &worktree_path, &worktree_id, |sessions| {
         if let Some(session) = sessions.find_session_mut(&session_id) {
-            if !claude_session_id_for_log.is_empty() {
-                session.claude_session_id = Some(claude_session_id_for_log.clone());
+            if !agent_session_id_for_log.is_empty() {
+                match agent {
+                    ChatAgent::Claude => {
+                        session.claude_session_id = Some(agent_session_id_for_log.clone())
+                    }
+                    ChatAgent::Codex => {
+                        session.codex_session_id = Some(agent_session_id_for_log.clone())
+                    }
+                }
             }
         }
         Ok(())
     })?;
 
-    if claude_response.cancelled {
+    if cancelled {
         log::trace!("Chat message cancelled but partial response saved for session: {session_id}");
     } else {
         log::trace!("Chat message sent and response received for session: {session_id}");
@@ -1271,6 +1422,7 @@ pub async fn clear_session_history(
 
             session.messages.clear();
             session.claude_session_id = None;
+            session.codex_session_id = None;
             session.selected_model = selected_model;
             session.selected_thinking_level = selected_thinking_level;
 
@@ -2347,6 +2499,40 @@ struct ContextSummaryResponse {
     slug: String,
 }
 
+/// Best-effort JSON extraction from a model-generated text response.
+fn extract_json_from_text(text: &str) -> Result<serde_json::Value, String> {
+    let trimmed = text.trim();
+    if trimmed.is_empty() {
+        return Err("Empty response".to_string());
+    }
+
+    if let Ok(v) = serde_json::from_str::<serde_json::Value>(trimmed) {
+        return Ok(v);
+    }
+
+    // Prefer fenced JSON blocks if present.
+    if let Some(start) = trimmed.find("```json") {
+        let rest = &trimmed[start + "```json".len()..];
+        if let Some(end) = rest.find("```") {
+            let inside = rest[..end].trim();
+            if let Ok(v) = serde_json::from_str::<serde_json::Value>(inside) {
+                return Ok(v);
+            }
+        }
+    }
+
+    // Fall back to parsing the first JSON value after the first '{'.
+    if let Some(start) = trimmed.find('{') {
+        let slice = &trimmed[start..];
+        let mut deserializer = serde_json::Deserializer::from_str(slice);
+        let v = serde_json::Value::deserialize(&mut deserializer)
+            .map_err(|e| format!("Failed to parse JSON from response: {e}"))?;
+        return Ok(v);
+    }
+
+    Err("No JSON found in response".to_string())
+}
+
 /// Generate a fallback slug from project and session name
 /// Sanitizes and combines both, truncates to reasonable length
 fn generate_fallback_slug(project_name: &str, session_name: &str) -> String {
@@ -2458,6 +2644,30 @@ fn execute_summarization_claude(
     })
 }
 
+fn execute_summarization_codex(
+    app: &AppHandle,
+    working_dir: &str,
+    prompt: &str,
+    model: Option<&str>,
+    reasoning_effort: Option<&str>,
+) -> Result<ContextSummaryResponse, String> {
+    let wrapped = format!(
+        r#"{prompt}
+
+Return ONLY valid JSON with keys "summary" and "slug". Do not include markdown fences or extra text.
+
+Schema (for reference):
+{schema}
+"#,
+        schema = CONTEXT_SUMMARY_SCHEMA
+    );
+
+    let text = run_codex_prompt(app, working_dir, &wrapped, model, reasoning_effort)?;
+    let json = extract_json_from_text(&text)?;
+    serde_json::from_value::<ContextSummaryResponse>(json)
+        .map_err(|e| format!("Failed to parse structured response: {e}"))
+}
+
 /// Generate a context summary from a session's messages in the background
 ///
 /// This command loads a session's messages, sends them to Claude for summarization,
@@ -2470,7 +2680,9 @@ pub async fn generate_context_from_session(
     source_session_id: String,
     project_name: String,
     custom_prompt: Option<String>,
+    agent: Option<ChatAgent>,
     model: Option<String>,
+    codex_reasoning_effort: Option<String>,
 ) -> Result<SaveContextResponse, String> {
     log::trace!(
         "Generating context from session {} for project {}",
@@ -2507,24 +2719,26 @@ pub async fn generate_context_from_session(
         .replace("{date}", &today)
         .replace("{conversation}", &conversation_history);
 
-    // 4. Call Claude CLI with JSON schema (non-streaming)
-    // If JSON parsing fails, use fallback slug from project + session name
-    let (summary, slug) = match execute_summarization_claude(&app, &prompt, model.as_deref()) {
-        Ok(response) => {
-            // Validate slug is not empty
-            let slug = if response.slug.trim().is_empty() {
-                log::warn!("Empty slug in response, using fallback");
-                generate_fallback_slug(&project_name, &session.name)
-            } else {
-                response.slug
-            };
-            (response.summary, slug)
-        }
-        Err(e) => {
-            log::error!("Structured summarization failed: {e}, cannot generate context");
-            return Err(e);
-        }
+    // Run summarization with Claude or Codex.
+    let response = match agent.unwrap_or(ChatAgent::Claude) {
+        ChatAgent::Claude => execute_summarization_claude(&app, &prompt, model.as_deref())?,
+        ChatAgent::Codex => execute_summarization_codex(
+            &app,
+            &worktree_path,
+            &prompt,
+            model.as_deref(),
+            codex_reasoning_effort.as_deref(),
+        )?,
     };
+
+    // Validate slug is not empty
+    let slug = if response.slug.trim().is_empty() {
+        log::warn!("Empty slug in response, using fallback");
+        generate_fallback_slug(&project_name, &session.name)
+    } else {
+        response.slug
+    };
+    let summary = response.summary;
 
     // 5. Save context file
     let contexts_dir = get_saved_contexts_dir(&app)?;
@@ -2599,6 +2813,7 @@ pub async fn get_session_debug_info(
     let sessions = load_sessions(&app, &worktree_path, &worktree_id)?;
     let session = sessions.find_session(&session_id);
     let claude_session_id = session.and_then(|s| s.claude_session_id.clone());
+    let codex_session_id = session.and_then(|s| s.codex_session_id.clone());
 
     // Try to find Claude CLI's JSONL file
     let claude_jsonl_file = claude_session_id.as_ref().and_then(|sid| {
@@ -2677,6 +2892,7 @@ pub async fn get_session_debug_info(
         runs_dir,
         manifest_file,
         claude_session_id,
+        codex_session_id,
         claude_jsonl_file,
         run_log_files,
         total_usage,
@@ -2754,6 +2970,7 @@ pub async fn resume_session(
         let run_id = run.run_id.clone();
         let pid = run.pid.unwrap(); // Safe because we filtered for Some above
         let output_file = session_dir.join(format!("{run_id}.jsonl"));
+        let agent_for_run = run.agent.clone();
 
         log::trace!(
             "Resuming run: {run_id}, PID: {pid}, output: {:?}",
@@ -2771,25 +2988,41 @@ pub async fn resume_session(
         let session_id_clone = session_id.clone();
         let worktree_id_clone = worktree_id.clone();
         let run_id_clone = run_id.clone();
+        let agent_clone = agent_for_run.clone();
+        let assistant_message_id_for_run = run
+            .assistant_message_id
+            .clone()
+            .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
 
         // Spawn a task to tail the output file
         tauri::async_runtime::spawn(async move {
             log::trace!("Starting tail task for run: {run_id_clone}, session: {session_id_clone}");
 
             // Tail the output file
-            let result = super::claude::tail_claude_output(
-                &app_clone,
-                &session_id_clone,
-                &worktree_id_clone,
-                &output_file,
-                pid,
-            );
+            let result: Result<(String, Option<UsageData>), String> = match agent_clone.clone() {
+                ChatAgent::Claude => super::claude::tail_claude_output(
+                    &app_clone,
+                    &session_id_clone,
+                    &worktree_id_clone,
+                    &output_file,
+                    pid,
+                )
+                .map(|r| (r.session_id, r.usage)),
+                ChatAgent::Codex => super::codex::tail_codex_output(
+                    &app_clone,
+                    &session_id_clone,
+                    &worktree_id_clone,
+                    &output_file,
+                    pid,
+                )
+                .map(|r| (r.session_id, r.usage)),
+            };
 
             match result {
-                Ok(response) => {
+                Ok((agent_session_id, usage)) => {
                     log::trace!(
                         "Resume completed for run: {run_id_clone}, session_id: {:?}",
-                        response.session_id
+                        agent_session_id
                     );
 
                     // Create a RunLogWriter to update the manifest
@@ -2797,16 +3030,16 @@ pub async fn resume_session(
                         RunLogWriter::resume(&app_clone, &session_id_clone, &run_id_clone)
                     {
                         // Mark as completed
-                        let assistant_message_id = uuid::Uuid::new_v4().to_string();
-                        let claude_session_id = if response.session_id.is_empty() {
+                        let agent_sid = if agent_session_id.is_empty() {
                             None
                         } else {
-                            Some(response.session_id.as_str())
+                            Some(agent_session_id.as_str())
                         };
                         if let Err(e) = writer.complete(
-                            &assistant_message_id,
-                            claude_session_id,
-                            response.usage.clone(),
+                            &assistant_message_id_for_run,
+                            agent_clone,
+                            agent_sid,
+                            usage,
                         ) {
                             log::error!("Failed to mark run as completed: {e}");
                         }

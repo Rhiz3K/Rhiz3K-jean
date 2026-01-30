@@ -4,14 +4,21 @@
 export type MessageRole = 'user' | 'assistant'
 
 /**
- * Thinking level for Claude responses
- * Controls --settings alwaysThinkingEnabled and MAX_THINKING_TOKENS env var
- * - off: Thinking disabled
- * - think: 4K tokens budget
- * - megathink: 10K tokens budget
- * - ultrathink: 32K tokens budget (default)
+ * Reasoning setting for agents
+ *
+ * - Claude: "thinking level" (controls Claude Code thinking + token budget)
+ * - Codex: "reasoning effort" (controls Codex model reasoning effort)
  */
-export type ThinkingLevel = 'off' | 'think' | 'megathink' | 'ultrathink'
+export type ThinkingLevel =
+  | 'off'
+  | 'think'
+  | 'megathink'
+  | 'ultrathink'
+  | 'minimal'
+  | 'low'
+  | 'medium'
+  | 'high'
+  | 'xhigh'
 
 /**
  * Effort level for Opus 4.6 adaptive thinking
@@ -25,12 +32,26 @@ export type ThinkingLevel = 'off' | 'think' | 'megathink' | 'ultrathink'
 export type EffortLevel = 'low' | 'medium' | 'high' | 'max'
 
 /**
- * Execution mode for Claude CLI permission handling
- * - plan: Read-only mode, Claude can't make changes (--permission-mode plan)
- * - build: Auto-approve file edits only (--permission-mode acceptEdits)
- * - yolo: Auto-approve ALL tools without prompting (--permission-mode bypassPermissions)
+ * Execution mode for agent permission handling
+ *
+ * Claude (Claude Code CLI):
+ * - plan: Read-only mode (`--permission-mode plan`)
+ * - build: Auto-approve file edits only (`--permission-mode acceptEdits`)
+ * - yolo: Auto-approve ALL tools without prompting (`--permission-mode bypassPermissions`)
+ *
+ * Codex (Codex CLI):
+ * - plan: Read-only sandbox (`--sandbox read-only`)
+ * - build: Workspace-write sandbox (`--sandbox workspace-write`)
+ * - yolo: No sandbox + no approvals (`--dangerously-bypass-approvals-and-sandbox`)
  */
 export type ExecutionMode = 'plan' | 'build' | 'yolo'
+
+/**
+ * Chat agent implementation
+ * - claude: Anthropic Claude Code via embedded Claude CLI
+ * - codex: OpenAI Codex via embedded Codex CLI
+ */
+export type ChatAgent = 'claude' | 'codex'
 
 /** Cycle order for execution modes (used by Shift+Tab cycling) */
 export const EXECUTION_MODE_CYCLE: ExecutionMode[] = ['plan', 'build', 'yolo']
@@ -127,6 +148,8 @@ export interface Session {
   message_count?: number
   /** Claude CLI session ID for resuming conversations */
   claude_session_id?: string
+  /** Codex CLI session ID for resuming conversations */
+  codex_session_id?: string
   /** Selected model for this session */
   selected_model?: string
   /** Selected thinking level for this session */
@@ -683,6 +706,8 @@ export interface ReviewFinding {
 export interface QueuedMessage {
   /** Unique ID for this queued message (for reordering/removal) */
   id: string
+  /** Agent to use for this message (snapshot at queue time) */
+  agent: ChatAgent
   /** The message text (already formatted with file/image references) */
   message: string
   /** Snapshot of pending images at time of queue */
@@ -854,6 +879,8 @@ export interface SessionDebugInfo {
   manifest_file?: string
   /** Claude CLI session ID (if any) */
   claude_session_id?: string
+  /** Codex CLI session ID (if any) */
+  codex_session_id?: string
   /** Path to Claude CLI's JSONL file (in ~/.claude/projects/) */
   claude_jsonl_file?: string
   /** List of JSONL run log files for this session */

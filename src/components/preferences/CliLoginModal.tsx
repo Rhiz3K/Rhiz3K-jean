@@ -2,7 +2,7 @@
  * CLI Login Modal
  *
  * Modal with embedded xterm terminal for CLI login flows.
- * Used for `claude` and `gh auth login` commands that require
+ * Used for `claude`, `codex login`, and `gh auth login` commands that require
  * interactive terminal access.
  */
 
@@ -41,7 +41,7 @@ export function CliLoginModal() {
 }
 
 interface CliLoginModalContentProps {
-  cliType: 'claude' | 'gh' | null
+  cliType: 'claude' | 'gh' | 'codex' | null
   command: string
   onClose: () => void
 }
@@ -54,7 +54,8 @@ function CliLoginModalContent({
   const queryClient = useQueryClient()
   const initialized = useRef(false)
   const observerRef = useRef<ResizeObserver | null>(null)
-  const cliName = cliType === 'claude' ? 'Claude CLI' : 'GitHub CLI'
+  const cliName =
+    cliType === 'claude' ? 'Claude CLI' : cliType === 'codex' ? 'Codex CLI' : 'GitHub CLI'
 
   // Generate unique terminal ID for this login session
   const terminalId = useMemo(() => {

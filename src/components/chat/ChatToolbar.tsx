@@ -72,7 +72,7 @@ import { cn } from '@/lib/utils'
 import type { ClaudeModel } from '@/store/chat-store'
 import { useMcpHealthCheck } from '@/services/mcp'
 import type { McpServerInfo, McpHealthStatus } from '@/types/chat'
-import type { ThinkingLevel, EffortLevel, ExecutionMode } from '@/types/chat'
+import type { ChatAgent, ThinkingLevel, EffortLevel, ExecutionMode } from '@/types/chat'
 import type {
   PrDisplayStatus,
   CheckStatus,
@@ -90,16 +90,28 @@ import {
   getSavedContextContent,
 } from '@/services/github'
 
-/** Model options with display labels */
-const MODEL_OPTIONS: { value: ClaudeModel; label: string }[] = [
+/** Claude model options with display labels */
+const CLAUDE_MODEL_OPTIONS: { value: string; label: string }[] = [
   { value: 'opus', label: 'Opus 4.6' },
   { value: 'opus-4.5', label: 'Opus 4.5' },
   { value: 'sonnet', label: 'Sonnet' },
   { value: 'haiku', label: 'Haiku' },
 ]
 
-/** Thinking level options with display labels and token counts */
-const THINKING_LEVEL_OPTIONS: {
+/** Codex model options (OpenAI) */
+const CODEX_MODEL_OPTIONS: { value: string; label: string }[] = [
+  { value: 'gpt-5.2-codex', label: 'gpt-5.2-codex' },
+  { value: 'gpt-5.2', label: 'gpt-5.2' },
+]
+
+/** Agent options with display labels */
+const AGENT_OPTIONS: { value: ChatAgent; label: string }[] = [
+  { value: 'claude', label: 'Claude' },
+  { value: 'codex', label: 'Codex' },
+]
+
+/** Claude thinking level options with display labels and token counts */
+const CLAUDE_THINKING_LEVEL_OPTIONS: {
   value: ThinkingLevel
   label: string
   tokens: string
@@ -120,6 +132,19 @@ const EFFORT_LEVEL_OPTIONS: {
   { value: 'medium', label: 'Medium', description: 'Moderate' },
   { value: 'high', label: 'High', description: 'Deep' },
   { value: 'max', label: 'Max', description: 'No limits' },
+]
+
+/** Codex reasoning effort options (per Codex config) */
+const CODEX_REASONING_EFFORT_OPTIONS: {
+  value: ThinkingLevel
+  label: string
+  tokens: string
+}[] = [
+  { value: 'minimal', label: 'Minimal', tokens: '' },
+  { value: 'low', label: 'Low', tokens: '' },
+  { value: 'medium', label: 'Medium', tokens: '' },
+  { value: 'high', label: 'High', tokens: '' },
+  { value: 'xhigh', label: 'xhigh', tokens: 'Default' },
 ]
 
 /** Get display label and color for PR status */
@@ -178,7 +203,8 @@ interface ChatToolbarProps {
   hasPendingAttachments: boolean
   hasInputValue: boolean
   executionMode: ExecutionMode
-  selectedModel: ClaudeModel
+  selectedAgent: ChatAgent
+  selectedModel: string
   selectedThinkingLevel: ThinkingLevel
   selectedEffortLevel: EffortLevel
   thinkingOverrideActive: boolean // True when thinking is disabled in build/yolo due to preference
@@ -226,7 +252,8 @@ interface ChatToolbarProps {
   onInvestigate: () => void
   hasOpenPr: boolean
   onSetDiffRequest: (request: DiffRequest) => void
-  onModelChange: (model: ClaudeModel) => void
+  onAgentChange: (agent: ChatAgent) => void
+  onModelChange: (model: string) => void
   onThinkingLevelChange: (level: ThinkingLevel) => void
   onEffortLevelChange: (level: EffortLevel) => void
   onSetExecutionMode: (mode: ExecutionMode) => void
@@ -292,6 +319,7 @@ export const ChatToolbar = memo(function ChatToolbar({
   hasPendingAttachments,
   hasInputValue,
   executionMode,
+  selectedAgent,
   selectedModel,
   selectedThinkingLevel,
   selectedEffortLevel,
@@ -328,6 +356,7 @@ export const ChatToolbar = memo(function ChatToolbar({
   onInvestigate,
   hasOpenPr,
   onSetDiffRequest,
+  onAgentChange,
   onModelChange,
   onThinkingLevelChange,
   onEffortLevelChange,
@@ -362,9 +391,16 @@ export const ChatToolbar = memo(function ChatToolbar({
   }, [availableMcpServers, enabledMcpServers])
 
   // Memoize callbacks to prevent Select re-renders
+  const handleAgentChange = useCallback(
+    (value: string) => {
+      onAgentChange(value as ChatAgent)
+    },
+    [onAgentChange]
+  )
+
   const handleModelChange = useCallback(
     (value: string) => {
-      onModelChange(value as ClaudeModel)
+      onModelChange(value)
     },
     [onModelChange]
   )
@@ -526,6 +562,26 @@ export const ChatToolbar = memo(function ChatToolbar({
 
   const isDisabled = isSending || hasPendingQuestions
   const canSend = hasInputValue || hasPendingAttachments
+
+  const baseModelOptions =
+    selectedAgent === 'codex' ? CODEX_MODEL_OPTIONS : CLAUDE_MODEL_OPTIONS
+  const modelOptions =
+    selectedModel && !baseModelOptions.some(o => o.value === selectedModel)
+      ? [{ value: selectedModel, label: selectedModel }, ...baseModelOptions]
+      : baseModelOptions
+  const selectedModelLabel =
+    modelOptions.find(o => o.value === selectedModel)?.label ?? selectedModel
+
+  const thinkingOptions =
+    selectedAgent === 'codex'
+      ? CODEX_REASONING_EFFORT_OPTIONS
+      : CLAUDE_THINKING_LEVEL_OPTIONS
+  const thinkingLabel = selectedAgent === 'codex' ? 'Reasoning' : 'Thinking'
+  const effectiveThinkingOverrideActive =
+    selectedAgent === 'claude' && thinkingOverrideActive
+  const selectedThinkingLabel =
+    thinkingOptions.find(o => o.value === selectedThinkingLevel)?.label ??
+    selectedThinkingLevel
 
   return (
     <div className="@container px-4 py-2 md:px-6">
@@ -724,13 +780,39 @@ export const ChatToolbar = memo(function ChatToolbar({
 
             <DropdownMenuSeparator />
 
+            {/* Agent selector as submenu */}
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger>
+                <CircleDot className="mr-2 h-4 w-4" />
+                <span>Agent</span>
+                <span className="ml-auto text-xs text-muted-foreground">
+                  {AGENT_OPTIONS.find(o => o.value === selectedAgent)?.label}
+                </span>
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent>
+                <DropdownMenuRadioGroup
+                  value={selectedAgent}
+                  onValueChange={handleAgentChange}
+                >
+                  {AGENT_OPTIONS.map(option => (
+                    <DropdownMenuRadioItem
+                      key={option.value}
+                      value={option.value}
+                    >
+                      {option.label}
+                    </DropdownMenuRadioItem>
+                  ))}
+                </DropdownMenuRadioGroup>
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+
             {/* Model selector as submenu */}
             <DropdownMenuSub>
               <DropdownMenuSubTrigger>
                 <Sparkles className="mr-2 h-4 w-4" />
                 <span>Model</span>
                 <span className="ml-auto text-xs text-muted-foreground">
-                  {MODEL_OPTIONS.find(o => o.value === selectedModel)?.label}
+                  {selectedModelLabel}
                 </span>
               </DropdownMenuSubTrigger>
               <DropdownMenuSubContent>
@@ -738,7 +820,7 @@ export const ChatToolbar = memo(function ChatToolbar({
                   value={selectedModel}
                   onValueChange={handleModelChange}
                 >
-                  {MODEL_OPTIONS.map(option => (
+                  {modelOptions.map(option => (
                     <DropdownMenuRadioItem
                       key={option.value}
                       value={option.value}
@@ -751,7 +833,7 @@ export const ChatToolbar = memo(function ChatToolbar({
             </DropdownMenuSub>
 
             {/* Thinking/Effort level as submenu */}
-            {useAdaptiveThinking ? (
+            {selectedAgent === 'claude' && useAdaptiveThinking ? (
               <DropdownMenuSub>
                 <DropdownMenuSubTrigger>
                   <Brain className="mr-2 h-4 w-4" />
@@ -783,15 +865,15 @@ export const ChatToolbar = memo(function ChatToolbar({
                   </DropdownMenuRadioGroup>
                 </DropdownMenuSubContent>
               </DropdownMenuSub>
-            ) : (
+            ) : selectedAgent === 'codex' ? (
               <DropdownMenuSub>
                 <DropdownMenuSubTrigger>
                   <Brain className="mr-2 h-4 w-4" />
-                  <span>Thinking</span>
+                  <span>Reasoning</span>
                   <span className="ml-auto text-xs text-muted-foreground">
                     {thinkingOverrideActive
                       ? 'Off'
-                      : THINKING_LEVEL_OPTIONS.find(
+                      : CODEX_REASONING_EFFORT_OPTIONS.find(
                           o => o.value === selectedThinkingLevel
                         )?.label}
                   </span>
@@ -803,7 +885,41 @@ export const ChatToolbar = memo(function ChatToolbar({
                     }
                     onValueChange={handleThinkingLevelChange}
                   >
-                    {THINKING_LEVEL_OPTIONS.map(option => (
+                    {CODEX_REASONING_EFFORT_OPTIONS.map(option => (
+                      <DropdownMenuRadioItem
+                        key={option.value}
+                        value={option.value}
+                      >
+                        {option.label}
+                        <span className="ml-auto pl-4 text-xs text-muted-foreground">
+                          {option.tokens}
+                        </span>
+                      </DropdownMenuRadioItem>
+                    ))}
+                  </DropdownMenuRadioGroup>
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
+            ) : (
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger>
+                  <Brain className="mr-2 h-4 w-4" />
+                  <span>Thinking</span>
+                  <span className="ml-auto text-xs text-muted-foreground">
+                    {thinkingOverrideActive
+                      ? 'Off'
+                      : CLAUDE_THINKING_LEVEL_OPTIONS.find(
+                          o => o.value === selectedThinkingLevel
+                        )?.label}
+                  </span>
+                </DropdownMenuSubTrigger>
+                <DropdownMenuSubContent>
+                  <DropdownMenuRadioGroup
+                    value={
+                      thinkingOverrideActive ? 'off' : selectedThinkingLevel
+                    }
+                    onValueChange={handleThinkingLevelChange}
+                  >
+                    {CLAUDE_THINKING_LEVEL_OPTIONS.map(option => (
                       <DropdownMenuRadioItem
                         key={option.value}
                         value={option.value}
@@ -1128,6 +1244,28 @@ export const ChatToolbar = memo(function ChatToolbar({
         {/* Divider - desktop only */}
         <div className="hidden @md:block h-4 w-px bg-border/50" />
 
+        {/* Agent selector - desktop only */}
+        <Select
+          value={selectedAgent}
+          onValueChange={handleAgentChange}
+          disabled={isDisabled}
+        >
+          <SelectTrigger className="hidden @md:flex h-8 w-auto gap-1.5 rounded-none border-0 bg-transparent px-3 text-sm text-muted-foreground shadow-none hover:bg-muted/80 hover:text-foreground dark:bg-transparent dark:hover:bg-muted/80">
+            <CircleDot className="h-3.5 w-3.5" />
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {AGENT_OPTIONS.map(option => (
+              <SelectItem key={option.value} value={option.value}>
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        {/* Divider - desktop only */}
+        <div className="hidden @md:block h-4 w-px bg-border/50" />
+
         {/* Model selector - desktop only */}
         <Select
           value={selectedModel}
@@ -1139,7 +1277,7 @@ export const ChatToolbar = memo(function ChatToolbar({
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {MODEL_OPTIONS.map(option => (
+            {modelOptions.map(option => (
               <SelectItem key={option.value} value={option.value}>
                 {option.label}
               </SelectItem>
@@ -1151,7 +1289,7 @@ export const ChatToolbar = memo(function ChatToolbar({
         <div className="hidden @md:block h-4 w-px bg-border/50" />
 
         {/* Thinking/Effort level dropdown - desktop only */}
-        {useAdaptiveThinking ? (
+        {selectedAgent === 'claude' && useAdaptiveThinking ? (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
@@ -1214,14 +1352,14 @@ export const ChatToolbar = memo(function ChatToolbar({
                 title={
                   thinkingOverrideActive
                     ? `Thinking disabled in ${executionMode} mode (change in Settings)`
-                    : `Thinking: ${THINKING_LEVEL_OPTIONS.find(o => o.value === selectedThinkingLevel)?.label}`
+                    : `Thinking: ${(selectedAgent === 'codex' ? CODEX_REASONING_EFFORT_OPTIONS : CLAUDE_THINKING_LEVEL_OPTIONS).find(o => o.value === selectedThinkingLevel)?.label}`
                 }
               >
                 <Brain className="h-3.5 w-3.5" />
                 <span>
                   {thinkingOverrideActive
                     ? 'Off'
-                    : THINKING_LEVEL_OPTIONS.find(
+                    : (selectedAgent === 'codex' ? CODEX_REASONING_EFFORT_OPTIONS : CLAUDE_THINKING_LEVEL_OPTIONS).find(
                         o => o.value === selectedThinkingLevel
                       )?.label}
                 </span>
@@ -1233,7 +1371,7 @@ export const ChatToolbar = memo(function ChatToolbar({
                 value={thinkingOverrideActive ? 'off' : selectedThinkingLevel}
                 onValueChange={handleThinkingLevelChange}
               >
-                {THINKING_LEVEL_OPTIONS.map(option => (
+                {(selectedAgent === 'codex' ? CODEX_REASONING_EFFORT_OPTIONS : CLAUDE_THINKING_LEVEL_OPTIONS).map(option => (
                   <DropdownMenuRadioItem
                     key={option.value}
                     value={option.value}

@@ -11,6 +11,7 @@ use tauri::menu::{MenuBuilder, MenuItemBuilder, PredefinedMenuItem, SubmenuBuild
 mod background_tasks;
 mod chat;
 mod claude_cli;
+mod codex_cli;
 mod gh_cli;
 pub mod http_server;
 mod platform;
@@ -75,10 +76,14 @@ pub struct AppPreferences {
     pub theme: String,
     #[serde(default = "default_model")]
     pub selected_model: String, // Claude model: opus, sonnet, haiku
+    #[serde(default = "default_codex_model")]
+    pub codex_selected_model: String, // Codex model: gpt-5.2-codex, gpt-5.2
     #[serde(default = "default_thinking_level")]
     pub thinking_level: String, // Thinking level: off, think, megathink, ultrathink
     #[serde(default = "default_effort_level")]
     pub default_effort_level: String, // Effort level for Opus 4.6: low, medium, high, max
+    #[serde(default = "default_codex_reasoning_effort")]
+    pub codex_reasoning_effort: String, // Codex reasoning effort: minimal, low, medium, high, xhigh
     #[serde(default = "default_terminal")]
     pub terminal: String, // Terminal app: terminal, warp, ghostty
     #[serde(default = "default_editor")]
@@ -119,6 +124,8 @@ pub struct AppPreferences {
     pub syntax_theme_light: String, // Syntax highlighting theme for light mode
     #[serde(default = "default_disable_thinking_in_non_plan_modes")]
     pub disable_thinking_in_non_plan_modes: bool, // Disable thinking in build/yolo modes (only plan uses thinking)
+    #[serde(default = "default_codex_disable_reasoning_in_non_plan_modes")]
+    pub codex_disable_reasoning_in_non_plan_modes: bool, // Reduce Codex reasoning effort in build/yolo modes
     #[serde(default = "default_session_recap_enabled")]
     pub session_recap_enabled: bool, // Show session recap when returning to unfocused sessions
     #[serde(default = "default_session_recap_model")]
@@ -128,7 +135,13 @@ pub struct AppPreferences {
     #[serde(default)]
     pub magic_prompts: MagicPrompts, // Customizable prompts for AI-powered features
     #[serde(default)]
+    pub magic_prompt_agents: MagicPromptAgents, // Per-prompt agent selection (Claude or Codex)
+    #[serde(default)]
     pub magic_prompt_models: MagicPromptModels, // Per-prompt model overrides
+    #[serde(default)]
+    pub magic_prompt_codex_models: MagicPromptCodexModels, // Per-prompt model overrides (Codex)
+    #[serde(default)]
+    pub magic_prompt_codex_reasoning_efforts: MagicPromptCodexReasoningEfforts, // Per-prompt reasoning effort overrides (Codex)
     #[serde(default = "default_file_edit_mode")]
     pub file_edit_mode: String, // How to edit files: inline (CodeMirror) or external (VS Code, etc.)
     #[serde(default)]
@@ -209,12 +222,20 @@ fn default_model() -> String {
     "opus".to_string()
 }
 
+fn default_codex_model() -> String {
+    "gpt-5.2".to_string()
+}
+
 fn default_thinking_level() -> String {
     "ultrathink".to_string()
 }
 
 fn default_effort_level() -> String {
     "high".to_string()
+}
+
+fn default_codex_reasoning_effort() -> String {
+    "medium".to_string()
 }
 
 fn default_terminal() -> String {
@@ -272,6 +293,10 @@ fn default_disable_thinking_in_non_plan_modes() -> bool {
     true // Enabled by default: only plan mode uses thinking
 }
 
+fn default_codex_disable_reasoning_in_non_plan_modes() -> bool {
+    true // Enabled by default: only plan mode uses higher reasoning effort
+}
+
 fn default_session_recap_enabled() -> bool {
     false // Disabled by default (experimental)
 }
@@ -318,6 +343,33 @@ fn default_auto_archive_on_pr_merged() -> bool {
 
 fn default_show_keybinding_hints() -> bool {
     true // Enabled by default
+}
+
+// =============================================================================
+// Magic Prompt Agent Selection
+// =============================================================================
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MagicPromptAgents {
+    pub investigate_model: String,
+    pub pr_content_model: String,
+    pub commit_message_model: String,
+    pub code_review_model: String,
+    pub context_summary_model: String,
+    pub resolve_conflicts_model: String,
+}
+
+impl Default for MagicPromptAgents {
+    fn default() -> Self {
+        Self {
+            investigate_model: "claude".to_string(),
+            pr_content_model: "claude".to_string(),
+            commit_message_model: "claude".to_string(),
+            code_review_model: "claude".to_string(),
+            context_summary_model: "claude".to_string(),
+            resolve_conflicts_model: "claude".to_string(),
+        }
+    }
 }
 
 // =============================================================================
@@ -530,8 +582,50 @@ pub struct MagicPromptModels {
     pub resolve_conflicts_model: String,
 }
 
+/// Per-prompt Codex model overrides for magic prompts
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MagicPromptCodexModels {
+    #[serde(default = "default_codex_model")]
+    pub investigate_model: String,
+    #[serde(default = "default_codex_model")]
+    pub pr_content_model: String,
+    #[serde(default = "default_codex_model")]
+    pub commit_message_model: String,
+    #[serde(default = "default_codex_model")]
+    pub code_review_model: String,
+    #[serde(default = "default_codex_model")]
+    pub context_summary_model: String,
+    #[serde(default = "default_codex_model")]
+    pub resolve_conflicts_model: String,
+}
+
+/// Per-prompt Codex reasoning effort overrides for magic prompts
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MagicPromptCodexReasoningEfforts {
+    #[serde(default = "default_high_effort")]
+    pub investigate_model: String, // opus -> high
+    #[serde(default = "default_low_effort")]
+    pub pr_content_model: String, // haiku -> low
+    #[serde(default = "default_low_effort")]
+    pub commit_message_model: String, // haiku -> low
+    #[serde(default = "default_low_effort")]
+    pub code_review_model: String, // haiku -> low
+    #[serde(default = "default_high_effort")]
+    pub context_summary_model: String, // opus -> high
+    #[serde(default = "default_high_effort")]
+    pub resolve_conflicts_model: String, // opus -> high
+}
+
 fn default_haiku_model() -> String {
     "haiku".to_string()
+}
+
+fn default_low_effort() -> String {
+    "low".to_string()
+}
+
+fn default_high_effort() -> String {
+    "high".to_string()
 }
 
 impl Default for MagicPromptModels {
@@ -543,6 +637,32 @@ impl Default for MagicPromptModels {
             code_review_model: default_haiku_model(),
             context_summary_model: default_model(),
             resolve_conflicts_model: default_model(),
+        }
+    }
+}
+
+impl Default for MagicPromptCodexModels {
+    fn default() -> Self {
+        Self {
+            investigate_model: default_codex_model(),
+            pr_content_model: default_codex_model(),
+            commit_message_model: default_codex_model(),
+            code_review_model: default_codex_model(),
+            context_summary_model: default_codex_model(),
+            resolve_conflicts_model: default_codex_model(),
+        }
+    }
+}
+
+impl Default for MagicPromptCodexReasoningEfforts {
+    fn default() -> Self {
+        Self {
+            investigate_model: default_high_effort(),
+            pr_content_model: default_low_effort(),
+            commit_message_model: default_low_effort(),
+            code_review_model: default_low_effort(),
+            context_summary_model: default_high_effort(),
+            resolve_conflicts_model: default_high_effort(),
         }
     }
 }
@@ -591,6 +711,8 @@ impl Default for AppPreferences {
             theme: "system".to_string(),
             selected_model: default_model(),
             thinking_level: default_thinking_level(),
+            codex_selected_model: default_codex_model(),
+            codex_reasoning_effort: default_codex_reasoning_effort(),
             terminal: default_terminal(),
             editor: default_editor(),
             auto_branch_naming: default_auto_branch_naming(),
@@ -611,11 +733,15 @@ impl Default for AppPreferences {
             syntax_theme_dark: default_syntax_theme_dark(),
             syntax_theme_light: default_syntax_theme_light(),
             disable_thinking_in_non_plan_modes: default_disable_thinking_in_non_plan_modes(),
+            codex_disable_reasoning_in_non_plan_modes: default_codex_disable_reasoning_in_non_plan_modes(),
             session_recap_enabled: default_session_recap_enabled(),
             session_recap_model: default_session_recap_model(),
             parallel_execution_prompt_enabled: default_parallel_execution_prompt_enabled(),
             magic_prompts: MagicPrompts::default(),
+            magic_prompt_agents: MagicPromptAgents::default(),
             magic_prompt_models: MagicPromptModels::default(),
+            magic_prompt_codex_models: MagicPromptCodexModels::default(),
+            magic_prompt_codex_reasoning_efforts: MagicPromptCodexReasoningEfforts::default(),
             file_edit_mode: default_file_edit_mode(),
             ai_language: String::new(),
             allow_web_tools_in_plan_mode: default_allow_web_tools_in_plan_mode(),
@@ -1821,6 +1947,11 @@ pub fn run() {
             claude_cli::check_claude_cli_auth,
             claude_cli::get_available_cli_versions,
             claude_cli::install_claude_cli,
+            // Codex CLI management commands
+            codex_cli::check_codex_cli_installed,
+            codex_cli::check_codex_cli_auth,
+            codex_cli::get_available_codex_versions,
+            codex_cli::install_codex_cli,
             // GitHub CLI management commands
             gh_cli::check_gh_cli_installed,
             gh_cli::check_gh_cli_auth,

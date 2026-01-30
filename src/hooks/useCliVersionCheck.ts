@@ -11,13 +11,14 @@ import {
   useClaudeCliStatus,
   useAvailableCliVersions,
 } from '@/services/claude-cli'
+import { useCodexCliStatus, useAvailableCodexVersions } from '@/services/codex-cli'
 import { useGhCliStatus, useAvailableGhVersions } from '@/services/gh-cli'
 import { useUIStore } from '@/store/ui-store'
 import { isNewerVersion } from '@/lib/version-utils'
 import { logger } from '@/lib/logger'
 
 interface CliUpdateInfo {
-  type: 'claude' | 'gh'
+  type: 'claude' | 'gh' | 'codex'
   currentVersion: string
   latestVersion: string
 }
@@ -29,9 +30,12 @@ interface CliUpdateInfo {
  */
 export function useCliVersionCheck() {
   const { data: claudeStatus, isLoading: claudeLoading } = useClaudeCliStatus()
+  const { data: codexStatus, isLoading: codexLoading } = useCodexCliStatus()
   const { data: ghStatus, isLoading: ghLoading } = useGhCliStatus()
   const { data: claudeVersions, isLoading: claudeVersionsLoading } =
     useAvailableCliVersions()
+  const { data: codexVersions, isLoading: codexVersionsLoading } =
+    useAvailableCodexVersions()
   const { data: ghVersions, isLoading: ghVersionsLoading } =
     useAvailableGhVersions()
 
@@ -43,7 +47,12 @@ export function useCliVersionCheck() {
   useEffect(() => {
     // Wait until all data is loaded
     const isLoading =
-      claudeLoading || ghLoading || claudeVersionsLoading || ghVersionsLoading
+      claudeLoading ||
+      codexLoading ||
+      ghLoading ||
+      claudeVersionsLoading ||
+      codexVersionsLoading ||
+      ghVersionsLoading
     if (isLoading) return
 
     const updates: CliUpdateInfo[] = []
@@ -90,6 +99,25 @@ export function useCliVersionCheck() {
       }
     }
 
+    // Check Codex CLI
+    if (codexStatus?.installed && codexStatus.version && codexVersions?.length) {
+      const latestStable = codexVersions.find(v => !v.prerelease)
+      if (
+        latestStable &&
+        isNewerVersion(latestStable.version, codexStatus.version)
+      ) {
+        const key = `codex:${codexStatus.version}→${latestStable.version}`
+        if (!notifiedRef.current.has(key)) {
+          notifiedRef.current.add(key)
+          updates.push({
+            type: 'codex',
+            currentVersion: codexStatus.version,
+            latestVersion: latestStable.version,
+          })
+        }
+      }
+    }
+
     if (updates.length > 0) {
       logger.info('CLI updates available', { updates })
 
@@ -106,12 +134,16 @@ export function useCliVersionCheck() {
     isInitialCheckRef.current = false
   }, [
     claudeStatus,
+    codexStatus,
     ghStatus,
     claudeVersions,
+    codexVersions,
     ghVersions,
     claudeLoading,
+    codexLoading,
     ghLoading,
     claudeVersionsLoading,
+    codexVersionsLoading,
     ghVersionsLoading,
   ])
 }
@@ -125,7 +157,12 @@ function showUpdateToasts(updates: CliUpdateInfo[]) {
   const { openCliUpdateModal } = useUIStore.getState()
 
   for (const update of updates) {
-    const cliName = update.type === 'claude' ? 'Claude CLI' : 'GitHub CLI'
+    const cliName =
+      update.type === 'claude'
+        ? 'Claude CLI'
+        : update.type === 'codex'
+          ? 'Codex CLI'
+          : 'GitHub CLI'
     const toastId = `cli-update-${update.type}`
 
     toast.info(`${cliName} update available`, {

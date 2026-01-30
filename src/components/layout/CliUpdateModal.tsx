@@ -11,6 +11,7 @@
 import { useUIStore } from '@/store/ui-store'
 import {
   ClaudeCliReinstallModal,
+  CodexCliReinstallModal,
   GhCliReinstallModal,
 } from '@/components/preferences/CliReinstallModal'
 
@@ -35,6 +36,10 @@ export function CliUpdateModal() {
       />
       <GhCliReinstallModal
         open={cliUpdateModalOpen && cliUpdateModalType === 'gh'}
+        onOpenChange={handleOpenChange}
+      />
+      <CodexCliReinstallModal
+        open={cliUpdateModalOpen && cliUpdateModalType === 'codex'}
         onOpenChange={handleOpenChange}
       />
     </>

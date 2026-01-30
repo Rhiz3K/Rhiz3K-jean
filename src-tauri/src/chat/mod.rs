@@ -1,6 +1,9 @@
 mod claude;
+mod codex_exec;
 mod commands;
 pub mod detached;
+pub mod events;
+mod codex;
 mod naming;
 pub mod registry;
 pub mod run_log;

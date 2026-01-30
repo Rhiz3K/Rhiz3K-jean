@@ -9,6 +9,7 @@ import {
 import { useChatStore } from '@/store/chat-store'
 import type {
   ChatMessage,
+  ChatAgent,
   EffortLevel,
   ExecutionMode,
   Question,
@@ -34,6 +35,7 @@ interface SendMessageMutation {
       sessionId: string
       worktreeId: string
       worktreePath: string
+      agent?: ChatAgent
       message: string
       model?: string
       executionMode?: ExecutionMode
@@ -55,6 +57,7 @@ interface UseMessageHandlersParams {
   activeWorktreeIdRef: RefObject<string | null | undefined>
   activeWorktreePathRef: RefObject<string | null | undefined>
   // Refs for settings (stable across re-renders)
+  selectedAgentRef: RefObject<ChatAgent>
   selectedModelRef: RefObject<string>
   executionModeRef: RefObject<ExecutionMode>
   selectedThinkingLevelRef: RefObject<ThinkingLevel>
@@ -111,6 +114,7 @@ export function useMessageHandlers({
   activeSessionIdRef,
   activeWorktreeIdRef,
   activeWorktreePathRef,
+  selectedAgentRef,
   selectedModelRef,
   executionModeRef,
   selectedThinkingLevelRef,
@@ -139,6 +143,7 @@ export function useMessageHandlers({
         markQuestionAnswered,
         addSendingSession,
         setSelectedModel,
+        setAgent,
         setExecutingMode,
         setSessionReviewing,
         setWaitingForInput,
@@ -176,6 +181,7 @@ export function useMessageHandlers({
       // Add to sending state
       addSendingSession(sessionId)
       setSelectedModel(sessionId, selectedModelRef.current)
+      setAgent(sessionId, selectedAgentRef.current)
       setExecutingMode(sessionId, executionModeRef.current)
 
       // Send the formatted answer
@@ -184,6 +190,7 @@ export function useMessageHandlers({
           sessionId,
           worktreeId,
           worktreePath,
+          agent: selectedAgentRef.current,
           message,
           model: selectedModelRef.current,
           executionMode: executionModeRef.current,
@@ -204,6 +211,7 @@ export function useMessageHandlers({
       activeSessionIdRef,
       activeWorktreeIdRef,
       activeWorktreePathRef,
+      selectedAgentRef,
       selectedModelRef,
       executionModeRef,
       selectedThinkingLevelRef,
@@ -312,6 +320,7 @@ export function useMessageHandlers({
         setExecutionMode: setMode,
         addSendingSession,
         setSelectedModel,
+        setAgent,
         setLastSentMessage,
         setError,
         setExecutingMode,
@@ -344,6 +353,7 @@ export function useMessageHandlers({
       setError(sessionId, null)
       addSendingSession(sessionId)
       setSelectedModel(sessionId, selectedModelRef.current)
+      setAgent(sessionId, selectedAgentRef.current)
       setExecutingMode(sessionId, 'build')
 
       sendMessage.mutate(
@@ -351,6 +361,7 @@ export function useMessageHandlers({
           sessionId,
           worktreeId,
           worktreePath,
+          agent: selectedAgentRef.current,
           message,
           model: selectedModelRef.current,
           executionMode: 'build',
@@ -372,6 +383,7 @@ export function useMessageHandlers({
       activeSessionIdRef,
       activeWorktreeIdRef,
       activeWorktreePathRef,
+      selectedAgentRef,
       selectedModelRef,
       selectedThinkingLevelRef,
       selectedEffortLevelRef,
@@ -423,6 +435,7 @@ export function useMessageHandlers({
         setExecutionMode: setMode,
         addSendingSession,
         setSelectedModel,
+        setAgent,
         setLastSentMessage,
         setError,
         setExecutingMode,
@@ -453,6 +466,7 @@ export function useMessageHandlers({
       setError(sessionId, null)
       addSendingSession(sessionId)
       setSelectedModel(sessionId, selectedModelRef.current)
+      setAgent(sessionId, selectedAgentRef.current)
       setExecutingMode(sessionId, 'yolo')
 
       sendMessage.mutate(
@@ -460,6 +474,7 @@ export function useMessageHandlers({
           sessionId,
           worktreeId,
           worktreePath,
+          agent: selectedAgentRef.current,
           message,
           model: selectedModelRef.current,
           executionMode: 'yolo',
@@ -481,6 +496,7 @@ export function useMessageHandlers({
       activeSessionIdRef,
       activeWorktreeIdRef,
       activeWorktreePathRef,
+      selectedAgentRef,
       selectedModelRef,
       selectedThinkingLevelRef,
       selectedEffortLevelRef,
@@ -512,6 +528,7 @@ export function useMessageHandlers({
       setStreamingPlanApproved,
       setExecutionMode: setMode,
       setSelectedModel,
+      setAgent,
       setLastSentMessage,
       setError,
       addSendingSession,
@@ -532,6 +549,7 @@ export function useMessageHandlers({
     // Explicitly set to build mode (not toggle, to avoid switching back to plan if already in build)
     setMode(sessionId, 'build')
     setSelectedModel(sessionId, selectedModelRef.current)
+    setAgent(sessionId, selectedAgentRef.current)
 
     // Send approval message to Claude so it continues with execution
     // NOTE: setLastSentMessage is critical for permission denial flow - without it,
@@ -546,6 +564,7 @@ export function useMessageHandlers({
         sessionId,
         worktreeId,
         worktreePath,
+        agent: selectedAgentRef.current,
         message: 'Approved',
         model: selectedModelRef.current,
         executionMode: 'build',
@@ -566,6 +585,7 @@ export function useMessageHandlers({
     activeSessionIdRef,
     activeWorktreeIdRef,
     activeWorktreePathRef,
+    selectedAgentRef,
     selectedModelRef,
     selectedThinkingLevelRef,
     selectedEffortLevelRef,
@@ -588,6 +608,7 @@ export function useMessageHandlers({
       setStreamingPlanApproved,
       setExecutionMode: setMode,
       setSelectedModel,
+      setAgent,
       setLastSentMessage,
       setError,
       addSendingSession,
@@ -608,6 +629,7 @@ export function useMessageHandlers({
     // Set to yolo mode for auto-approval of all future tools
     setMode(sessionId, 'yolo')
     setSelectedModel(sessionId, selectedModelRef.current)
+    setAgent(sessionId, selectedAgentRef.current)
 
     // Send approval message to Claude so it continues with execution
     setLastSentMessage(sessionId, 'Approved - yolo')
@@ -620,6 +642,7 @@ export function useMessageHandlers({
         sessionId,
         worktreeId,
         worktreePath,
+        agent: selectedAgentRef.current,
         message: 'Approved - yolo',
         model: selectedModelRef.current,
         executionMode: 'yolo',
@@ -640,6 +663,7 @@ export function useMessageHandlers({
     activeSessionIdRef,
     activeWorktreeIdRef,
     activeWorktreePathRef,
+    selectedAgentRef,
     selectedModelRef,
     selectedThinkingLevelRef,
     selectedEffortLevelRef,
@@ -667,6 +691,7 @@ export function useMessageHandlers({
         setLastSentMessage,
         setError,
         setSelectedModel,
+        setAgent,
         setExecutingMode,
         setWaitingForInput,
       } = useChatStore.getState()
@@ -688,6 +713,8 @@ export function useMessageHandlers({
         clearPendingDenials(sessionId)
         return
       }
+
+      const agentToUse = context.agent ?? selectedAgentRef.current
 
       // Clear pending state
       clearPendingDenials(sessionId)
@@ -731,6 +758,7 @@ export function useMessageHandlers({
       setError(sessionId, null)
       addSendingSession(sessionId)
       setSelectedModel(sessionId, modelToUse)
+      setAgent(sessionId, agentToUse)
       setExecutingMode(sessionId, modeToUse)
 
       sendMessage.mutate(
@@ -738,6 +766,7 @@ export function useMessageHandlers({
           sessionId,
           worktreeId,
           worktreePath,
+          agent: agentToUse,
           message: continuationMessage,
           model: modelToUse,
           executionMode: modeToUse,
@@ -759,6 +788,7 @@ export function useMessageHandlers({
     [
       activeWorktreeIdRef,
       activeWorktreePathRef,
+      selectedAgentRef,
       selectedModelRef,
       executionModeRef,
       selectedThinkingLevelRef,
@@ -787,6 +817,7 @@ export function useMessageHandlers({
         setLastSentMessage,
         setError,
         setSelectedModel,
+        setAgent,
         setExecutingMode,
         setExecutionMode: setMode,
         setWaitingForInput,
@@ -806,6 +837,8 @@ export function useMessageHandlers({
         clearPendingDenials(sessionId)
         return
       }
+
+      const agentToUse = context.agent ?? selectedAgentRef.current
 
       // Clear pending state
       clearPendingDenials(sessionId)
@@ -851,6 +884,7 @@ export function useMessageHandlers({
       setError(sessionId, null)
       addSendingSession(sessionId)
       setSelectedModel(sessionId, modelToUse)
+      setAgent(sessionId, agentToUse)
       setExecutingMode(sessionId, 'yolo')
 
       sendMessage.mutate(
@@ -858,6 +892,7 @@ export function useMessageHandlers({
           sessionId,
           worktreeId,
           worktreePath,
+          agent: agentToUse,
           message: continuationMessage,
           model: modelToUse,
           executionMode: 'yolo',
@@ -878,6 +913,7 @@ export function useMessageHandlers({
     [
       activeWorktreeIdRef,
       activeWorktreePathRef,
+      selectedAgentRef,
       selectedModelRef,
       selectedThinkingLevelRef,
       selectedEffortLevelRef,
@@ -939,6 +975,7 @@ Please apply this fix to the file.`
         setLastSentMessage,
         setError,
         setSelectedModel,
+        setAgent,
         setExecutingMode,
         markFindingFixed,
       } = useChatStore.getState()
@@ -946,6 +983,7 @@ Please apply this fix to the file.`
       setError(sessionId, null)
       addSendingSession(sessionId)
       setSelectedModel(sessionId, selectedModelRef.current)
+      setAgent(sessionId, selectedAgentRef.current)
       setExecutingMode(sessionId, 'build') // Fixes are always in build mode
 
       // Mark this finding as fixed (we don't have the index here, so we generate a key based on file+line)
@@ -976,6 +1014,7 @@ Please apply this fix to the file.`
           sessionId,
           worktreeId,
           worktreePath,
+          agent: selectedAgentRef.current,
           message,
           model: selectedModelRef.current,
           executionMode: 'build',
@@ -996,6 +1035,7 @@ Please apply this fix to the file.`
       activeSessionIdRef,
       activeWorktreeIdRef,
       activeWorktreePathRef,
+      selectedAgentRef,
       selectedModelRef,
       selectedThinkingLevelRef,
       selectedEffortLevelRef,
@@ -1047,6 +1087,7 @@ Please apply all these fixes to the respective files.`
         setLastSentMessage,
         setError,
         setSelectedModel,
+        setAgent,
         setExecutingMode,
         markFindingFixed,
       } = useChatStore.getState()
@@ -1054,6 +1095,7 @@ Please apply all these fixes to the respective files.`
       setError(sessionId, null)
       addSendingSession(sessionId)
       setSelectedModel(sessionId, selectedModelRef.current)
+      setAgent(sessionId, selectedAgentRef.current)
       setExecutingMode(sessionId, 'build') // Fixes are always in build mode
 
       // Mark all findings as fixed
@@ -1086,6 +1128,7 @@ Please apply all these fixes to the respective files.`
           sessionId,
           worktreeId,
           worktreePath,
+          agent: selectedAgentRef.current,
           message,
           model: selectedModelRef.current,
           executionMode: 'build',
@@ -1106,6 +1149,7 @@ Please apply all these fixes to the respective files.`
       activeSessionIdRef,
       activeWorktreeIdRef,
       activeWorktreePathRef,
+      selectedAgentRef,
       selectedModelRef,
       selectedThinkingLevelRef,
       selectedEffortLevelRef,

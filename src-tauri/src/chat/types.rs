@@ -59,6 +59,17 @@ pub enum MessageRole {
     Assistant,
 }
 
+/// Which agent/provider handled a run.
+///
+/// Default is `claude` for backward compatibility with existing metadata.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum ChatAgent {
+    #[default]
+    Claude,
+    Codex,
+}
+
 /// Thinking level for Claude responses
 /// Controls --settings alwaysThinkingEnabled and MAX_THINKING_TOKENS env var
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
@@ -69,6 +80,12 @@ pub enum ThinkingLevel {
     Megathink,
     #[default]
     Ultrathink,
+    // Codex reasoning effort values (used via Codex CLI config overrides)
+    Minimal,
+    Low,
+    Medium,
+    High,
+    Xhigh,
 }
 
 /// Effort level for Opus 4.6 adaptive thinking
@@ -102,7 +119,10 @@ impl EffortLevel {
 impl ThinkingLevel {
     /// Whether thinking is enabled for this level
     pub fn is_enabled(&self) -> bool {
-        !matches!(self, ThinkingLevel::Off)
+        matches!(
+            self,
+            ThinkingLevel::Think | ThinkingLevel::Megathink | ThinkingLevel::Ultrathink
+        )
     }
 
     /// Get the MAX_THINKING_TOKENS value for this level
@@ -112,6 +132,19 @@ impl ThinkingLevel {
             ThinkingLevel::Think => Some(4_000),
             ThinkingLevel::Megathink => Some(10_000),
             ThinkingLevel::Ultrathink => Some(31_999),
+            _ => None,
+        }
+    }
+
+    /// Map codex-only variants to Codex CLI `model_reasoning_effort` values.
+    pub fn codex_reasoning_effort(&self) -> Option<&'static str> {
+        match self {
+            ThinkingLevel::Minimal => Some("minimal"),
+            ThinkingLevel::Low => Some("low"),
+            ThinkingLevel::Medium => Some("medium"),
+            ThinkingLevel::High => Some("high"),
+            ThinkingLevel::Xhigh => Some("xhigh"),
+            _ => None,
         }
     }
 }
@@ -304,6 +337,9 @@ pub struct Session {
     /// Claude CLI session ID for resuming conversations
     #[serde(default)]
     pub claude_session_id: Option<String>,
+    /// Codex CLI session ID for resuming conversations
+    #[serde(default)]
+    pub codex_session_id: Option<String>,
     /// Selected model for this session
     #[serde(default)]
     pub selected_model: Option<String>,
@@ -383,6 +419,7 @@ impl Session {
             messages: vec![],
             message_count: None,
             claude_session_id: None,
+            codex_session_id: None,
             selected_model: None,
             selected_thinking_level: None,
             session_naming_completed: false,
@@ -529,6 +566,7 @@ impl SessionMetadata {
             messages: vec![], // Loaded separately from JSONL files
             message_count: Some(self.to_index_entry().message_count),
             claude_session_id: self.claude_session_id.clone(),
+            codex_session_id: self.codex_session_id.clone(),
             selected_model: self.selected_model.clone(),
             selected_thinking_level: self.selected_thinking_level.clone(),
             session_naming_completed: self.session_naming_completed,
@@ -556,6 +594,7 @@ impl SessionMetadata {
         self.name = session.name.clone();
         self.order = session.order;
         self.claude_session_id = session.claude_session_id.clone();
+        self.codex_session_id = session.codex_session_id.clone();
         self.selected_model = session.selected_model.clone();
         self.selected_thinking_level = session.selected_thinking_level.clone();
         self.session_naming_completed = session.session_naming_completed;
@@ -763,9 +802,15 @@ pub struct RunEntry {
     /// Whether this run was recovered from a crash
     #[serde(default)]
     pub recovered: bool,
+    /// Which agent/provider produced the output for this run
+    #[serde(default)]
+    pub agent: ChatAgent,
     /// Claude CLI session ID for resuming conversations
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub claude_session_id: Option<String>,
+    /// Codex CLI session ID for resuming conversations
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub codex_session_id: Option<String>,
     /// PID of the detached Claude CLI process (for checking if still running)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pid: Option<u32>,
@@ -793,6 +838,9 @@ pub struct SessionMetadata {
     /// Claude CLI session ID for resuming conversations
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub claude_session_id: Option<String>,
+    /// Codex CLI session ID for resuming conversations
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub codex_session_id: Option<String>,
     /// Selected model for this session
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub selected_model: Option<String>,
@@ -890,6 +938,9 @@ pub struct SessionDebugInfo {
     pub manifest_file: Option<String>,
     /// Claude CLI session ID (if any)
     pub claude_session_id: Option<String>,
+    /// Codex CLI session ID (if any)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub codex_session_id: Option<String>,
     /// Path to Claude CLI's JSONL file (in ~/.claude/projects/)
     pub claude_jsonl_file: Option<String>,
     /// List of JSONL run log files for this session
@@ -912,6 +963,7 @@ impl SessionMetadata {
                 .unwrap_or_default()
                 .as_secs(),
             claude_session_id: None,
+            codex_session_id: None,
             selected_model: None,
             selected_thinking_level: None,
             session_naming_completed: false,
@@ -951,6 +1003,15 @@ impl SessionMetadata {
             .iter()
             .rev()
             .find_map(|r| r.claude_session_id.as_deref())
+    }
+
+    /// Get the latest Codex session ID from runs
+    #[allow(dead_code)]
+    pub fn latest_codex_session_id(&self) -> Option<&str> {
+        self.runs
+            .iter()
+            .rev()
+            .find_map(|r| r.codex_session_id.as_deref())
     }
 
     /// Convert to a lightweight index entry for tab rendering
@@ -996,6 +1057,11 @@ mod tests {
         assert!(ThinkingLevel::Think.is_enabled());
         assert!(ThinkingLevel::Megathink.is_enabled());
         assert!(ThinkingLevel::Ultrathink.is_enabled());
+        assert!(!ThinkingLevel::Minimal.is_enabled());
+        assert!(!ThinkingLevel::Low.is_enabled());
+        assert!(!ThinkingLevel::Medium.is_enabled());
+        assert!(!ThinkingLevel::High.is_enabled());
+        assert!(!ThinkingLevel::Xhigh.is_enabled());
     }
 
     #[test]
@@ -1004,6 +1070,11 @@ mod tests {
         assert_eq!(ThinkingLevel::Think.thinking_tokens(), Some(4_000));
         assert_eq!(ThinkingLevel::Megathink.thinking_tokens(), Some(10_000));
         assert_eq!(ThinkingLevel::Ultrathink.thinking_tokens(), Some(31_999));
+        assert_eq!(ThinkingLevel::Minimal.thinking_tokens(), None);
+        assert_eq!(ThinkingLevel::Low.thinking_tokens(), None);
+        assert_eq!(ThinkingLevel::Medium.thinking_tokens(), None);
+        assert_eq!(ThinkingLevel::High.thinking_tokens(), None);
+        assert_eq!(ThinkingLevel::Xhigh.thinking_tokens(), None);
     }
 
     #[test]
@@ -1030,6 +1101,26 @@ mod tests {
             serde_json::to_string(&ThinkingLevel::Ultrathink).unwrap(),
             "\"ultrathink\""
         );
+        assert_eq!(
+            serde_json::to_string(&ThinkingLevel::Minimal).unwrap(),
+            "\"minimal\""
+        );
+        assert_eq!(
+            serde_json::to_string(&ThinkingLevel::Low).unwrap(),
+            "\"low\""
+        );
+        assert_eq!(
+            serde_json::to_string(&ThinkingLevel::Medium).unwrap(),
+            "\"medium\""
+        );
+        assert_eq!(
+            serde_json::to_string(&ThinkingLevel::High).unwrap(),
+            "\"high\""
+        );
+        assert_eq!(
+            serde_json::to_string(&ThinkingLevel::Xhigh).unwrap(),
+            "\"xhigh\""
+        );
     }
 
     #[test]
@@ -1049,6 +1140,26 @@ mod tests {
         assert_eq!(
             serde_json::from_str::<ThinkingLevel>("\"ultrathink\"").unwrap(),
             ThinkingLevel::Ultrathink
+        );
+        assert_eq!(
+            serde_json::from_str::<ThinkingLevel>("\"minimal\"").unwrap(),
+            ThinkingLevel::Minimal
+        );
+        assert_eq!(
+            serde_json::from_str::<ThinkingLevel>("\"low\"").unwrap(),
+            ThinkingLevel::Low
+        );
+        assert_eq!(
+            serde_json::from_str::<ThinkingLevel>("\"medium\"").unwrap(),
+            ThinkingLevel::Medium
+        );
+        assert_eq!(
+            serde_json::from_str::<ThinkingLevel>("\"high\"").unwrap(),
+            ThinkingLevel::High
+        );
+        assert_eq!(
+            serde_json::from_str::<ThinkingLevel>("\"xhigh\"").unwrap(),
+            ThinkingLevel::Xhigh
         );
     }
 
@@ -1286,7 +1397,9 @@ mod tests {
             assistant_message_id: None,
             cancelled: false,
             recovered: false,
+            agent: ChatAgent::Claude,
             claude_session_id: None,
+            codex_session_id: None,
             pid: Some(12345),
             usage: None,
         });
@@ -1322,7 +1435,9 @@ mod tests {
             assistant_message_id: None,
             cancelled: false,
             recovered: false,
+            agent: ChatAgent::Claude,
             claude_session_id: None,
+            codex_session_id: None,
             pid: None,
             usage: None,
         });
@@ -1344,7 +1459,9 @@ mod tests {
             assistant_message_id: None,
             cancelled: false,
             recovered: false,
+            agent: ChatAgent::Claude,
             claude_session_id: Some("claude-sess-abc".to_string()),
+            codex_session_id: None,
             pid: None,
             usage: None,
         });

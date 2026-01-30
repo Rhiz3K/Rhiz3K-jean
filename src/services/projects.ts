@@ -40,6 +40,120 @@ export const projectsQueryKeys = {
     [...projectsQueryKeys.all, 'worktrees', projectId] as const,
 }
 
+function applyWorktreeCreated(
+  queryClient: ReturnType<typeof useQueryClient>,
+  worktree: Worktree
+) {
+  // Update cache: replace pending worktree with completed one
+  queryClient.setQueryData<Worktree[]>(
+    projectsQueryKeys.worktrees(worktree.project_id),
+    old => {
+      if (!old) return [{ ...worktree, status: 'ready' as const }]
+      return old.map(w =>
+        w.id === worktree.id ? { ...worktree, status: 'ready' as const } : w
+      )
+    }
+  )
+
+  // Update single worktree cache (used by ChatWindow via useWorktree)
+  queryClient.setQueryData<Worktree>(
+    [...projectsQueryKeys.all, 'worktree', worktree.id],
+    { ...worktree, status: 'ready' as const }
+  )
+
+  // Select worktree in sidebar and set as active for chat
+  const { expandProject, selectWorktree } = useProjectsStore.getState()
+  const { setActiveWorktree, addSetupScriptResult } = useChatStore.getState()
+  expandProject(worktree.project_id)
+  selectWorktree(worktree.id)
+  setActiveWorktree(worktree.id, worktree.path)
+
+  // Add setup script output to chat store if present
+  if (worktree.setup_output) {
+    addSetupScriptResult(worktree.id, {
+      worktreeName: worktree.name,
+      worktreePath: worktree.path,
+      script: worktree.setup_script ?? '',
+      output: worktree.setup_output,
+      success: true,
+    })
+  }
+
+  // Auto-investigate (issue)
+  const shouldInvestigateIssue =
+    useUIStore.getState().autoInvestigateWorktreeIds.has(worktree.id)
+  if (shouldInvestigateIssue) {
+    const timeoutId = window.setTimeout(() => {
+      window.removeEventListener(
+        'chat-ready-for-investigate',
+        issueReadyHandler as EventListener
+      )
+      useUIStore.getState().consumeAutoInvestigate(worktree.id)
+      window.dispatchEvent(
+        new CustomEvent('magic-command', { detail: { command: 'investigate' } })
+      )
+    }, 5000)
+
+    const issueReadyHandler = (
+      e: CustomEvent<{ worktreeId: string; type: string }>
+    ) => {
+      if (e.detail.worktreeId === worktree.id && e.detail.type === 'issue') {
+        clearTimeout(timeoutId)
+        window.removeEventListener(
+          'chat-ready-for-investigate',
+          issueReadyHandler as EventListener
+        )
+        useUIStore.getState().consumeAutoInvestigate(worktree.id)
+        window.dispatchEvent(
+          new CustomEvent('magic-command', { detail: { command: 'investigate' } })
+        )
+      }
+    }
+
+    window.addEventListener(
+      'chat-ready-for-investigate',
+      issueReadyHandler as EventListener
+    )
+  }
+
+  // Auto-investigate (PR)
+  const shouldInvestigatePR =
+    useUIStore.getState().autoInvestigatePRWorktreeIds.has(worktree.id)
+  if (shouldInvestigatePR) {
+    const prTimeoutId = window.setTimeout(() => {
+      window.removeEventListener(
+        'chat-ready-for-investigate',
+        prReadyHandler as EventListener
+      )
+      useUIStore.getState().consumeAutoInvestigatePR(worktree.id)
+      window.dispatchEvent(
+        new CustomEvent('magic-command', { detail: { command: 'investigate' } })
+      )
+    }, 5000)
+
+    const prReadyHandler = (
+      e: CustomEvent<{ worktreeId: string; type: string }>
+    ) => {
+      if (e.detail.worktreeId === worktree.id && e.detail.type === 'pr') {
+        clearTimeout(prTimeoutId)
+        window.removeEventListener(
+          'chat-ready-for-investigate',
+          prReadyHandler as EventListener
+        )
+        useUIStore.getState().consumeAutoInvestigatePR(worktree.id)
+        window.dispatchEvent(
+          new CustomEvent('magic-command', { detail: { command: 'investigate' } })
+        )
+      }
+    }
+
+    window.addEventListener(
+      'chat-ready-for-investigate',
+      prReadyHandler as EventListener
+    )
+  }
+}
+
 // ============================================================================
 // Project Queries
 // ============================================================================
@@ -429,6 +543,42 @@ export function useCreateWorktree() {
       const { expandProject, selectWorktree } = useProjectsStore.getState()
       expandProject(projectId)
       selectWorktree(pendingWorktree.id)
+
+      // Fallback: If the `worktree:created` event is missed, poll the backend until the
+      // worktree is persisted, then mark it ready. This avoids getting stuck on
+      // "Creating..." until app restart.
+      const worktreeId = pendingWorktree.id
+      const startedAt = Date.now()
+      const pollMaxMs = 1000 * 60 * 10 // 10 minutes
+
+      const poll = async (delayMs: number) => {
+        const cached = queryClient.getQueryData<Worktree>([
+          ...projectsQueryKeys.all,
+          'worktree',
+          worktreeId,
+        ])
+        if (cached && cached.status !== 'pending') return
+
+        if (Date.now() - startedAt > pollMaxMs) {
+          queryClient.invalidateQueries({
+            queryKey: projectsQueryKeys.worktrees(projectId),
+          })
+          return
+        }
+
+        try {
+          const worktree = await invoke<Worktree>('get_worktree', { worktreeId })
+          applyWorktreeCreated(queryClient, worktree)
+        } catch {
+          window.setTimeout(() => {
+            poll(Math.min(delayMs * 2, 30000)).catch(() => undefined)
+          }, delayMs)
+        }
+      }
+
+      window.setTimeout(() => {
+        poll(1000).catch(() => undefined)
+      }, 1500)
     },
     onError: error => {
       let message: string
@@ -536,6 +686,40 @@ export function useCreateWorktreeFromExistingBranch() {
       const { expandProject, selectWorktree } = useProjectsStore.getState()
       expandProject(projectId)
       selectWorktree(pendingWorktree.id)
+
+      // Fallback polling (same as useCreateWorktree)
+      const worktreeId = pendingWorktree.id
+      const startedAt = Date.now()
+      const pollMaxMs = 1000 * 60 * 10 // 10 minutes
+
+      const poll = async (delayMs: number) => {
+        const cached = queryClient.getQueryData<Worktree>([
+          ...projectsQueryKeys.all,
+          'worktree',
+          worktreeId,
+        ])
+        if (cached && cached.status !== 'pending') return
+
+        if (Date.now() - startedAt > pollMaxMs) {
+          queryClient.invalidateQueries({
+            queryKey: projectsQueryKeys.worktrees(projectId),
+          })
+          return
+        }
+
+        try {
+          const worktree = await invoke<Worktree>('get_worktree', { worktreeId })
+          applyWorktreeCreated(queryClient, worktree)
+        } catch {
+          window.setTimeout(() => {
+            poll(Math.min(delayMs * 2, 30000)).catch(() => undefined)
+          }, delayMs)
+        }
+      }
+
+      window.setTimeout(() => {
+        poll(1000).catch(() => undefined)
+      }, 1500)
     },
     onError: error => {
       let message: string
