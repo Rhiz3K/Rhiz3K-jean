@@ -93,6 +93,11 @@ fn build_codex_args(
         "build" => {
             args.push("--sandbox".to_string());
             args.push("workspace-write".to_string());
+
+            // Allow outbound network in the workspace-write sandbox so common workflows like
+            // `gh` (GitHub API) work without forcing YOLO mode.
+            args.push("--config".to_string());
+            args.push("sandbox_workspace_write.network_access=true".to_string());
         }
         "yolo" => {
             args.push("--dangerously-bypass-approvals-and-sandbox".to_string());
