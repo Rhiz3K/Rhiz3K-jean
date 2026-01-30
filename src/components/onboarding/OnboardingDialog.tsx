@@ -6,7 +6,7 @@
  * Shows on first launch when required CLIs are missing or not authenticated.
  */
 
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo, useId } from 'react'
 import { CheckCircle2 } from 'lucide-react'
 import {
   Dialog,
@@ -18,7 +18,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { useUIStore } from '@/store/ui-store'
 import { useClaudeCliSetup, useClaudeCliAuth } from '@/services/claude-cli'
-import { useCodexCliSetup } from '@/services/codex-cli'
+import { useCodexCliSetup, useCodexCliAuth } from '@/services/codex-cli'
 import { useGhCliSetup, useGhCliAuth } from '@/services/gh-cli'
 import {
   SetupState,
@@ -39,6 +39,8 @@ type OnboardingStep =
   | 'claude-auth-login'
   | 'codex-setup'
   | 'codex-installing'
+  | 'codex-auth-checking'
+  | 'codex-auth-login'
   | 'gh-setup'
   | 'gh-installing'
   | 'gh-auth-checking'
@@ -104,6 +106,9 @@ function OnboardingDialogContent() {
   const ghAuth = useGhCliAuth({
     enabled: !!ghSetup.status?.installed,
   })
+  const codexAuth = useCodexCliAuth({
+    enabled: !!codexSetup.status?.installed,
+  })
 
   const [step, setStep] = useState<OnboardingStep>('claude-setup')
   const [claudeVersion, setClaudeVersion] = useState<string | null>(null)
@@ -119,15 +124,18 @@ function OnboardingDialogContent() {
   const didInitOnOpenRef = useRef(false)
 
   // Stable terminal IDs for auth login steps (created once per dialog open)
+  const onboardingId = useId().replace(/[^a-zA-Z0-9_-]/g, '')
   const claudeLoginTerminalId = useMemo(
-    // eslint-disable-next-line react-hooks/purity
-    () => `onboarding-claude-login-${Date.now()}`,
-    []
+    () => `onboarding-claude-login-${onboardingId}`,
+    [onboardingId]
+  )
+  const codexLoginTerminalId = useMemo(
+    () => `onboarding-codex-login-${onboardingId}`,
+    [onboardingId]
   )
   const ghLoginTerminalId = useMemo(
-    // eslint-disable-next-line react-hooks/purity
-    () => `onboarding-gh-login-${Date.now()}`,
-    []
+    () => `onboarding-gh-login-${onboardingId}`,
+    [onboardingId]
   )
 
   // Filter to stable releases only
@@ -168,12 +176,20 @@ function OnboardingDialogContent() {
   const getNextStepAfterClaude = useCallback(() => {
     if (!codexSkipped && !codexSetup.status?.installed)
       return 'codex-setup' as const
+    if (
+      !codexSkipped &&
+      codexSetup.status?.installed &&
+      !codexAuth.data?.authenticated
+    ) {
+      return 'codex-auth-checking' as const
+    }
     if (!ghSetup.status?.installed) return 'gh-setup' as const
     if (!ghAuth.data?.authenticated) return 'gh-auth-checking' as const
     return 'complete' as const
   }, [
     codexSkipped,
     codexSetup.status?.installed,
+    codexAuth.data?.authenticated,
     ghSetup.status?.installed,
     ghAuth.data?.authenticated,
   ])
@@ -231,7 +247,9 @@ function OnboardingDialogContent() {
     // Auto-skip based on installation + auth status
     const claudeInstalled = claudeSetup.status?.installed
     const ghInstalled = ghSetup.status?.installed
-    const codexComplete = !!codexSetup.status?.installed || codexSkipped
+    const codexComplete =
+      codexSkipped ||
+      (!!codexSetup.status?.installed && !!codexAuth.data?.authenticated)
     const claudeAuthed = claudeAuth.data?.authenticated
     const ghAuthed = ghAuth.data?.authenticated
 
@@ -269,6 +287,7 @@ function OnboardingDialogContent() {
     ghSetup.status?.installed,
     claudeAuth.data?.authenticated,
     ghAuth.data?.authenticated,
+    codexAuth.data?.authenticated,
     codexSkipped,
     setOnboardingStartStep,
   ])
@@ -309,6 +328,37 @@ function OnboardingDialogContent() {
     getNextStepAfterGh,
   ])
 
+  // Handle Codex auth check result
+  useEffect(() => {
+    if (step !== 'codex-auth-checking') return
+    if (codexAuth.isLoading || codexAuth.isFetching) return
+
+    if (codexAuth.data?.authenticated) {
+      queueMicrotask(() => {
+        if (!ghSetup.status?.installed) {
+          setStep('gh-setup')
+          return
+        }
+
+        if (ghAuth.data?.authenticated) {
+          setStep('complete')
+          return
+        }
+
+        setStep('gh-auth-checking')
+      })
+    } else {
+      queueMicrotask(() => setStep('codex-auth-login'))
+    }
+  }, [
+    step,
+    codexAuth.isLoading,
+    codexAuth.isFetching,
+    codexAuth.data?.authenticated,
+    ghSetup.status?.installed,
+    ghAuth.data?.authenticated,
+  ])
+
   const handleClaudeInstall = useCallback(() => {
     if (!claudeVersion) return
     setStep('claude-installing')
@@ -330,50 +380,30 @@ function OnboardingDialogContent() {
     setStep('codex-installing')
     codexSetup.install(codexVersion, {
       onSuccess: () => {
-        if (!ghSetup.status?.installed) {
-          setStep('gh-setup')
-          return
-        }
-
-        if (ghAuth.data?.authenticated) {
-          setStep('complete')
-          return
-        }
-
-        setStep('gh-auth-checking')
-        ghAuth.refetch()
+        setStep('codex-auth-checking')
+        codexAuth.refetch()
       },
       onError: () => {
         setCodexInstallFailed(true)
         setStep('codex-setup')
       },
     })
-  }, [codexVersion, codexSetup, ghSetup.status?.installed, ghAuth])
+  }, [codexVersion, codexSetup, codexAuth])
 
   const handleCodexInstallLatest = useCallback(() => {
     if (!codexSetup.installLatest) return
     setStep('codex-installing')
     codexSetup.installLatest({
       onSuccess: () => {
-        if (!ghSetup.status?.installed) {
-          setStep('gh-setup')
-          return
-        }
-
-        if (ghAuth.data?.authenticated) {
-          setStep('complete')
-          return
-        }
-
-        setStep('gh-auth-checking')
-        ghAuth.refetch()
+        setStep('codex-auth-checking')
+        codexAuth.refetch()
       },
       onError: () => {
         setCodexInstallFailed(true)
         setStep('codex-setup')
       },
     })
-  }, [codexSetup, ghSetup.status?.installed, ghAuth])
+  }, [codexSetup, codexAuth])
 
   const handleGhInstall = useCallback(() => {
     if (!ghVersion) return
@@ -401,12 +431,34 @@ function OnboardingDialogContent() {
     await ghAuth.refetch()
   }, [ghAuth])
 
+  const handleCodexLoginComplete = useCallback(async () => {
+    setStep('codex-auth-checking')
+    await codexAuth.refetch()
+  }, [codexAuth])
+
   const handleGhLoginSkip = useCallback(() => {
     toast.info(
       'GitHub authentication skipped. You can authenticate later in Settings.'
     )
     setStep('complete')
   }, [])
+
+  const handleCodexLoginSkip = useCallback(() => {
+    toast.info('Codex authentication skipped. You can login later in Settings.')
+    setCodexSkipped(true)
+    if (!ghSetup.status?.installed) {
+      setStep('gh-setup')
+      return
+    }
+
+    if (ghAuth.data?.authenticated) {
+      setStep('complete')
+      return
+    }
+
+    setStep('gh-auth-checking')
+    ghAuth.refetch()
+  }, [ghSetup.status?.installed, ghAuth])
 
   const handleComplete = useCallback(() => {
     claudeSetup.refetchStatus()
@@ -508,6 +560,11 @@ function OnboardingDialogContent() {
   const claudeLoginCommand = claudeSetup.status?.path
     ? `'${claudeSetup.status.path.replace(/'/g, "'\\''")}'`
     : ''
+  const codexLoginCommand = codexSetup.status?.path
+    ? navigator.userAgent.includes('Windows')
+      ? `& "${codexSetup.status.path}" login`
+      : `'${codexSetup.status.path.replace(/'/g, "'\\''")}' login`
+    : ''
   const ghLoginCommand = ghSetup.status?.path
     ? `'${ghSetup.status.path.replace(/'/g, "'\\''")}' auth login`
     : ''
@@ -555,6 +612,14 @@ function OnboardingDialogContent() {
       }
     }
 
+    if (step === 'codex-auth-checking' || step === 'codex-auth-login') {
+      return {
+        title: 'Authenticate Codex CLI',
+        description: 'Codex CLI requires authentication to function.',
+        showClose: false,
+      }
+    }
+
     if (step === 'gh-setup' || step === 'gh-installing') {
       return {
         title: isGhReinstall
@@ -588,8 +653,9 @@ function OnboardingDialogContent() {
 
     const claudeReady =
       !!claudeSetup.status?.installed && !!claudeAuth.data?.authenticated
-    const codexInstalled = !!codexSetup.status?.installed
-    const codexDone = codexInstalled || codexSkipped
+    const codexReady =
+      codexSkipped ||
+      (!!codexSetup.status?.installed && !!codexAuth.data?.authenticated)
     const ghReady = !!ghSetup.status?.installed && !!ghAuth.data?.authenticated
 
     const claudeComplete = claudeReady && !isClaudeStep
@@ -618,20 +684,20 @@ function OnboardingDialogContent() {
           className={`flex items-center gap-1.5 px-2 py-1 rounded text-xs ${
             isCodexStep
               ? 'bg-primary text-primary-foreground'
-              : codexInstalled
+              : codexReady && !codexSkipped
                 ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
-                : codexDone
+                : codexReady
                   ? 'bg-muted text-muted-foreground'
                   : 'bg-muted text-muted-foreground'
           }`}
         >
-          {codexInstalled && !isCodexStep ? (
+          {codexReady && !codexSkipped && !isCodexStep ? (
             <CheckCircle2 className="size-3" />
           ) : (
             <span className="font-medium">2</span>
           )}
           <span>Codex CLI</span>
-          {codexSkipped && !isCodexStep && !codexInstalled && (
+          {codexSkipped && !isCodexStep && (
             <span className="text-muted-foreground">(skipped)</span>
           )}
         </div>
@@ -697,6 +763,16 @@ function OnboardingDialogContent() {
             <InstallingState cliName="Claude CLI" progress={cliData.progress} />
           ) : step === 'codex-installing' && cliData ? (
             <InstallingState cliName="Codex CLI" progress={cliData.progress} />
+          ) : step === 'codex-auth-checking' ? (
+            <AuthCheckingState cliName="Codex CLI" />
+          ) : step === 'codex-auth-login' ? (
+            <AuthLoginState
+              cliName="Codex CLI"
+              terminalId={codexLoginTerminalId}
+              command={codexLoginCommand}
+              onComplete={handleCodexLoginComplete}
+              onSkip={handleCodexLoginSkip}
+            />
           ) : step === 'gh-installing' && cliData ? (
             <InstallingState cliName="GitHub CLI" progress={cliData.progress} />
           ) : step === 'claude-auth-checking' ? (
