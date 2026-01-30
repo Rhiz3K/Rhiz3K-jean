@@ -405,6 +405,7 @@ pub fn write_codex_input_file(
     session_id: &str,
     run_id: &str,
     message: &str,
+    execution_mode: Option<&str>,
     ai_language: Option<&str>,
     parallel_execution_prompt_enabled: bool,
 ) -> Result<PathBuf, String> {
@@ -427,6 +428,22 @@ pub fn write_codex_input_file(
             "In plan mode, structure plans so tasks can be done simultaneously. \
 In build/execute mode, try to parallelize work for faster implementation.\n\n",
         );
+    }
+
+    // Sandbox/network behavior
+    //
+    // Jean runs Codex with a sandbox in plan/build modes. In some environments this blocks
+    // outbound network access, so commands that hit GitHub APIs (e.g. `gh repo list`) will fail.
+    // In yolo mode we bypass the sandbox.
+    match execution_mode.unwrap_or("plan") {
+        "yolo" => {}
+        _ => {
+            prompt.push_str(
+                "Note: In this mode, outbound network access may be blocked by the sandbox. \
+Avoid using `gh`/GitHub API calls here. If GitHub data is required, ask the user to: \
+(1) switch to YOLO mode, or (2) run the command externally and paste the output.\n\n",
+            );
+        }
     }
 
     prompt.push_str(message);
