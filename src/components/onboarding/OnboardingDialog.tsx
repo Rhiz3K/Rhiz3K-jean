@@ -99,17 +99,6 @@ function OnboardingDialogContent() {
   const codexSetup = useCodexCliSetup()
   const ghSetup = useGhCliSetup()
 
-  // Auth hooks — only enabled when CLI is installed
-  const claudeAuth = useClaudeCliAuth({
-    enabled: !!claudeSetup.status?.installed,
-  })
-  const ghAuth = useGhCliAuth({
-    enabled: !!ghSetup.status?.installed,
-  })
-  const codexAuth = useCodexCliAuth({
-    enabled: !!codexSetup.status?.installed,
-  })
-
   const [step, setStep] = useState<OnboardingStep>('claude-setup')
   const [claudeVersion, setClaudeVersion] = useState<string | null>(null)
   const [codexVersion, setCodexVersion] = useState<string | null>(null)
@@ -122,6 +111,19 @@ function OnboardingDialogContent() {
   const deliberateStepRef = useRef(false)
   // Ensure one-time reset of local state per dialog open
   const didInitOnOpenRef = useRef(false)
+
+  // Auth hooks — only enabled when CLI is installed
+  const claudeAuth = useClaudeCliAuth({
+    enabled: !!claudeSetup.status?.installed,
+  })
+  const ghAuth = useGhCliAuth({
+    enabled: !!ghSetup.status?.installed,
+  })
+  const codexAuth = useCodexCliAuth({
+    // Avoid races where we install Codex but `check_codex_cli_installed` hasn't refetched yet.
+    // When the Codex step is active, always allow the auth check to run.
+    enabled: step.startsWith('codex-') || !!codexSetup.status?.installed,
+  })
 
   // Stable terminal IDs for auth login steps (created once per dialog open)
   const onboardingId = useId().replace(/[^a-zA-Z0-9_-]/g, '')
@@ -380,8 +382,11 @@ function OnboardingDialogContent() {
     setStep('codex-installing')
     codexSetup.install(codexVersion, {
       onSuccess: () => {
-        setStep('codex-auth-checking')
-        codexAuth.refetch()
+        void (async () => {
+          await codexSetup.refetchStatus()
+          setStep('codex-auth-checking')
+          await codexAuth.refetch()
+        })()
       },
       onError: () => {
         setCodexInstallFailed(true)
@@ -395,8 +400,11 @@ function OnboardingDialogContent() {
     setStep('codex-installing')
     codexSetup.installLatest({
       onSuccess: () => {
-        setStep('codex-auth-checking')
-        codexAuth.refetch()
+        void (async () => {
+          await codexSetup.refetchStatus()
+          setStep('codex-auth-checking')
+          await codexAuth.refetch()
+        })()
       },
       onError: () => {
         setCodexInstallFailed(true)
