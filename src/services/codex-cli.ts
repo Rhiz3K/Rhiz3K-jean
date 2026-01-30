@@ -163,7 +163,10 @@ export function useInstallCodexCli() {
  * Hook to listen for installation progress events
  * Returns [progress, resetProgress] tuple to allow resetting state before new install
  */
-export function useCodexInstallProgress(): [CodexInstallProgress | null, () => void] {
+export function useCodexInstallProgress(): [
+  CodexInstallProgress | null,
+  () => void,
+] {
   const [progress, setProgress] = useState<CodexInstallProgress | null>(null)
 
   const resetProgress = useCallback(() => {
@@ -178,7 +181,9 @@ export function useCodexInstallProgress(): [CodexInstallProgress | null, () => v
 
     const setupListener = async () => {
       try {
-        logger.info('[useCodexInstallProgress] Setting up listener', { listenerId })
+        logger.info('[useCodexInstallProgress] Setting up listener', {
+          listenerId,
+        })
         unlistenFn = await listen<CodexInstallProgress>(
           'codex-cli:install-progress',
           event => {
@@ -202,7 +207,9 @@ export function useCodexInstallProgress(): [CodexInstallProgress | null, () => v
     setupListener()
 
     return () => {
-      logger.info('[useCodexInstallProgress] Cleaning up listener', { listenerId })
+      logger.info('[useCodexInstallProgress] Cleaning up listener', {
+        listenerId,
+      })
       if (unlistenFn) {
         unlistenFn()
       }
@@ -234,7 +241,9 @@ export function useCodexCliSetup() {
 
     resetProgress()
 
-    logger.info('[useCodexCliSetup] Calling installMutation.mutate()', { version })
+    logger.info('[useCodexCliSetup] Calling installMutation.mutate()', {
+      version,
+    })
     installMutation.mutate(version, {
       onSuccess: () => {
         logger.info('[useCodexCliSetup] mutate onSuccess callback')
@@ -247,17 +256,48 @@ export function useCodexCliSetup() {
     })
   }
 
+  const installLatest = (options?: {
+    onSuccess?: () => void
+    onError?: (error: Error) => void
+  }) => {
+    logger.info('[useCodexCliSetup] installLatest() called', {
+      isPending: installMutation.isPending,
+    })
+
+    resetProgress()
+
+    // Passing `undefined` maps to `version: null` in the invoke call, which makes
+    // the backend pick the latest stable release.
+    installMutation.mutate(undefined, {
+      onSuccess: () => {
+        logger.info(
+          '[useCodexCliSetup] installLatest mutate onSuccess callback'
+        )
+        options?.onSuccess?.()
+      },
+      onError: error => {
+        logger.error(
+          '[useCodexCliSetup] installLatest mutate onError callback',
+          { error }
+        )
+        options?.onError?.(error)
+      },
+    })
+  }
+
   return {
     status: status.data,
     isStatusLoading: status.isLoading,
     versions: versions.data ?? [],
     isVersionsLoading: versions.isLoading,
+    versionsError: versions.error,
     needsSetup,
     isInstalling: installMutation.isPending,
     installError: installMutation.error,
     progress,
     install,
+    installLatest,
     refetchStatus: status.refetch,
+    refetchVersions: versions.refetch,
   }
 }
-

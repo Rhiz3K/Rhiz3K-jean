@@ -27,6 +27,7 @@ export interface SetupStateProps {
     tag_name?: string
     publishedAt?: string
     published_at?: string
+    prerelease?: boolean
   }[]
   selectedVersion: string | null
   currentVersion?: string | null
@@ -80,6 +81,11 @@ export function SetupState({
                   {index === 0 && (
                     <span className="ml-2 text-xs text-muted-foreground">
                       (latest)
+                    </span>
+                  )}
+                  {v.prerelease && (
+                    <span className="ml-2 text-xs text-muted-foreground">
+                      (prerelease)
                     </span>
                   )}
                   {currentVersion === v.version && (

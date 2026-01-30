@@ -58,6 +58,12 @@ interface CliSetupData {
     version: string,
     options?: { onSuccess?: () => void; onError?: (error: Error) => void }
   ) => void
+  // Optional convenience for flows where version fetching fails.
+  installLatest?: (options?: {
+    onSuccess?: () => void
+    onError?: (error: Error) => void
+  }) => void
+  versionsError?: unknown
   currentVersion: string | null | undefined
 }
 
@@ -127,6 +133,12 @@ function OnboardingDialogContent() {
   const stableCodexVersions = codexSetup.versions.filter(v => !v.prerelease)
   const stableGhVersions = ghSetup.versions.filter(v => !v.prerelease)
 
+  // Codex releases are sometimes all marked as prerelease; fall back to showing them.
+  const codexVersionsForPicker =
+    stableCodexVersions.length > 0 ? stableCodexVersions : codexSetup.versions
+  const codexPrereleaseOnly =
+    stableCodexVersions.length === 0 && codexSetup.versions.length > 0
+
   // Auto-select latest versions when loaded
   useEffect(() => {
     if (!claudeVersion && stableClaudeVersions.length > 0) {
@@ -143,16 +155,17 @@ function OnboardingDialogContent() {
   }, [ghVersion, stableGhVersions])
 
   useEffect(() => {
-    if (!codexVersion && stableCodexVersions.length > 0) {
+    if (!codexVersion && codexVersionsForPicker.length > 0) {
       queueMicrotask(() =>
-        setCodexVersion(stableCodexVersions[0]?.version ?? null)
+        setCodexVersion(codexVersionsForPicker[0]?.version ?? null)
       )
     }
-  }, [codexVersion, stableCodexVersions])
+  }, [codexVersion, codexVersionsForPicker])
 
   // Helper: determine next step after Claude is installed + authenticated
   const getNextStepAfterClaude = useCallback(() => {
-    if (!codexSkipped && !codexSetup.status?.installed) return 'codex-setup' as const
+    if (!codexSkipped && !codexSetup.status?.installed)
+      return 'codex-setup' as const
     if (!ghSetup.status?.installed) return 'gh-setup' as const
     if (!ghAuth.data?.authenticated) return 'gh-auth-checking' as const
     return 'complete' as const
@@ -335,6 +348,31 @@ function OnboardingDialogContent() {
     })
   }, [codexVersion, codexSetup, ghSetup.status?.installed, ghAuth])
 
+  const handleCodexInstallLatest = useCallback(() => {
+    if (!codexSetup.installLatest) return
+    setStep('codex-installing')
+    codexSetup.installLatest({
+      onSuccess: () => {
+        if (!ghSetup.status?.installed) {
+          setStep('gh-setup')
+          return
+        }
+
+        if (ghAuth.data?.authenticated) {
+          setStep('complete')
+          return
+        }
+
+        setStep('gh-auth-checking')
+        ghAuth.refetch()
+      },
+      onError: () => {
+        setCodexInstallFailed(true)
+        setStep('codex-setup')
+      },
+    })
+  }, [codexSetup, ghSetup.status?.installed, ghAuth])
+
   const handleGhInstall = useCallback(() => {
     if (!ghVersion) return
     setStep('gh-installing')
@@ -374,7 +412,13 @@ function OnboardingDialogContent() {
     ghSetup.refetchStatus()
     setOnboardingOpen(false)
     setOnboardingStartStep(null)
-  }, [claudeSetup, codexSetup, ghSetup, setOnboardingOpen, setOnboardingStartStep])
+  }, [
+    claudeSetup,
+    codexSetup,
+    ghSetup,
+    setOnboardingOpen,
+    setOnboardingStartStep,
+  ])
 
   const handleSkipGh = useCallback(() => {
     // Only available on error - graceful fallback
@@ -419,12 +463,14 @@ function OnboardingDialogContent() {
         type: 'codex',
         title: 'Codex CLI',
         description: 'Codex CLI is optional and enables Codex agent chat.',
-        versions: stableCodexVersions,
+        versions: codexVersionsForPicker,
         isVersionsLoading: codexSetup.isVersionsLoading,
         isInstalling: codexSetup.isInstalling,
         installError: codexInstallFailed ? codexSetup.installError : null,
         progress: codexSetup.progress,
         install: codexSetup.install,
+        installLatest: codexSetup.installLatest,
+        versionsError: codexSetup.versionsError,
         currentVersion: codexSetup.status?.version,
       }
     }
@@ -469,7 +515,8 @@ function OnboardingDialogContent() {
     if (step === 'complete') {
       return {
         title: 'Setup Complete',
-        description: 'All required tools have been installed and authenticated.',
+        description:
+          'All required tools have been installed and authenticated.',
         showClose: true,
       }
     }
@@ -701,7 +748,7 @@ function OnboardingDialogContent() {
               <div className="space-y-3">
                 <SetupState
                   cliName="Codex CLI"
-                  versions={stableCodexVersions}
+                  versions={codexVersionsForPicker}
                   selectedVersion={codexVersion}
                   currentVersion={
                     isCodexReinstall ? cliData.currentVersion : null
@@ -710,6 +757,36 @@ function OnboardingDialogContent() {
                   onVersionChange={setCodexVersion}
                   onInstall={handleCodexInstall}
                 />
+
+                {codexPrereleaseOnly && (
+                  <p className="text-xs text-muted-foreground">
+                    Only prerelease Codex versions are currently available.
+                  </p>
+                )}
+
+                {codexVersionsForPicker.length === 0 &&
+                  !cliData.isVersionsLoading && (
+                    <div className="rounded-lg border border-border p-3 text-sm">
+                      <p className="text-muted-foreground">
+                        Unable to load Codex versions from GitHub right now.
+                      </p>
+                      {cliData.versionsError != null && (
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {String(cliData.versionsError)}
+                        </p>
+                      )}
+                      <div className="mt-3">
+                        <Button
+                          onClick={handleCodexInstallLatest}
+                          className="w-full"
+                          size="lg"
+                        >
+                          Install Latest Codex CLI
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
                 {!isCodexReinstall && (
                   <Button
                     variant="outline"
@@ -771,7 +848,9 @@ function SuccessState({
             {claudeVersion && <p>Claude CLI: v{claudeVersion}</p>}
             {codexVersion && <p>Codex CLI: v{codexVersion}</p>}
             {ghVersion && <p>GitHub CLI: v{ghVersion}</p>}
-            {!claudeVersion && !codexVersion && !ghVersion && <p>Setup complete</p>}
+            {!claudeVersion && !codexVersion && !ghVersion && (
+              <p>Setup complete</p>
+            )}
           </div>
         </div>
       </div>
