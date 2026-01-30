@@ -318,24 +318,95 @@ pub async fn install_claude_cli(app: AppHandle, version: Option<String>) -> Resu
     // Emit progress: starting
     emit_progress(&app, "starting", "Preparing installation...", 0);
 
-    // Determine version (use provided or fetch stable)
-    let version = match version {
-        Some(v) => v,
-        None => fetch_latest_version().await?,
-    };
-
     // Detect platform
     let platform = get_platform()?;
-    log::trace!("Installing version {version} for platform {platform}");
 
-    // Fetch manifest and get expected checksum
+    // Determine version candidates.
+    //
+    // When installing the "latest" version, there can be brief propagation windows where the
+    // `latest` pointer updates before the per-version manifest is available, leading to HTTP 404.
+    // In that case, try a few recent npm versions as a fallback.
+    let requested_version = version;
+    let mut candidate_versions: Vec<String> = Vec::new();
+
+    if let Some(v) = requested_version.clone() {
+        candidate_versions.push(v);
+    } else {
+        let latest = fetch_latest_version().await?;
+        candidate_versions.push(latest);
+
+        match get_available_cli_versions().await {
+            Ok(versions) => {
+                for v in versions {
+                    candidate_versions.push(v.version);
+                }
+            }
+            Err(e) => {
+                // Fallback list is best-effort; if it fails we still try the "latest" candidate.
+                log::warn!("Failed to fetch fallback Claude CLI versions from npm: {e}");
+            }
+        }
+    }
+
+    // De-dupe candidates while preserving order
+    let mut seen = std::collections::HashSet::<String>::new();
+    candidate_versions.retain(|v| seen.insert(v.clone()));
+
+    log::trace!(
+        "Resolving Claude CLI version for platform {platform} from candidates: {:?}",
+        candidate_versions
+    );
+
+    // Fetch manifest (and ensure platform exists)
     emit_progress(
         &app,
         "fetching_manifest",
         "Fetching release manifest...",
         10,
     );
-    let manifest = fetch_manifest(&version).await?;
+
+    let mut resolved_version: Option<String> = None;
+    let mut resolved_manifest: Option<Manifest> = None;
+    let mut manifest_errors: Vec<String> = Vec::new();
+
+    for v in &candidate_versions {
+        match fetch_manifest(v).await {
+            Ok(m) => {
+                if m.platforms.contains_key(platform) {
+                    resolved_version = Some(v.clone());
+                    resolved_manifest = Some(m);
+                    break;
+                }
+                manifest_errors.push(format!(
+                    "Version {v}: manifest has no entry for platform {platform}"
+                ));
+            }
+            Err(e) => {
+                manifest_errors.push(format!("Version {v}: {e}"));
+            }
+        }
+    }
+
+    let version = resolved_version.ok_or_else(|| {
+        let mut msg = String::new();
+        if requested_version.is_some() {
+            msg.push_str("Failed to fetch Claude CLI release manifest for the selected version.");
+        } else {
+            msg.push_str("Failed to fetch Claude CLI release manifest for the latest version.");
+        }
+
+        if !manifest_errors.is_empty() {
+            msg.push_str("\n\nDetails:\n");
+            msg.push_str(&manifest_errors.join("\n"));
+        }
+
+        msg
+    })?;
+
+    let manifest = resolved_manifest.ok_or_else(|| "Failed to resolve Claude CLI manifest".to_string())?;
+
+    log::trace!("Installing version {version} for platform {platform}");
+
     let expected_checksum = manifest
         .platforms
         .get(platform)

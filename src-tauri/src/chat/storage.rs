@@ -253,13 +253,20 @@ fn load_metadata_internal(
         .map_err(|e| format!("Failed to parse metadata file {path:?}: {e}"))?;
 
     // Best-effort repair for previously-buggy runs where we returned early before persisting
-    // the PID/crash status. A "Running" run with no PID cannot be cancelled/resumed and will
-    // otherwise leave the UI stuck in a "sending" state.
+    // the PID/crash status.
+    //
+    // Important: there is a short, legitimate window between `start_run` (metadata written)
+    // and `set_pid` (PID persisted) during normal operation. If we aggressively mark a
+    // "Running" run with no PID as "Crashed" while it's still starting up, the UI can briefly
+    // show the crashed placeholder message until the CLI produces output.
     let mut repaired = false;
-    let ended_at = std::time::SystemTime::now()
+    let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
         .as_secs();
+    // Only repair PID-less running runs if they've been stuck long enough to be considered
+    // unrecoverable (i.e. not just "pid not persisted yet").
+    const PID_REPAIR_GRACE_SECS: u64 = 30;
     for run in &mut metadata.runs {
         if (run.status == crate::chat::types::RunStatus::Running
             || run.status == crate::chat::types::RunStatus::Resumable
@@ -271,9 +278,12 @@ fn load_metadata_internal(
         }
 
         if run.status == crate::chat::types::RunStatus::Running && run.pid.is_none() {
-            run.status = crate::chat::types::RunStatus::Crashed;
-            run.ended_at = run.ended_at.or(Some(ended_at));
-            repaired = true;
+            let age_secs = now.saturating_sub(run.started_at);
+            if age_secs > PID_REPAIR_GRACE_SECS {
+                run.status = crate::chat::types::RunStatus::Crashed;
+                run.ended_at = run.ended_at.or(Some(now));
+                repaired = true;
+            }
         }
     }
     if repaired {
