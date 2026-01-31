@@ -80,8 +80,9 @@ function applyWorktreeCreated(
   }
 
   // Auto-investigate (issue)
-  const shouldInvestigateIssue =
-    useUIStore.getState().autoInvestigateWorktreeIds.has(worktree.id)
+  const shouldInvestigateIssue = useUIStore
+    .getState()
+    .autoInvestigateWorktreeIds.has(worktree.id)
   if (shouldInvestigateIssue) {
     const timeoutId = window.setTimeout(() => {
       window.removeEventListener(
@@ -105,7 +106,9 @@ function applyWorktreeCreated(
         )
         useUIStore.getState().consumeAutoInvestigate(worktree.id)
         window.dispatchEvent(
-          new CustomEvent('magic-command', { detail: { command: 'investigate' } })
+          new CustomEvent('magic-command', {
+            detail: { command: 'investigate' },
+          })
         )
       }
     }
@@ -117,8 +120,9 @@ function applyWorktreeCreated(
   }
 
   // Auto-investigate (PR)
-  const shouldInvestigatePR =
-    useUIStore.getState().autoInvestigatePRWorktreeIds.has(worktree.id)
+  const shouldInvestigatePR = useUIStore
+    .getState()
+    .autoInvestigatePRWorktreeIds.has(worktree.id)
   if (shouldInvestigatePR) {
     const prTimeoutId = window.setTimeout(() => {
       window.removeEventListener(
@@ -142,7 +146,9 @@ function applyWorktreeCreated(
         )
         useUIStore.getState().consumeAutoInvestigatePR(worktree.id)
         window.dispatchEvent(
-          new CustomEvent('magic-command', { detail: { command: 'investigate' } })
+          new CustomEvent('magic-command', {
+            detail: { command: 'investigate' },
+          })
         )
       }
     }
@@ -567,7 +573,9 @@ export function useCreateWorktree() {
         }
 
         try {
-          const worktree = await invoke<Worktree>('get_worktree', { worktreeId })
+          const worktree = await invoke<Worktree>('get_worktree', {
+            worktreeId,
+          })
           applyWorktreeCreated(queryClient, worktree)
         } catch {
           window.setTimeout(() => {
@@ -708,7 +716,9 @@ export function useCreateWorktreeFromExistingBranch() {
         }
 
         try {
-          const worktree = await invoke<Worktree>('get_worktree', { worktreeId })
+          const worktree = await invoke<Worktree>('get_worktree', {
+            worktreeId,
+          })
           applyWorktreeCreated(queryClient, worktree)
         } catch {
           window.setTimeout(() => {

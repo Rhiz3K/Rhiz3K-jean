@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react'
 import { getModifierSymbol } from '@/lib/platform'
 import { invoke } from '@/lib/transport'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -762,7 +769,8 @@ export function LoadContextModal({
             : preferences?.magic_prompt_models?.context_summary_model
         const codexReasoningEffort =
           agent === 'codex'
-            ? preferences?.magic_prompt_codex_reasoning_efforts?.context_summary_model
+            ? preferences?.magic_prompt_codex_reasoning_efforts
+                ?.context_summary_model
             : undefined
 
         // Call background summarization command with the session's worktree info
@@ -1612,7 +1620,7 @@ function ContextsTab({
     !hasContexts && !hasSessions && !hasAttachedContexts && !isLoading && !error
 
   // Calculate flat index for sessions
-  let sessionStartIndex = filteredContexts.length
+  const initialSessionStartIndex = filteredContexts.length
 
   return (
     <div className="flex flex-col flex-1 min-h-0">
@@ -1711,22 +1719,32 @@ function ContextsTab({
                 <div className="px-3 py-2 text-xs font-medium text-muted-foreground bg-muted/30 mt-2">
                   Generate from Session
                 </div>
-                {filteredEntries.map(entry => {
-                  const entryElement = (
-                    <SessionGroup
-                      key={entry.worktree_id}
-                      entry={entry}
-                      generatingSessionId={generatingSessionId}
-                      onSessionClick={onSessionClick}
-                      selectedIndex={selectedIndex}
-                      sessionStartIndex={sessionStartIndex}
-                      setSelectedIndex={setSelectedIndex}
-                    />
-                  )
-                  // eslint-disable-next-line react-hooks/immutability
-                  sessionStartIndex += entry.sessions.length
-                  return entryElement
-                })}
+                {
+                  filteredEntries.reduce<{
+                    elements: ReactNode[]
+                    startIndex: number
+                  }>(
+                    (acc, entry) => {
+                      acc.elements.push(
+                        <SessionGroup
+                          key={entry.worktree_id}
+                          entry={entry}
+                          generatingSessionId={generatingSessionId}
+                          onSessionClick={onSessionClick}
+                          selectedIndex={selectedIndex}
+                          sessionStartIndex={acc.startIndex}
+                          setSelectedIndex={setSelectedIndex}
+                        />
+                      )
+                      acc.startIndex += entry.sessions.length
+                      return acc
+                    },
+                    {
+                      elements: [],
+                      startIndex: initialSessionStartIndex,
+                    }
+                  ).elements
+                }
               </>
             )}
           </div>

@@ -273,9 +273,7 @@ export function AuthLoginState({
       if (observerRef.current) {
         observerRef.current.disconnect()
       }
-      invoke('stop_terminal', { terminalId }).catch(() => {
-        /* noop */
-      })
+      invoke('stop_terminal', { terminalId }).catch(() => undefined)
       disposeTerminal(terminalId)
     }
   }, [terminalId])

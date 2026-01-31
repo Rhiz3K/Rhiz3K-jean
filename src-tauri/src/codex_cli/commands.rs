@@ -250,7 +250,10 @@ async fn fetch_release(tag_name: &str) -> Result<GitHubRelease, String> {
         .map_err(|e| format!("Failed to fetch release: {e}"))?;
 
     if !response.status().is_success() {
-        return Err(format!("Failed to fetch release: HTTP {}", response.status()));
+        return Err(format!(
+            "Failed to fetch release: HTTP {}",
+            response.status()
+        ));
     }
 
     response
@@ -294,7 +297,12 @@ async fn fetch_latest_codex_version() -> Result<String, String> {
     let version = latest
         .name
         .and_then(|n| extract_version_number(&n))
-        .or_else(|| latest.tag_name.strip_prefix("rust-v").map(|s| s.to_string()))
+        .or_else(|| {
+            latest
+                .tag_name
+                .strip_prefix("rust-v")
+                .map(|s| s.to_string())
+        })
         .unwrap_or(latest.tag_name);
 
     log::trace!("Latest Codex CLI version: {version}");
@@ -507,12 +515,7 @@ fn parse_codex_auth_status(stdout: &str, stderr: &str) -> CodexAuthStatus {
         };
     }
 
-    let auth_markers = [
-        "logged in",
-        "authenticated",
-        "you are logged",
-        "signed in",
-    ];
+    let auth_markers = ["logged in", "authenticated", "you are logged", "signed in"];
     if auth_markers.iter().any(|m| combined_lc.contains(m)) {
         return CodexAuthStatus {
             authenticated: true,
@@ -522,7 +525,9 @@ fn parse_codex_auth_status(stdout: &str, stderr: &str) -> CodexAuthStatus {
 
     CodexAuthStatus {
         authenticated: false,
-        error: Some("Unable to determine authentication status. Please run `codex login`.".to_string()),
+        error: Some(
+            "Unable to determine authentication status. Please run `codex login`.".to_string(),
+        ),
     }
 }
 

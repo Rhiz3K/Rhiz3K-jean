@@ -369,9 +369,7 @@ function App() {
       // Best-effort sync cleanup for refresh scenarios
       // Note: async operations may not complete, but Rust-side RunEvent::Exit
       // will handle proper cleanup on app quit
-      invoke('kill_all_terminals').catch(() => {
-        /* noop */
-      })
+      invoke('kill_all_terminals').catch(() => undefined)
     }
     window.addEventListener('beforeunload', handleBeforeUnload)
     return () => window.removeEventListener('beforeunload', handleBeforeUnload)

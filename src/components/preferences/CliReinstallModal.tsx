@@ -105,7 +105,9 @@ function GhCliReinstallModalContent({ open, onOpenChange }: ModalProps) {
  */
 export function CodexCliReinstallModal({ open, onOpenChange }: ModalProps) {
   if (!open) return null
-  return <CodexCliReinstallModalContent open={open} onOpenChange={onOpenChange} />
+  return (
+    <CodexCliReinstallModalContent open={open} onOpenChange={onOpenChange} />
+  )
 }
 
 function CodexCliReinstallModalContent({ open, onOpenChange }: ModalProps) {
@@ -119,7 +121,6 @@ function CodexCliReinstallModalContent({ open, onOpenChange }: ModalProps) {
     />
   )
 }
-
 
 /**
  * Shared UI component - receives setup as prop, no hooks here
@@ -138,7 +139,11 @@ function CliReinstallModalUI({
   onOpenChange,
 }: CliReinstallModalUIProps) {
   const cliName =
-    cliType === 'claude' ? 'Claude CLI' : cliType === 'codex' ? 'Codex CLI' : 'GitHub CLI'
+    cliType === 'claude'
+      ? 'Claude CLI'
+      : cliType === 'codex'
+        ? 'Codex CLI'
+        : 'GitHub CLI'
 
   // Store setup in ref for stable callback reference
   const setupRef = useRef(setup)

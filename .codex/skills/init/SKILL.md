@@ -56,4 +56,3 @@ Explain to the user:
 - How to generate the Tauri updater keypair if needed.
 
 Be methodical and update each file completely. Do not skip any steps.
-

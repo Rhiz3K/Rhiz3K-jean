@@ -563,14 +563,15 @@ export function useCommandContext(
       const model =
         agent === 'codex'
           ? (preferences?.magic_prompt_codex_models?.code_review_model ??
-              DEFAULT_MAGIC_PROMPT_CODEX_MODELS.code_review_model)
+            DEFAULT_MAGIC_PROMPT_CODEX_MODELS.code_review_model)
           : (preferences?.magic_prompt_models?.code_review_model ??
-              DEFAULT_MAGIC_PROMPT_MODELS.code_review_model)
+            DEFAULT_MAGIC_PROMPT_MODELS.code_review_model)
 
       const codexReasoningEffort =
         agent === 'codex'
-          ? (preferences?.magic_prompt_codex_reasoning_efforts?.code_review_model ??
-              DEFAULT_MAGIC_PROMPT_CODEX_REASONING_EFFORTS.code_review_model)
+          ? (preferences?.magic_prompt_codex_reasoning_efforts
+              ?.code_review_model ??
+            DEFAULT_MAGIC_PROMPT_CODEX_REASONING_EFFORTS.code_review_model)
           : undefined
 
       const result = await invoke<ReviewResponse>('run_review_with_ai', {

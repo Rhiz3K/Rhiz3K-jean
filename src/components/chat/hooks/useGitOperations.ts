@@ -104,7 +104,8 @@ export function useGitOperations({
           : preferences?.magic_prompt_models?.commit_message_model
       const codexReasoningEffort =
         agent === 'codex'
-          ? preferences?.magic_prompt_codex_reasoning_efforts?.commit_message_model
+          ? preferences?.magic_prompt_codex_reasoning_efforts
+              ?.commit_message_model
           : undefined
 
       const result = await invoke<CreateCommitResponse>(
@@ -159,7 +160,8 @@ export function useGitOperations({
           : preferences?.magic_prompt_models?.commit_message_model
       const codexReasoningEffort =
         agent === 'codex'
-          ? preferences?.magic_prompt_codex_reasoning_efforts?.commit_message_model
+          ? preferences?.magic_prompt_codex_reasoning_efforts
+              ?.commit_message_model
           : undefined
 
       const result = await invoke<CreateCommitResponse>(
@@ -251,7 +253,8 @@ export function useGitOperations({
     const toastId = toast.loading(`Creating PR for ${branch}...`)
 
     try {
-      const agent = preferences?.magic_prompt_agents?.pr_content_model ?? 'claude'
+      const agent =
+        preferences?.magic_prompt_agents?.pr_content_model ?? 'claude'
       const model =
         agent === 'codex'
           ? preferences?.magic_prompt_codex_models?.pr_content_model
@@ -440,15 +443,10 @@ export function useGitOperations({
       setActiveSession(activeWorktreeId, newSession.id)
 
       // Apply per-magic agent/model defaults for this new session
-      const agentForPrompt =
-        (preferences?.magic_prompt_agents?.resolve_conflicts_model ??
-          'claude') as ChatAgent
-      const {
-        setAgent,
-        setSelectedModel,
-        setThinkingLevel,
-        setExecutingMode,
-      } = useChatStore.getState()
+      const agentForPrompt = (preferences?.magic_prompt_agents
+        ?.resolve_conflicts_model ?? 'claude') as ChatAgent
+      const { setAgent, setSelectedModel, setThinkingLevel, setExecutingMode } =
+        useChatStore.getState()
       setAgent(newSession.id, agentForPrompt)
       setExecutingMode(newSession.id, 'plan')
       if (agentForPrompt === 'codex') {
@@ -461,8 +459,7 @@ export function useGitOperations({
         setThinkingLevel(
           newSession.id,
           (preferences?.magic_prompt_codex_reasoning_efforts
-            ?.resolve_conflicts_model ??
-            'high') as ThinkingLevel
+            ?.resolve_conflicts_model ?? 'high') as ThinkingLevel
         )
       } else {
         setSelectedModel(
@@ -547,15 +544,10 @@ ${resolveInstructions}`
       setActiveSession(activeWorktreeId, newSession.id)
 
       // Apply per-magic agent/model defaults for this new session
-      const agentForPrompt =
-        (preferences?.magic_prompt_agents?.resolve_conflicts_model ??
-          'claude') as ChatAgent
-      const {
-        setAgent,
-        setSelectedModel,
-        setThinkingLevel,
-        setExecutingMode,
-      } = useChatStore.getState()
+      const agentForPrompt = (preferences?.magic_prompt_agents
+        ?.resolve_conflicts_model ?? 'claude') as ChatAgent
+      const { setAgent, setSelectedModel, setThinkingLevel, setExecutingMode } =
+        useChatStore.getState()
       setAgent(newSession.id, agentForPrompt)
       setExecutingMode(newSession.id, 'plan')
       if (agentForPrompt === 'codex') {
@@ -568,8 +560,7 @@ ${resolveInstructions}`
         setThinkingLevel(
           newSession.id,
           (preferences?.magic_prompt_codex_reasoning_efforts
-            ?.resolve_conflicts_model ??
-            'high') as ThinkingLevel
+            ?.resolve_conflicts_model ?? 'high') as ThinkingLevel
         )
       } else {
         setSelectedModel(

@@ -84,4 +84,3 @@ fn smoke_claude_cli_responds() {
     let _ = Command::new(&path).args(["--version"]).output();
     assert_cli_responds(&path, &["--help"]);
 }
-

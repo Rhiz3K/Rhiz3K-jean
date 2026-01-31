@@ -42,10 +42,9 @@ interface VariableInfo {
 
 interface PromptConfig {
   key: keyof MagicPrompts
-  modelKey:
-    | (keyof MagicPromptModels &
-        keyof MagicPromptCodexModels &
-        keyof MagicPromptCodexReasoningEfforts)
+  modelKey: keyof MagicPromptModels &
+    keyof MagicPromptCodexModels &
+    keyof MagicPromptCodexReasoningEfforts
   label: string
   description: string
   variables: VariableInfo[]
@@ -187,8 +186,8 @@ export const MagicPromptsPane: React.FC = () => {
   const currentCodexEfforts =
     preferences?.magic_prompt_codex_reasoning_efforts ??
     DEFAULT_MAGIC_PROMPT_CODEX_REASONING_EFFORTS
-  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-  const selectedConfig = PROMPT_CONFIGS.find(c => c.key === selectedKey)!
+  const selectedConfig = (PROMPT_CONFIGS.find(c => c.key === selectedKey) ??
+    PROMPT_CONFIGS[0]) as (typeof PROMPT_CONFIGS)[number]
   const currentValue =
     currentPrompts[selectedKey] ?? selectedConfig.defaultValue
   const currentClaudeModel =
@@ -204,7 +203,7 @@ export const MagicPromptsPane: React.FC = () => {
     (currentCodexEfforts[selectedConfig.modelKey] ??
       DEFAULT_MAGIC_PROMPT_CODEX_REASONING_EFFORTS[selectedConfig.modelKey]) as
       ThinkingLevel
-  const isModified = currentPrompts[selectedKey] !== null
+  const isModified = currentValue !== selectedConfig.defaultValue
 
   // Sync local value when selection changes or external value updates
   useEffect(() => {
@@ -283,7 +282,13 @@ export const MagicPromptsPane: React.FC = () => {
         [selectedKey]: null,
       },
     })
-  }, [preferences, savePreferences, currentPrompts, selectedKey])
+  }, [
+    preferences,
+    savePreferences,
+    currentPrompts,
+    selectedKey,
+    selectedConfig.defaultValue,
+  ])
 
   const handleClaudeModelChange = useCallback(
     (model: ClaudeModel) => {
@@ -346,7 +351,8 @@ export const MagicPromptsPane: React.FC = () => {
       {/* Prompt selector grid */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 mb-4 shrink-0">
         {PROMPT_CONFIGS.map(config => {
-          const promptIsModified = currentPrompts[config.key] !== null
+          const promptIsModified =
+            currentPrompts[config.key] !== config.defaultValue
           const promptAgent =
             currentAgents[config.modelKey] ??
             DEFAULT_MAGIC_PROMPT_AGENTS[config.modelKey]
@@ -355,16 +361,16 @@ export const MagicPromptsPane: React.FC = () => {
           const promptCodexModel =
             currentCodexModels[config.modelKey] ??
             DEFAULT_MAGIC_PROMPT_CODEX_MODELS[config.modelKey]
-          const promptEffort =
-            (currentCodexEfforts[config.modelKey] ??
-              DEFAULT_MAGIC_PROMPT_CODEX_REASONING_EFFORTS[config.modelKey]) as
-              ThinkingLevel
+          const promptEffort = (currentCodexEfforts[config.modelKey] ??
+            DEFAULT_MAGIC_PROMPT_CODEX_REASONING_EFFORTS[
+              config.modelKey
+            ]) as ThinkingLevel
           const effortBadge =
-            promptCodexModel === 'gpt-5.2-codex' ? `c-${promptEffort}` : promptEffort
+            promptCodexModel === 'gpt-5.2-codex'
+              ? `c-${promptEffort}`
+              : promptEffort
           const badgeText =
-            promptAgent === 'codex'
-              ? effortBadge
-              : promptClaudeModel
+            promptAgent === 'codex' ? effortBadge : promptClaudeModel
           return (
             <button
               key={config.key}
@@ -408,7 +414,12 @@ export const MagicPromptsPane: React.FC = () => {
           </p>
           <div className="flex flex-wrap items-center gap-2 mt-2">
             <span className="text-xs text-muted-foreground">Use</span>
-            <Select value={currentAgent} onValueChange={(v: string) => handleAgentChange(v as MagicPromptAgent)}>
+            <Select
+              value={currentAgent}
+              onValueChange={(v: string) =>
+                handleAgentChange(v as MagicPromptAgent)
+              }
+            >
               <SelectTrigger className="w-[130px] h-8 text-xs">
                 <SelectValue />
               </SelectTrigger>

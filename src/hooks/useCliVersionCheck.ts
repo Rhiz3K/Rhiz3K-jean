@@ -11,7 +11,10 @@ import {
   useClaudeCliStatus,
   useAvailableCliVersions,
 } from '@/services/claude-cli'
-import { useCodexCliStatus, useAvailableCodexVersions } from '@/services/codex-cli'
+import {
+  useCodexCliStatus,
+  useAvailableCodexVersions,
+} from '@/services/codex-cli'
 import { useGhCliStatus, useAvailableGhVersions } from '@/services/gh-cli'
 import { useUIStore } from '@/store/ui-store'
 import { isNewerVersion } from '@/lib/version-utils'
@@ -100,7 +103,11 @@ export function useCliVersionCheck() {
     }
 
     // Check Codex CLI
-    if (codexStatus?.installed && codexStatus.version && codexVersions?.length) {
+    if (
+      codexStatus?.installed &&
+      codexStatus.version &&
+      codexVersions?.length
+    ) {
       const latestStable = codexVersions.find(v => !v.prerelease)
       if (
         latestStable &&

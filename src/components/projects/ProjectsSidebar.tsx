@@ -74,6 +74,30 @@ export function ProjectsSidebar() {
       )
     }
 
+    // Fetch sessions for all worktrees in a project
+    const fetchSessionsForProject = async (projectId: string) => {
+      try {
+        const worktrees = await invoke<Worktree[]>('list_worktrees', {
+          projectId,
+        })
+        await Promise.all(
+          worktrees.map(w =>
+            prefetchSessions(queryClient, w.id, w.path).catch(err =>
+              console.warn(
+                `[startup] Failed to prefetch sessions for ${w.name}:`,
+                err
+              )
+            )
+          )
+        )
+      } catch (err) {
+        console.warn(
+          `[startup] Failed to list worktrees for project ${projectId}:`,
+          err
+        )
+      }
+    }
+
     const fetchAll = async () => {
       const concurrencyLimit = 3
 
@@ -96,7 +120,7 @@ export function ProjectsSidebar() {
       }
 
       console.info(
-        '[startup] Done fetching worktree git status for all projects'
+        '[startup] Done fetching worktree status and sessions for all projects'
       )
     }
 

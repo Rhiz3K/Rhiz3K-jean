@@ -42,7 +42,9 @@ describe('MagicPromptsPane', () => {
 
     render(<MagicPromptsPane />)
 
-    const investigateBtn = screen.getByRole('button', { name: /Investigate Issue/i })
+    const investigateBtn = screen.getByRole('button', {
+      name: /Investigate Issue/i,
+    })
     expect(within(investigateBtn).getByText('opus')).toBeInTheDocument()
     expect(within(investigateBtn).queryByText('c-low')).not.toBeInTheDocument()
   })
@@ -76,4 +78,3 @@ describe('MagicPromptsPane', () => {
     expect(within(commitBtn).queryByText('opus')).not.toBeInTheDocument()
   })
 })
-

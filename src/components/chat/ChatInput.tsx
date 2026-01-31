@@ -82,6 +82,7 @@ export const ChatInput = memo(function ChatInput({
   const [slashTriggerIndex, setSlashTriggerIndex] = useState<number | null>(
     null
   )
+  const [isSlashAtPromptStart, setIsSlashAtPromptStart] = useState(false)
 
   // Refs to expose navigation methods from popovers
   const fileMentionHandleRef = useRef<FileMentionPopoverHandle | null>(null)
@@ -267,9 +268,14 @@ export const ChatInput = memo(function ChatInput({
             charBeforeSlash === ' ' ||
             charBeforeSlash === '\n'
           ) {
-            setSlashTriggerIndex(cursorPos - 1)
+            const triggerIndex = cursorPos - 1
+            setSlashTriggerIndex(triggerIndex)
             setSlashQuery('')
             setSlashPopoverOpen(true)
+
+            setIsSlashAtPromptStart(
+              triggerIndex === 0 || value.slice(0, triggerIndex).trim() === ''
+            )
 
             // Calculate anchor position relative to form
             const textarea = e.target
@@ -296,8 +302,13 @@ export const ChatInput = memo(function ChatInput({
             setSlashPopoverOpen(false)
             setSlashTriggerIndex(null)
             setSlashQuery('')
+            setIsSlashAtPromptStart(false)
           } else {
             setSlashQuery(query)
+            setIsSlashAtPromptStart(
+              slashTriggerIndex === 0 ||
+                value.slice(0, slashTriggerIndex).trim() === ''
+            )
           }
         }
       }
@@ -750,12 +761,14 @@ export const ChatInput = memo(function ChatInput({
     [inputRef, onCommandExecute]
   )
 
-  // Determine if slash is at prompt start (for enabling commands)
-  const isSlashAtPromptStart =
-    slashTriggerIndex !== null &&
-    (slashTriggerIndex === 0 ||
-      // eslint-disable-next-line react-hooks/refs
-      valueRef.current.slice(0, slashTriggerIndex).trim() === '')
+  const handleSlashPopoverOpenChange = useCallback((open: boolean) => {
+    setSlashPopoverOpen(open)
+    if (!open) {
+      setSlashTriggerIndex(null)
+      setSlashQuery('')
+      setIsSlashAtPromptStart(false)
+    }
+  }, [])
 
   return (
     <div className="relative">
@@ -803,7 +816,7 @@ export const ChatInput = memo(function ChatInput({
       {/* Slash popover (/ commands and skills) */}
       <SlashPopover
         open={slashPopoverOpen}
-        onOpenChange={setSlashPopoverOpen}
+        onOpenChange={handleSlashPopoverOpenChange}
         onSelectSkill={handleSkillSelect}
         onSelectCommand={handleCommandSelect}
         searchQuery={slashQuery}

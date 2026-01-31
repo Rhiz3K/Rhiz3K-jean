@@ -307,6 +307,7 @@ export async function removeIssueContext(
     issueNumber,
     projectPath,
   })
+  return
 }
 
 // =============================================================================
@@ -453,6 +454,7 @@ export async function removePRContext(
     prNumber,
     projectPath,
   })
+  return
 }
 
 /**
@@ -655,6 +657,7 @@ export async function removeSavedContext(
     worktreeId,
     slug,
   })
+  return
 }
 
 /**

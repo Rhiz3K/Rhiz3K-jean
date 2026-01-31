@@ -194,6 +194,20 @@ describe('Project Commands', () => {
     expect(found.length).toBe(2)
   })
 
+  describe('execution mode commands', () => {
+    it('registers all execution mode commands', () => {
+      const commands = getAllCommands(mockContext)
+      const executionIds = [
+        'execution-plan',
+        'execution-build',
+        'execution-yolo',
+        'cycle-execution-mode',
+      ]
+      const found = commands.filter(cmd => executionIds.includes(cmd.id))
+      // cycle-execution-mode should always be available
+      expect(found.some(c => c.id === 'cycle-execution-mode')).toBe(true)
+    })
+
   it('add-project is always available', () => {
     const commands = getAllCommands(mockContext)
     const addCmd = commands.find(c => c.id === 'add-project')

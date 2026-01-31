@@ -6,7 +6,7 @@
  * interactive terminal access.
  */
 
-import { useCallback, useEffect, useRef, useMemo } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef } from 'react'
 import { invoke } from '@/lib/transport'
 import { useQueryClient } from '@tanstack/react-query'
 import { ghCliQueryKeys } from '@/services/gh-cli'
@@ -55,15 +55,21 @@ function CliLoginModalContent({
   const initialized = useRef(false)
   const observerRef = useRef<ResizeObserver | null>(null)
   const cliName =
-    cliType === 'claude' ? 'Claude CLI' : cliType === 'codex' ? 'Codex CLI' : 'GitHub CLI'
+    cliType === 'claude'
+      ? 'Claude CLI'
+      : cliType === 'codex'
+        ? 'Codex CLI'
+        : 'GitHub CLI'
 
   // Generate unique terminal ID for this login session
+  const id = useId()
   const terminalId = useMemo(() => {
-    // eslint-disable-next-line react-hooks/purity
-    const id = `cli-login-${Date.now()}`
-    console.log('[CliLoginModal] Generated terminalId:', id)
-    return id
-  }, [])
+    // useId() can include ":" which is awkward in logs/paths
+    const safeId = id.replace(/:/g, '')
+    const tid = `cli-login-${safeId}`
+    console.log('[CliLoginModal] Generated terminalId:', tid)
+    return tid
+  }, [id])
 
   console.log(
     '[CliLoginModal] Render - terminalId:',

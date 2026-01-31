@@ -25,8 +25,8 @@ use super::types::{
     WorktreeDeleteErrorEvent, WorktreeDeletedEvent, WorktreeDeletingEvent, WorktreePathExistsEvent,
     WorktreePermanentlyDeletedEvent, WorktreeUnarchivedEvent,
 };
-use crate::claude_cli::get_cli_binary_path;
 use crate::chat::types::ChatAgent;
+use crate::claude_cli::get_cli_binary_path;
 use crate::codex_cli::run_codex_prompt;
 use crate::gh_cli::config::resolve_gh_binary;
 use crate::http_server::EmitExt;

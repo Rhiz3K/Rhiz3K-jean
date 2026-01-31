@@ -10,6 +10,7 @@ metadata:
 Helps install skills. By default these are from https://github.com/openai/skills/tree/main/skills/.curated, but users can also provide other locations.
 
 Use the helper scripts based on the task:
+
 - List curated skills when the user asks what is available, or if the user uses this skill without specifying what to do.
 - Install from the curated list when the user provides a skill name.
 - Install from another repo when the user provides a GitHub repo/path (including private repos).
@@ -21,11 +22,12 @@ Install skills with the helper scripts.
 When listing curated skills, output approximately as follows, depending on the context of the user's request:
 """
 Skills from {repo}:
+
 1. skill-1
 2. skill-2 (already installed)
 3. ...
-Which ones would you like installed?
-"""
+   Which ones would you like installed?
+   """
 
 After installing a skill, tell the user: "Restart Codex to pick up new skills."
 

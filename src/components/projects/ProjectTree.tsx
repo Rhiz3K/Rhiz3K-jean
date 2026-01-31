@@ -35,8 +35,9 @@ function getDepth(projects: Project[], itemId: string): number {
   let current = projects.find(p => p.id === itemId)
   while (current?.parent_id) {
     depth++
-    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-    current = projects.find(p => p.id === current!.parent_id)
+    const parentId = current.parent_id
+    if (!parentId) break
+    current = projects.find(p => p.id === parentId)
   }
   return depth
 }
