@@ -226,7 +226,6 @@ interface ChatToolbarProps {
   onResolvePrConflicts: () => void
   onResolveConflicts: () => void
   onInvestigate: () => void
-  isBaseSession: boolean
   hasOpenPr: boolean
   onSetDiffRequest: (request: DiffRequest) => void
   onAgentChange: (agent: ChatAgent) => void
@@ -283,7 +282,6 @@ export const ChatToolbar = memo(function ChatToolbar({
   onResolvePrConflicts,
   onResolveConflicts,
   onInvestigate,
-  isBaseSession,
   hasOpenPr,
   onSetDiffRequest,
   onAgentChange,

@@ -84,7 +84,6 @@ import { usePrStatus, usePrStatusEvents } from '@/services/pr-status'
 import type { PrDisplayStatus, CheckStatus } from '@/types/pr-status'
 import type { QueuedMessage, ExecutionMode, ChatAgent } from '@/types/chat'
 import type { DiffRequest } from '@/types/git-diff'
-import { isBaseSession } from '@/types/projects'
 import { GitDiffModal } from './GitDiffModal'
 import { FileDiffModal } from './FileDiffModal'
 import { LoadContextModal } from '../magic/LoadContextModal'
@@ -2185,7 +2184,6 @@ Begin your investigation now.`
                         onResolvePrConflicts={handleResolvePrConflicts}
                         onResolveConflicts={handleResolveConflicts}
                         onInvestigate={handleInvestigate}
-                        isBaseSession={worktree ? isBaseSession(worktree) : true}
                         hasOpenPr={Boolean(worktree?.pr_url)}
                         onSetDiffRequest={setDiffRequest}
                         onAgentChange={handleToolbarAgentChange}
