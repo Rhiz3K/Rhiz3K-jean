@@ -38,7 +38,10 @@ export function TitleBar({ className, title = 'Jean' }: TitleBarProps) {
       )}
     >
       {/* Left side - Window Controls + Left Actions */}
-      <div className="flex items-center" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
+      <div
+        className="flex items-center"
+        style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+      >
         {isMacOS && <MacOSWindowControls />}
 
         {/* Left Action Buttons */}
@@ -68,7 +71,9 @@ export function TitleBar({ className, title = 'Jean' }: TitleBarProps) {
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
-                onClick={() => executeCommand('open-preferences', commandContext)}
+                onClick={() =>
+                  executeCommand('open-preferences', commandContext)
+                }
                 variant="ghost"
                 size="icon"
                 className="h-6 w-6 text-foreground/70 hover:text-foreground"
@@ -77,10 +82,13 @@ export function TitleBar({ className, title = 'Jean' }: TitleBarProps) {
               </Button>
             </TooltipTrigger>
             <TooltipContent>
-              Settings <kbd className="ml-1 text-[0.625rem] opacity-60">{formatShortcutDisplay(
-                (preferences?.keybindings?.open_preferences ||
-                  DEFAULT_KEYBINDINGS.open_preferences) as string
-              )}</kbd>
+              Settings{' '}
+              <kbd className="ml-1 text-[0.625rem] opacity-60">
+                {formatShortcutDisplay(
+                  (preferences?.keybindings?.open_preferences ||
+                    DEFAULT_KEYBINDINGS.open_preferences) as string
+                )}
+              </kbd>
             </TooltipContent>
           </Tooltip>
         </div>

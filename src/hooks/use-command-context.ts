@@ -28,7 +28,9 @@ import { gitPull, triggerImmediateGitPoll } from '@/services/git-status'
  * Command context hook - provides essential actions for commands
  * @param preferences - Optional preferences for terminal/editor selection
  */
-export function useCommandContext(preferences?: AppPreferences): CommandContext {
+export function useCommandContext(
+  preferences?: AppPreferences
+): CommandContext {
   const queryClient = useQueryClient()
   const themeContext = useContext(ThemeProviderContext)
 
@@ -273,6 +275,7 @@ export function useCommandContext(preferences?: AppPreferences): CommandContext 
   }, [getTargetPath])
 
   // Open In - Terminal
+  // eslint-disable-next-line react-hooks/preserve-manual-memoization
   const openInTerminal = useCallback(async () => {
     const worktreePath = getTargetPath()
     if (!worktreePath) {
@@ -292,6 +295,7 @@ export function useCommandContext(preferences?: AppPreferences): CommandContext 
   }, [getTargetPath, preferences?.terminal])
 
   // Open In - Editor
+  // eslint-disable-next-line react-hooks/preserve-manual-memoization
   const openInEditor = useCallback(async () => {
     const worktreePath = getTargetPath()
     if (!worktreePath) {
@@ -556,14 +560,15 @@ export function useCommandContext(preferences?: AppPreferences): CommandContext 
       const model =
         agent === 'codex'
           ? (preferences?.magic_prompt_codex_models?.code_review_model ??
-              DEFAULT_MAGIC_PROMPT_CODEX_MODELS.code_review_model)
+            DEFAULT_MAGIC_PROMPT_CODEX_MODELS.code_review_model)
           : (preferences?.magic_prompt_models?.code_review_model ??
-              DEFAULT_MAGIC_PROMPT_MODELS.code_review_model)
+            DEFAULT_MAGIC_PROMPT_MODELS.code_review_model)
 
       const codexReasoningEffort =
         agent === 'codex'
-          ? (preferences?.magic_prompt_codex_reasoning_efforts?.code_review_model ??
-              DEFAULT_MAGIC_PROMPT_CODEX_REASONING_EFFORTS.code_review_model)
+          ? (preferences?.magic_prompt_codex_reasoning_efforts
+              ?.code_review_model ??
+            DEFAULT_MAGIC_PROMPT_CODEX_REASONING_EFFORTS.code_review_model)
           : undefined
 
       const result = await invoke<ReviewResponse>('run_review_with_ai', {
@@ -605,7 +610,9 @@ export function useCommandContext(preferences?: AppPreferences): CommandContext 
 
     const { addTerminal, setTerminalPanelOpen, setTerminalVisible } =
       useTerminalStore.getState()
-    const terminals = useTerminalStore.getState().getTerminals(selectedWorktreeId)
+    const terminals = useTerminalStore
+      .getState()
+      .getTerminals(selectedWorktreeId)
 
     // Create a new terminal if none exists
     if (terminals.length === 0) {

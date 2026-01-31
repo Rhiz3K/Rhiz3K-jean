@@ -48,7 +48,10 @@ describe('useCommandContext', () => {
 
   it('runAIReview uses per-magic Codex model + reasoning effort', async () => {
     const qc = new QueryClient({
-      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+      defaultOptions: {
+        queries: { retry: false },
+        mutations: { retry: false },
+      },
     })
 
     const prefs: AppPreferences = {
@@ -102,4 +105,3 @@ describe('useCommandContext', () => {
     })
   })
 })
-

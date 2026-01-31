@@ -7,8 +7,14 @@
 
 import { useEffect, useRef } from 'react'
 import { toast } from 'sonner'
-import { useClaudeCliStatus, useAvailableCliVersions } from '@/services/claude-cli'
-import { useCodexCliStatus, useAvailableCodexVersions } from '@/services/codex-cli'
+import {
+  useClaudeCliStatus,
+  useAvailableCliVersions,
+} from '@/services/claude-cli'
+import {
+  useCodexCliStatus,
+  useAvailableCodexVersions,
+} from '@/services/codex-cli'
 import { useGhCliStatus, useAvailableGhVersions } from '@/services/gh-cli'
 import { useUIStore } from '@/store/ui-store'
 import { isNewerVersion } from '@/lib/version-utils'
@@ -55,9 +61,16 @@ export function useCliVersionCheck() {
     const updates: CliUpdateInfo[] = []
 
     // Check Claude CLI
-    if (claudeStatus?.installed && claudeStatus.version && claudeVersions?.length) {
+    if (
+      claudeStatus?.installed &&
+      claudeStatus.version &&
+      claudeVersions?.length
+    ) {
       const latestStable = claudeVersions.find(v => !v.prerelease)
-      if (latestStable && isNewerVersion(latestStable.version, claudeStatus.version)) {
+      if (
+        latestStable &&
+        isNewerVersion(latestStable.version, claudeStatus.version)
+      ) {
         const key = `claude:${claudeStatus.version}→${latestStable.version}`
         if (!notifiedRef.current.has(key)) {
           notifiedRef.current.add(key)
@@ -73,7 +86,10 @@ export function useCliVersionCheck() {
     // Check GitHub CLI
     if (ghStatus?.installed && ghStatus.version && ghVersions?.length) {
       const latestStable = ghVersions.find(v => !v.prerelease)
-      if (latestStable && isNewerVersion(latestStable.version, ghStatus.version)) {
+      if (
+        latestStable &&
+        isNewerVersion(latestStable.version, ghStatus.version)
+      ) {
         const key = `gh:${ghStatus.version}→${latestStable.version}`
         if (!notifiedRef.current.has(key)) {
           notifiedRef.current.add(key)
@@ -87,7 +103,11 @@ export function useCliVersionCheck() {
     }
 
     // Check Codex CLI
-    if (codexStatus?.installed && codexStatus.version && codexVersions?.length) {
+    if (
+      codexStatus?.installed &&
+      codexStatus.version &&
+      codexVersions?.length
+    ) {
       const latestStable = codexVersions.find(v => !v.prerelease)
       if (
         latestStable &&

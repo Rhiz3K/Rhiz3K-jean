@@ -52,14 +52,16 @@ export function useContextOperations({
     const toastId = toast.loading('Saving context...')
 
     try {
-      const agent = preferences?.magic_prompt_agents?.context_summary_model ?? 'claude'
+      const agent =
+        preferences?.magic_prompt_agents?.context_summary_model ?? 'claude'
       const model =
         agent === 'codex'
           ? preferences?.magic_prompt_codex_models?.context_summary_model
           : preferences?.magic_prompt_models?.context_summary_model
       const codexReasoningEffort =
         agent === 'codex'
-          ? preferences?.magic_prompt_codex_reasoning_efforts?.context_summary_model
+          ? preferences?.magic_prompt_codex_reasoning_efforts
+              ?.context_summary_model
           : undefined
 
       // Call background summarization command

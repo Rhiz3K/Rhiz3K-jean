@@ -26,7 +26,9 @@ export const windowCommands: AppCommand[] = [
               ),
             ])
             if (hasRunning) {
-              window.dispatchEvent(new CustomEvent('quit-confirmation-requested'))
+              window.dispatchEvent(
+                new CustomEvent('quit-confirmation-requested')
+              )
               return
             }
           } catch {

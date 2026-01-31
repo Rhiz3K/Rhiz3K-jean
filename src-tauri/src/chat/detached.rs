@@ -223,15 +223,15 @@ pub fn spawn_detached_codex(
         )
     };
 
-	    log::trace!("Spawning detached Codex CLI");
-	    log::trace!("Shell command: {shell_cmd}");
-	    log::trace!("Working directory: {working_dir:?}");
+    log::trace!("Spawning detached Codex CLI");
+    log::trace!("Shell command: {shell_cmd}");
+    log::trace!("Working directory: {working_dir:?}");
 
-	    let mut child = silent_command("sh")
-	        .arg("-c")
-	        .arg(&shell_cmd)
-	        .current_dir(working_dir)
-	        .stdin(Stdio::null())
+    let mut child = silent_command("sh")
+        .arg("-c")
+        .arg(&shell_cmd)
+        .current_dir(working_dir)
+        .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
@@ -282,9 +282,9 @@ pub fn spawn_detached_codex(
         .parse()
         .map_err(|e| format!("Failed to parse PID '{pid_str}': {e}"))?;
 
-	    log::trace!("Detached Codex CLI spawned with PID: {pid}");
-	    Ok(pid)
-	}
+    log::trace!("Detached Codex CLI spawned with PID: {pid}");
+    Ok(pid)
+}
 
 /// Spawn Claude CLI as a detached native Windows process.
 ///
@@ -408,7 +408,9 @@ pub fn spawn_detached_codex(
         cmd.env(k, v);
     }
 
-    let child = cmd.spawn().map_err(|e| format!("Failed to spawn Codex: {e}"))?;
+    let child = cmd
+        .spawn()
+        .map_err(|e| format!("Failed to spawn Codex: {e}"))?;
     Ok(child.id())
 }
 

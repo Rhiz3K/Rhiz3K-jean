@@ -207,7 +207,10 @@ export const AppearancePane: React.FC = () => {
             <Select
               value={preferences?.syntax_theme_dark ?? 'vitesse-black'}
               onValueChange={value =>
-                handleSyntaxThemeChange('syntax_theme_dark', value as SyntaxTheme)
+                handleSyntaxThemeChange(
+                  'syntax_theme_dark',
+                  value as SyntaxTheme
+                )
               }
               disabled={savePreferences.isPending}
             >
@@ -231,7 +234,10 @@ export const AppearancePane: React.FC = () => {
             <Select
               value={preferences?.syntax_theme_light ?? 'github-light'}
               onValueChange={value =>
-                handleSyntaxThemeChange('syntax_theme_light', value as SyntaxTheme)
+                handleSyntaxThemeChange(
+                  'syntax_theme_light',
+                  value as SyntaxTheme
+                )
               }
               disabled={savePreferences.isPending}
             >

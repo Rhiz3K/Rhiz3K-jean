@@ -127,17 +127,21 @@ export function PermissionApproval({
     // Extract inner content for containment check (e.g., "Bash(cmd)" → "cmd")
     const innerContent = patterns.map(p => {
       const match = p.match(/^(\w+)\((.+)\)$/)
-      return match ? { tool: match[1] ?? p, content: match[2] ?? p } : { tool: p, content: p }
+      return match
+        ? { tool: match[1] ?? p, content: match[2] ?? p }
+        : { tool: p, content: p }
     })
     const keep = new Set<number>()
 
     for (let i = 0; i < denials.length; i++) {
       let shouldKeep = true
-      const itemI = innerContent[i]!
+      const itemI = innerContent[i]
+      if (!itemI) continue
 
       for (let j = 0; j < denials.length; j++) {
         if (i === j) continue
-        const itemJ = innerContent[j]!
+        const itemJ = innerContent[j]
+        if (!itemJ) continue
 
         // Only compare containment for same tool type
         if (itemI.tool === itemJ.tool) {

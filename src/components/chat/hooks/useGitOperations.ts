@@ -7,7 +7,11 @@ import { useChatStore } from '@/store/chat-store'
 import { useProjectsStore } from '@/store/projects-store'
 import { chatQueryKeys } from '@/services/chat'
 import { saveWorktreePr, projectsQueryKeys } from '@/services/projects'
-import { gitPull, gitPush, triggerImmediateGitPoll } from '@/services/git-status'
+import {
+  gitPull,
+  gitPush,
+  triggerImmediateGitPoll,
+} from '@/services/git-status'
 import { isBaseSession } from '@/types/projects'
 import type {
   CreatePrResponse,
@@ -20,7 +24,10 @@ import type {
   Project,
 } from '@/types/projects'
 import type { Session, ChatAgent, ThinkingLevel } from '@/types/chat'
-import { DEFAULT_RESOLVE_CONFLICTS_PROMPT, type AppPreferences } from '@/types/preferences'
+import {
+  DEFAULT_RESOLVE_CONFLICTS_PROMPT,
+  type AppPreferences,
+} from '@/types/preferences'
 
 interface UseGitOperationsParams {
   activeWorktreeId: string | null | undefined
@@ -96,7 +103,8 @@ export function useGitOperations({
           : preferences?.magic_prompt_models?.commit_message_model
       const codexReasoningEffort =
         agent === 'codex'
-          ? preferences?.magic_prompt_codex_reasoning_efforts?.commit_message_model
+          ? preferences?.magic_prompt_codex_reasoning_efforts
+              ?.commit_message_model
           : undefined
 
       const result = await invoke<CreateCommitResponse>(
@@ -149,7 +157,8 @@ export function useGitOperations({
           : preferences?.magic_prompt_models?.commit_message_model
       const codexReasoningEffort =
         agent === 'codex'
-          ? preferences?.magic_prompt_codex_reasoning_efforts?.commit_message_model
+          ? preferences?.magic_prompt_codex_reasoning_efforts
+              ?.commit_message_model
           : undefined
 
       const result = await invoke<CreateCommitResponse>(
@@ -237,7 +246,8 @@ export function useGitOperations({
     const toastId = toast.loading('Creating PR...')
 
     try {
-      const agent = preferences?.magic_prompt_agents?.pr_content_model ?? 'claude'
+      const agent =
+        preferences?.magic_prompt_agents?.pr_content_model ?? 'claude'
       const model =
         agent === 'codex'
           ? preferences?.magic_prompt_codex_models?.pr_content_model
@@ -407,13 +417,10 @@ export function useGitOperations({
         return
       }
 
-      toast.warning(
-        `Found conflicts in ${result.conflicts.length} file(s)`,
-        {
-          id: toastId,
-          description: 'Opening conflict resolution session...',
-        }
-      )
+      toast.warning(`Found conflicts in ${result.conflicts.length} file(s)`, {
+        id: toastId,
+        description: 'Opening conflict resolution session...',
+      })
 
       const { setActiveSession, setInputDraft } = useChatStore.getState()
 
@@ -428,15 +435,10 @@ export function useGitOperations({
       setActiveSession(activeWorktreeId, newSession.id)
 
       // Apply per-magic agent/model defaults for this new session
-      const agentForPrompt =
-        (preferences?.magic_prompt_agents?.resolve_conflicts_model ??
-          'claude') as ChatAgent
-      const {
-        setAgent,
-        setSelectedModel,
-        setThinkingLevel,
-        setExecutingMode,
-      } = useChatStore.getState()
+      const agentForPrompt = (preferences?.magic_prompt_agents
+        ?.resolve_conflicts_model ?? 'claude') as ChatAgent
+      const { setAgent, setSelectedModel, setThinkingLevel, setExecutingMode } =
+        useChatStore.getState()
       setAgent(newSession.id, agentForPrompt)
       setExecutingMode(newSession.id, 'plan')
       if (agentForPrompt === 'codex') {
@@ -449,8 +451,7 @@ export function useGitOperations({
         setThinkingLevel(
           newSession.id,
           (preferences?.magic_prompt_codex_reasoning_efforts
-            ?.resolve_conflicts_model ??
-            'high') as ThinkingLevel
+            ?.resolve_conflicts_model ?? 'high') as ThinkingLevel
         )
       } else {
         setSelectedModel(
@@ -467,7 +468,9 @@ export function useGitOperations({
         ? `\n\nHere is the diff showing the conflict details:\n\n\`\`\`diff\n${result.conflict_diff}\n\`\`\``
         : ''
 
-      const resolveInstructions = preferences?.magic_prompts?.resolve_conflicts ?? DEFAULT_RESOLVE_CONFLICTS_PROMPT
+      const resolveInstructions =
+        preferences?.magic_prompts?.resolve_conflicts ??
+        DEFAULT_RESOLVE_CONFLICTS_PROMPT
 
       const conflictPrompt = `I have merge conflicts that need to be resolved.
 
@@ -497,7 +500,9 @@ ${resolveInstructions}`
   const handleResolvePrConflicts = useCallback(async () => {
     if (!activeWorktreeId || !worktree) return
 
-    const toastId = toast.loading('Fetching base branch and checking for conflicts...')
+    const toastId = toast.loading(
+      'Fetching base branch and checking for conflicts...'
+    )
 
     try {
       const result = await invoke<MergeConflictsResponse>(
@@ -506,18 +511,17 @@ ${resolveInstructions}`
       )
 
       if (!result.has_conflicts) {
-        toast.success('No conflicts — base branch merged cleanly', { id: toastId })
+        toast.success('No conflicts — base branch merged cleanly', {
+          id: toastId,
+        })
         triggerImmediateGitPoll()
         return
       }
 
-      toast.warning(
-        `Found conflicts in ${result.conflicts.length} file(s)`,
-        {
-          id: toastId,
-          description: 'Opening conflict resolution session...',
-        }
-      )
+      toast.warning(`Found conflicts in ${result.conflicts.length} file(s)`, {
+        id: toastId,
+        description: 'Opening conflict resolution session...',
+      })
 
       const { setActiveSession, setInputDraft } = useChatStore.getState()
 
@@ -532,15 +536,10 @@ ${resolveInstructions}`
       setActiveSession(activeWorktreeId, newSession.id)
 
       // Apply per-magic agent/model defaults for this new session
-      const agentForPrompt =
-        (preferences?.magic_prompt_agents?.resolve_conflicts_model ??
-          'claude') as ChatAgent
-      const {
-        setAgent,
-        setSelectedModel,
-        setThinkingLevel,
-        setExecutingMode,
-      } = useChatStore.getState()
+      const agentForPrompt = (preferences?.magic_prompt_agents
+        ?.resolve_conflicts_model ?? 'claude') as ChatAgent
+      const { setAgent, setSelectedModel, setThinkingLevel, setExecutingMode } =
+        useChatStore.getState()
       setAgent(newSession.id, agentForPrompt)
       setExecutingMode(newSession.id, 'plan')
       if (agentForPrompt === 'codex') {
@@ -553,8 +552,7 @@ ${resolveInstructions}`
         setThinkingLevel(
           newSession.id,
           (preferences?.magic_prompt_codex_reasoning_efforts
-            ?.resolve_conflicts_model ??
-            'high') as ThinkingLevel
+            ?.resolve_conflicts_model ?? 'high') as ThinkingLevel
         )
       } else {
         setSelectedModel(
@@ -572,7 +570,9 @@ ${resolveInstructions}`
         : ''
 
       const baseBranch = project?.default_branch || 'main'
-      const resolveInstructions = preferences?.magic_prompts?.resolve_conflicts ?? DEFAULT_RESOLVE_CONFLICTS_PROMPT
+      const resolveInstructions =
+        preferences?.magic_prompts?.resolve_conflicts ??
+        DEFAULT_RESOLVE_CONFLICTS_PROMPT
 
       const conflictPrompt = `I merged \`origin/${baseBranch}\` into this branch to resolve PR conflicts, but there are merge conflicts.
 
@@ -608,7 +608,8 @@ ${resolveInstructions}`
       setShowMergeDialog(false)
       setPendingMergeWorktree(null)
 
-      const { setWorktreeLoading, clearWorktreeLoading } = useChatStore.getState()
+      const { setWorktreeLoading, clearWorktreeLoading } =
+        useChatStore.getState()
       setWorktreeLoading(activeWorktreeId, 'merge')
       const toastId = toast.loading('Checking for uncommitted changes...')
       const featureBranch = worktreeData.branch
@@ -701,7 +702,9 @@ ${resolveInstructions}`
           // Get base branch name from the project
           const baseBranch = project?.default_branch || 'main'
 
-          const resolveInstructions = preferences?.magic_prompts?.resolve_conflicts ?? DEFAULT_RESOLVE_CONFLICTS_PROMPT
+          const resolveInstructions =
+            preferences?.magic_prompts?.resolve_conflicts ??
+            DEFAULT_RESOLVE_CONFLICTS_PROMPT
 
           const conflictPrompt = `I tried to merge this branch (\`${featureBranch}\`) into \`${baseBranch}\`, but there are merge conflicts.
 
@@ -734,7 +737,14 @@ ${resolveInstructions}`
         clearWorktreeLoading(activeWorktreeId)
       }
     },
-    [activeWorktreeId, pendingMergeWorktree, preferences, project, queryClient, inputRef]
+    [
+      activeWorktreeId,
+      pendingMergeWorktree,
+      preferences,
+      project,
+      queryClient,
+      inputRef,
+    ]
   )
 
   return {

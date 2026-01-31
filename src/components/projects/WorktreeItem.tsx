@@ -206,8 +206,10 @@ export function WorktreeItem({
   // Determine indicator color: blinking yellow=waiting for user, green=review, grey=idle
   // Running state uses BorderSpinner component instead (handled in render)
   const indicatorColor = useMemo(() => {
-    if (isWaitingQuestion) return 'text-yellow-500 animate-blink shadow-[0_0_6px_currentColor]'
-    if (isWaitingPlan) return 'text-yellow-500 animate-blink shadow-[0_0_6px_currentColor]'
+    if (isWaitingQuestion)
+      return 'text-yellow-500 animate-blink shadow-[0_0_6px_currentColor]'
+    if (isWaitingPlan)
+      return 'text-yellow-500 animate-blink shadow-[0_0_6px_currentColor]'
     if (isReviewing) return 'text-green-500 shadow-[0_0_6px_currentColor]'
     return 'text-muted-foreground/50'
   }, [isWaitingQuestion, isWaitingPlan, isReviewing])
@@ -327,7 +329,8 @@ export function WorktreeItem({
   const handlePull = useCallback(
     async (e: React.MouseEvent) => {
       e.stopPropagation()
-      const { setWorktreeLoading, clearWorktreeLoading } = useChatStore.getState()
+      const { setWorktreeLoading, clearWorktreeLoading } =
+        useChatStore.getState()
       setWorktreeLoading(worktree.id, 'pull')
       const toastId = toast.loading('Pulling changes...')
       try {
@@ -347,7 +350,9 @@ export function WorktreeItem({
           // Small delay to ensure worktree is selected before dispatching
           setTimeout(() => {
             window.dispatchEvent(
-              new CustomEvent('magic-command', { detail: { command: 'resolve-conflicts' } })
+              new CustomEvent('magic-command', {
+                detail: { command: 'resolve-conflicts' },
+              })
             )
           }, 100)
         } else {
@@ -395,21 +400,35 @@ export function WorktreeItem({
       >
         {/* Status indicator: circle for base session, square for worktrees */}
         {/* Priority: chat running > loading operation > idle states */}
-        {(isWaitingQuestion || isWaitingPlan) ? (
+        {isWaitingQuestion || isWaitingPlan ? (
           isBase ? (
-            <Circle className={cn('h-2 w-2 shrink-0 fill-current rounded-full', indicatorColor)} />
+            <Circle
+              className={cn(
+                'h-2 w-2 shrink-0 fill-current rounded-full',
+                indicatorColor
+              )}
+            />
           ) : (
-            <Square className={cn('h-2 w-2 shrink-0 fill-current rounded-sm', indicatorColor)} />
+            <Square
+              className={cn(
+                'h-2 w-2 shrink-0 fill-current rounded-sm',
+                indicatorColor
+              )}
+            />
           )
         ) : isChatRunning ? (
           <BorderSpinner
             shape={isBase ? 'circle' : 'square'}
             className={cn(
               'h-2 w-2 shadow-[0_0_6px_currentColor]',
-              runningSessionExecutionMode === 'yolo' ? 'text-destructive' : 'text-yellow-500'
+              runningSessionExecutionMode === 'yolo'
+                ? 'text-destructive'
+                : 'text-yellow-500'
             )}
             bgClassName={
-              runningSessionExecutionMode === 'yolo' ? 'fill-destructive/50' : 'fill-yellow-500/50'
+              runningSessionExecutionMode === 'yolo'
+                ? 'fill-destructive/50'
+                : 'fill-yellow-500/50'
             }
           />
         ) : loadingOperation ? (
@@ -419,9 +438,19 @@ export function WorktreeItem({
             bgClassName="fill-cyan-500/50"
           />
         ) : isBase ? (
-          <Circle className={cn('h-2 w-2 shrink-0 fill-current rounded-full', indicatorColor)} />
+          <Circle
+            className={cn(
+              'h-2 w-2 shrink-0 fill-current rounded-full',
+              indicatorColor
+            )}
+          />
         ) : (
-          <Square className={cn('h-2 w-2 shrink-0 fill-current rounded-sm', indicatorColor)} />
+          <Square
+            className={cn(
+              'h-2 w-2 shrink-0 fill-current rounded-sm',
+              indicatorColor
+            )}
+          />
         )}
 
         {/* Workspace name - editable on double-click */}
@@ -490,7 +519,6 @@ export function WorktreeItem({
             <span className="text-red-500">-{uncommittedRemoved}</span>
           </span>
         )}
-
       </div>
     </WorktreeContextMenu>
   )

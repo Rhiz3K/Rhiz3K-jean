@@ -36,4 +36,3 @@ If `mgrep` is unavailable/quota-blocked, use `rg` as a fallback.
 ## Keywords
 
 search, grep, files, local files, local search, local grep
-

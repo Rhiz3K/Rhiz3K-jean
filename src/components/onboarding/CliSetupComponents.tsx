@@ -271,7 +271,7 @@ export function AuthLoginState({
       if (observerRef.current) {
         observerRef.current.disconnect()
       }
-      invoke('stop_terminal', { terminalId }).catch(() => {})
+      invoke('stop_terminal', { terminalId }).catch(() => undefined)
       disposeTerminal(terminalId)
     }
   }, [terminalId])
@@ -292,7 +292,7 @@ export function AuthLoginState({
 
       <div className="flex gap-2">
         <Button onClick={onComplete} className="flex-1" size="lg">
-          I've Completed Login
+          I&apos;ve Completed Login
         </Button>
         {onSkip && (
           <Button

@@ -29,7 +29,7 @@ pub fn get_codex_cli_binary_path(app: &AppHandle) -> Result<PathBuf, String> {
 /// Ensure the CLI directory exists, creating it if necessary
 pub fn ensure_codex_cli_dir(app: &AppHandle) -> Result<PathBuf, String> {
     let cli_dir = get_codex_cli_dir(app)?;
-    std::fs::create_dir_all(&cli_dir).map_err(|e| format!("Failed to create CLI directory: {e}"))?;
+    std::fs::create_dir_all(&cli_dir)
+        .map_err(|e| format!("Failed to create CLI directory: {e}"))?;
     Ok(cli_dir)
 }
-

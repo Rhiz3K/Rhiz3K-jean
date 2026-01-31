@@ -180,7 +180,9 @@ export function useGhInstallProgress(): [GhInstallProgress | null, () => void] {
 
     const setupListener = async () => {
       try {
-        logger.info('[useGhInstallProgress] Setting up listener', { listenerId })
+        logger.info('[useGhInstallProgress] Setting up listener', {
+          listenerId,
+        })
         unlistenFn = await listen<GhInstallProgress>(
           'gh-cli:install-progress',
           event => {
@@ -194,7 +196,10 @@ export function useGhInstallProgress(): [GhInstallProgress | null, () => void] {
           }
         )
       } catch (error) {
-        logger.error('[useGhInstallProgress] Failed to setup listener', { listenerId, error })
+        logger.error('[useGhInstallProgress] Failed to setup listener', {
+          listenerId,
+          error,
+        })
       }
     }
 

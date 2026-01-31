@@ -18,4 +18,3 @@ Invoke with `$check`.
 1. Check all work in this session for adherence with `docs/developer/architecture-guide.md`.
 2. Remove any unnecessary comments or `console.log`s introduced in the session and clean up leftovers from approaches that didn’t work.
 3. Run `npm run check:all` and fix any errors.
-

@@ -56,4 +56,3 @@ export interface CodexInstallProgress {
   /** Percentage complete (0-100) */
   percent: number
 }
-

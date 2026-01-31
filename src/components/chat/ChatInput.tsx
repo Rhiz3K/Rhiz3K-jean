@@ -77,7 +77,10 @@ export const ChatInput = memo(function ChatInput({
     top: number
     left: number
   } | null>(null)
-  const [slashTriggerIndex, setSlashTriggerIndex] = useState<number | null>(null)
+  const [slashTriggerIndex, setSlashTriggerIndex] = useState<number | null>(
+    null
+  )
+  const [isSlashAtPromptStart, setIsSlashAtPromptStart] = useState(false)
 
   // Refs to expose navigation methods from popovers
   const fileMentionHandleRef = useRef<FileMentionPopoverHandle | null>(null)
@@ -263,9 +266,14 @@ export const ChatInput = memo(function ChatInput({
             charBeforeSlash === ' ' ||
             charBeforeSlash === '\n'
           ) {
-            setSlashTriggerIndex(cursorPos - 1)
+            const triggerIndex = cursorPos - 1
+            setSlashTriggerIndex(triggerIndex)
             setSlashQuery('')
             setSlashPopoverOpen(true)
+
+            setIsSlashAtPromptStart(
+              triggerIndex === 0 || value.slice(0, triggerIndex).trim() === ''
+            )
 
             // Calculate anchor position relative to form
             const textarea = e.target
@@ -292,8 +300,13 @@ export const ChatInput = memo(function ChatInput({
             setSlashPopoverOpen(false)
             setSlashTriggerIndex(null)
             setSlashQuery('')
+            setIsSlashAtPromptStart(false)
           } else {
             setSlashQuery(query)
+            setIsSlashAtPromptStart(
+              slashTriggerIndex === 0 ||
+                value.slice(0, slashTriggerIndex).trim() === ''
+            )
           }
         }
       }
@@ -327,7 +340,10 @@ export const ChatInput = memo(function ChatInput({
 
       // When file mention popover is open, handle navigation
       if (fileMentionOpen) {
-        console.log('[ChatInput] File mention popover open, handling key:', e.key)
+        console.log(
+          '[ChatInput] File mention popover open, handling key:',
+          e.key
+        )
         switch (e.key) {
           case 'ArrowDown':
             e.preventDefault()
@@ -342,7 +358,9 @@ export const ChatInput = memo(function ChatInput({
           case 'Enter':
           case 'Tab':
             e.preventDefault()
-            console.log('[ChatInput] Calling fileMentionHandleRef.selectCurrent()')
+            console.log(
+              '[ChatInput] Calling fileMentionHandleRef.selectCurrent()'
+            )
             fileMentionHandleRef.current?.selectCurrent()
             return
           case 'Escape':
@@ -370,7 +388,9 @@ export const ChatInput = memo(function ChatInput({
           case 'Enter':
           case 'Tab':
             e.preventDefault()
-            console.log('[ChatInput] Calling slashPopoverHandleRef.selectCurrent()')
+            console.log(
+              '[ChatInput] Calling slashPopoverHandleRef.selectCurrent()'
+            )
             slashPopoverHandleRef.current?.selectCurrent()
             return
           case 'Escape':
@@ -414,7 +434,14 @@ export const ChatInput = memo(function ChatInput({
       }
       // Shift+Enter adds a new line (default behavior)
     },
-    [activeSessionId, fileMentionOpen, slashPopoverOpen, isSending, onCancel, onSubmit]
+    [
+      activeSessionId,
+      fileMentionOpen,
+      slashPopoverOpen,
+      isSending,
+      onCancel,
+      onSubmit,
+    ]
   )
 
   // Handle paste events
@@ -635,11 +662,14 @@ export const ChatInput = memo(function ChatInput({
     [inputRef, onCommandExecute]
   )
 
-  // Determine if slash is at prompt start (for enabling commands)
-  const isSlashAtPromptStart =
-    slashTriggerIndex !== null &&
-    (slashTriggerIndex === 0 ||
-      valueRef.current.slice(0, slashTriggerIndex).trim() === '')
+  const handleSlashPopoverOpenChange = useCallback((open: boolean) => {
+    setSlashPopoverOpen(open)
+    if (!open) {
+      setSlashTriggerIndex(null)
+      setSlashQuery('')
+      setIsSlashAtPromptStart(false)
+    }
+  }, [])
 
   return (
     <div className="relative">
@@ -687,7 +717,7 @@ export const ChatInput = memo(function ChatInput({
       {/* Slash popover (/ commands and skills) */}
       <SlashPopover
         open={slashPopoverOpen}
-        onOpenChange={setSlashPopoverOpen}
+        onOpenChange={handleSlashPopoverOpenChange}
         onSelectSkill={handleSkillSelect}
         onSelectCommand={handleCommandSelect}
         searchQuery={slashQuery}

@@ -43,7 +43,10 @@ interface SessionBoardViewProps {
   onSessionClick: (worktreeId: string, sessionId: string) => void
 }
 
-export function SessionBoardView({ projectId, onSessionClick }: SessionBoardViewProps) {
+export function SessionBoardView({
+  projectId,
+  onSessionClick,
+}: SessionBoardViewProps) {
   // Get all projects to find the current one
   const { data: projects = [], isLoading: projectsLoading } = useProjects()
   const project = projects.find(p => p.id === projectId)
@@ -306,7 +309,10 @@ function MultiWorktreeSessionsView({
   const q8 = useSessions(wt8?.id ?? null, wt8?.path ?? null)
   const q9 = useSessions(wt9?.id ?? null, wt9?.path ?? null)
 
-  const queries = [q0, q1, q2, q3, q4, q5, q6, q7, q8, q9]
+  const queries = useMemo(
+    () => [q0, q1, q2, q3, q4, q5, q6, q7, q8, q9],
+    [q0, q1, q2, q3, q4, q5, q6, q7, q8, q9]
+  )
 
   // Aggregate all sessions
   const allBoardSessions = useMemo(() => {

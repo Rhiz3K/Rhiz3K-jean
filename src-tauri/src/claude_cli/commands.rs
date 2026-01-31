@@ -414,7 +414,8 @@ pub async fn install_claude_cli(app: AppHandle, version: Option<String>) -> Resu
         msg
     })?;
 
-    let manifest = resolved_manifest.ok_or_else(|| "Failed to resolve Claude CLI manifest".to_string())?;
+    let manifest =
+        resolved_manifest.ok_or_else(|| "Failed to resolve Claude CLI manifest".to_string())?;
 
     log::trace!("Installing version {version} for platform {platform}");
 

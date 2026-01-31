@@ -56,15 +56,30 @@ function buildMagicSections(hasOpenPr: boolean): MagicSection[] {
     {
       header: 'Context',
       options: [
-        { id: 'save-context', label: 'Save Context', icon: BookmarkPlus, key: 'S' },
-        { id: 'load-context', label: 'Load Context', icon: FolderOpen, key: 'L' },
+        {
+          id: 'save-context',
+          label: 'Save Context',
+          icon: BookmarkPlus,
+          key: 'S',
+        },
+        {
+          id: 'load-context',
+          label: 'Load Context',
+          icon: FolderOpen,
+          key: 'L',
+        },
       ],
     },
     {
       header: 'Commit',
       options: [
         { id: 'commit', label: 'Commit', icon: GitCommitHorizontal, key: 'C' },
-        { id: 'commit-and-push', label: 'Commit & Push', icon: GitCommitHorizontal, key: 'P' },
+        {
+          id: 'commit-and-push',
+          label: 'Commit & Push',
+          icon: GitCommitHorizontal,
+          key: 'P',
+        },
       ],
     },
     {
@@ -77,7 +92,12 @@ function buildMagicSections(hasOpenPr: boolean): MagicSection[] {
     {
       header: 'Pull Request',
       options: [
-        { id: 'open-pr', label: hasOpenPr ? 'Open' : 'Create', icon: GitPullRequest, key: 'O' },
+        {
+          id: 'open-pr',
+          label: hasOpenPr ? 'Open' : 'Create',
+          icon: GitPullRequest,
+          key: 'O',
+        },
         { id: 'review', label: 'Review', icon: Eye, key: 'R' },
         { id: 'checkout-pr', label: 'Checkout', icon: GitBranch, key: 'K' },
       ],
@@ -86,8 +106,18 @@ function buildMagicSections(hasOpenPr: boolean): MagicSection[] {
       header: 'Branch',
       options: [
         { id: 'merge', label: 'Merge to Base', icon: GitMerge, key: 'M' },
-        { id: 'resolve-conflicts', label: 'Resolve Conflicts', icon: GitMerge, key: 'F' },
-        { id: 'investigate', label: 'Investigate Context', icon: Search, key: 'I' },
+        {
+          id: 'resolve-conflicts',
+          label: 'Resolve Conflicts',
+          icon: GitMerge,
+          key: 'F',
+        },
+        {
+          id: 'investigate',
+          label: 'Investigate Context',
+          icon: Search,
+          key: 'I',
+        },
       ],
     },
   ]
@@ -120,7 +150,10 @@ export function MagicModal() {
   const hasOpenPr = Boolean(worktree?.pr_url)
 
   // Build sections dynamically based on PR state
-  const magicSections = useMemo(() => buildMagicSections(hasOpenPr), [hasOpenPr])
+  const magicSections = useMemo(
+    () => buildMagicSections(hasOpenPr),
+    [hasOpenPr]
+  )
 
   // Flatten all options for arrow key navigation
   const allOptions = useMemo(
@@ -150,6 +183,7 @@ export function MagicModal() {
   const selectedProjectId = useProjectsStore(state => state.selectedProjectId)
 
   const executeAction = useCallback(
+    // eslint-disable-next-line react-hooks/preserve-manual-memoization
     (option: MagicOption) => {
       // checkout-pr only needs a project selected, not a worktree
       // Handle it directly here since ChatWindow may not be rendered

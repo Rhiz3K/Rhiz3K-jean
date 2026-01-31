@@ -34,7 +34,12 @@ import {
   useWorktreePolling,
   type WorktreePollingInfo,
 } from '@/services/git-status'
-import { useWorktree, useProjects, useCreateWorktreeKeybinding, useWorktreeEvents } from '@/services/projects'
+import {
+  useWorktree,
+  useProjects,
+  useCreateWorktreeKeybinding,
+  useWorktreeEvents,
+} from '@/services/projects'
 import { usePreferences } from '@/services/preferences'
 import { useSessions } from '@/services/chat'
 import { useChatStore } from '@/store/chat-store'
@@ -58,12 +63,16 @@ export function MainWindow() {
 
   // Fetch preferences and session data for title
   const { data: preferences } = usePreferences()
-  const { data: sessionsData } = useSessions(selectedWorktreeId ?? null, worktree?.path ?? null)
+  const { data: sessionsData } = useSessions(
+    selectedWorktreeId ?? null,
+    worktree?.path ?? null
+  )
   const activeSessionId = useChatStore(state =>
     selectedWorktreeId ? state.activeSessionIds[selectedWorktreeId] : undefined
   )
 
   // Find active session name
+  // eslint-disable-next-line react-hooks/preserve-manual-memoization
   const activeSessionName = useMemo(() => {
     if (!sessionsData?.sessions || !activeSessionId) return undefined
     return sessionsData.sessions.find(s => s.id === activeSessionId)?.name
@@ -72,7 +81,8 @@ export function MainWindow() {
   // Compute window title based on selected project/worktree
   const windowTitle = useMemo(() => {
     if (!project || !worktree) return 'Jean'
-    const branchSuffix = worktree.branch !== worktree.name ? ` (${worktree.branch})` : ''
+    const branchSuffix =
+      worktree.branch !== worktree.name ? ` (${worktree.branch})` : ''
 
     // Add session name when grouping enabled
     if (preferences?.session_grouping_enabled && activeSessionName) {
@@ -80,7 +90,12 @@ export function MainWindow() {
     }
 
     return `${project.name} › ${worktree.name}${branchSuffix}`
-  }, [project, worktree, preferences?.session_grouping_enabled, activeSessionName])
+  }, [
+    project,
+    worktree,
+    preferences?.session_grouping_enabled,
+    activeSessionName,
+  ])
 
   // Compute polling info - null if no worktree or data not loaded
   const pollingInfo: WorktreePollingInfo | null = useMemo(() => {

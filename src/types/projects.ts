@@ -194,11 +194,11 @@ export interface WorktreePathExistsEvent {
     number: number
     title: string
     body?: string
-    comments: Array<{
+    comments: {
       author: { login: string }
       body: string
       createdAt: string
-    }>
+    }[]
   }
 }
 
@@ -217,11 +217,11 @@ export interface WorktreeBranchExistsEvent {
     number: number
     title: string
     body?: string
-    comments: Array<{
+    comments: {
       author: { login: string }
       body: string
       createdAt: string
-    }>
+    }[]
   }
   /** PR context to use when creating a new worktree with the suggested name */
   pr_context?: {
@@ -230,17 +230,17 @@ export interface WorktreeBranchExistsEvent {
     body?: string
     headRefName: string
     baseRefName: string
-    comments: Array<{
+    comments: {
       author: { login: string }
       body: string
       createdAt: string
-    }>
-    reviews: Array<{
+    }[]
+    reviews: {
       author: { login: string }
       body: string
       state: string
       submittedAt: string
-    }>
+    }[]
     diff?: string
   }
 }

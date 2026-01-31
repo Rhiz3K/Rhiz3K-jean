@@ -52,8 +52,9 @@ describe('useStreamingEvents', () => {
     })
 
     if (!globalThis.crypto?.randomUUID) {
-      ;(globalThis as unknown as { crypto: { randomUUID: () => string } }).crypto =
-        { randomUUID: () => 'uuid' }
+      ;(
+        globalThis as unknown as { crypto: { randomUUID: () => string } }
+      ).crypto = { randomUUID: () => 'uuid' }
     }
 
     useChatStore.setState({
@@ -106,7 +107,10 @@ describe('useStreamingEvents', () => {
 
   it('preserves partial assistant output on chat:error', async () => {
     const queryClient = new QueryClient({
-      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+      defaultOptions: {
+        queries: { retry: false },
+        mutations: { retry: false },
+      },
     })
 
     const sessionId = 's1'
@@ -144,7 +148,9 @@ describe('useStreamingEvents', () => {
 
     onError?.({ payload: { session_id: sessionId, error: 'boom' } })
 
-    const updated = queryClient.getQueryData<Session>(chatQueryKeys.session(sessionId))
+    const updated = queryClient.getQueryData<Session>(
+      chatQueryKeys.session(sessionId)
+    )
     expect(updated?.messages).toHaveLength(1)
     expect(updated?.messages[0]?.role).toBe('assistant')
     expect(updated?.messages[0]?.content).toBe('partial output')
@@ -152,7 +158,10 @@ describe('useStreamingEvents', () => {
 
   it('invalidates the session query on chat:done (prevents stale placeholders after recovery)', async () => {
     const queryClient = new QueryClient({
-      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+      defaultOptions: {
+        queries: { retry: false },
+        mutations: { retry: false },
+      },
     })
     const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
 

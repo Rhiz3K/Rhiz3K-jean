@@ -42,10 +42,9 @@ interface VariableInfo {
 
 interface PromptConfig {
   key: keyof MagicPrompts
-  modelKey:
-    | (keyof MagicPromptModels &
-        keyof MagicPromptCodexModels &
-        keyof MagicPromptCodexReasoningEfforts)
+  modelKey: keyof MagicPromptModels &
+    keyof MagicPromptCodexModels &
+    keyof MagicPromptCodexReasoningEfforts
   label: string
   description: string
   variables: VariableInfo[]
@@ -61,7 +60,10 @@ const PROMPT_CONFIGS: PromptConfig[] = [
     description: 'Prompt for analyzing GitHub issues loaded into the context.',
     variables: [
       { name: '{issueRefs}', description: 'Issue numbers (e.g., #123, #456)' },
-      { name: '{issueWord}', description: '"issue" or "issues" based on count' },
+      {
+        name: '{issueWord}',
+        description: '"issue" or "issues" based on count',
+      },
     ],
     defaultValue: DEFAULT_INVESTIGATE_ISSUE_PROMPT,
     defaultClaudeModel: 'opus',
@@ -70,10 +72,14 @@ const PROMPT_CONFIGS: PromptConfig[] = [
     key: 'investigate_pr',
     modelKey: 'investigate_model',
     label: 'Investigate PR',
-    description: 'Prompt for analyzing GitHub pull requests loaded into the context.',
+    description:
+      'Prompt for analyzing GitHub pull requests loaded into the context.',
     variables: [
       { name: '{prRefs}', description: 'PR numbers (e.g., #123, #456)' },
-      { name: '{prWord}', description: '"pull request" or "pull requests" based on count' },
+      {
+        name: '{prWord}',
+        description: '"pull request" or "pull requests" based on count',
+      },
     ],
     defaultValue: DEFAULT_INVESTIGATE_PR_PROMPT,
     defaultClaudeModel: 'opus',
@@ -85,7 +91,10 @@ const PROMPT_CONFIGS: PromptConfig[] = [
     description: 'Prompt for generating pull request titles and descriptions.',
     variables: [
       { name: '{current_branch}', description: 'Name of the feature branch' },
-      { name: '{target_branch}', description: 'Branch to merge into (e.g., main)' },
+      {
+        name: '{target_branch}',
+        description: 'Branch to merge into (e.g., main)',
+      },
       { name: '{commit_count}', description: 'Number of commits in the PR' },
       { name: '{commits}', description: 'List of commit messages' },
       { name: '{diff}', description: 'Git diff of all changes' },
@@ -101,7 +110,10 @@ const PROMPT_CONFIGS: PromptConfig[] = [
     variables: [
       { name: '{status}', description: 'Git status output' },
       { name: '{diff}', description: 'Staged changes diff' },
-      { name: '{recent_commits}', description: 'Recent commit messages for style' },
+      {
+        name: '{recent_commits}',
+        description: 'Recent commit messages for style',
+      },
       { name: '{remote_info}', description: 'Remote repository info' },
     ],
     defaultValue: DEFAULT_COMMIT_MESSAGE_PROMPT,
@@ -159,7 +171,8 @@ const AGENT_OPTIONS: { value: MagicPromptAgent; label: string }[] = [
 export const MagicPromptsPane: React.FC = () => {
   const { data: preferences } = usePreferences()
   const savePreferences = useSavePreferences()
-  const [selectedKey, setSelectedKey] = useState<keyof MagicPrompts>('investigate_issue')
+  const [selectedKey, setSelectedKey] =
+    useState<keyof MagicPrompts>('investigate_issue')
   const [localValue, setLocalValue] = useState('')
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
@@ -173,8 +186,10 @@ export const MagicPromptsPane: React.FC = () => {
   const currentCodexEfforts =
     preferences?.magic_prompt_codex_reasoning_efforts ??
     DEFAULT_MAGIC_PROMPT_CODEX_REASONING_EFFORTS
-  const selectedConfig = PROMPT_CONFIGS.find(c => c.key === selectedKey)!
-  const currentValue = currentPrompts[selectedKey] ?? selectedConfig.defaultValue
+  const selectedConfig = (PROMPT_CONFIGS.find(c => c.key === selectedKey) ??
+    PROMPT_CONFIGS[0]) as (typeof PROMPT_CONFIGS)[number]
+  const currentValue =
+    currentPrompts[selectedKey] ?? selectedConfig.defaultValue
   const currentClaudeModel =
     currentClaudeModels[selectedConfig.modelKey] ??
     selectedConfig.defaultClaudeModel
@@ -184,14 +199,15 @@ export const MagicPromptsPane: React.FC = () => {
   const currentCodexModel =
     currentCodexModels[selectedConfig.modelKey] ??
     DEFAULT_MAGIC_PROMPT_CODEX_MODELS[selectedConfig.modelKey]
-  const currentCodexEffort =
-    (currentCodexEfforts[selectedConfig.modelKey] ??
-      DEFAULT_MAGIC_PROMPT_CODEX_REASONING_EFFORTS[selectedConfig.modelKey]) as
-      ThinkingLevel
+  const currentCodexEffort = (currentCodexEfforts[selectedConfig.modelKey] ??
+    DEFAULT_MAGIC_PROMPT_CODEX_REASONING_EFFORTS[
+      selectedConfig.modelKey
+    ]) as ThinkingLevel
   const isModified = currentValue !== selectedConfig.defaultValue
 
   // Sync local value when selection changes or external value updates
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLocalValue(currentValue)
   }, [currentValue, selectedKey])
 
@@ -242,7 +258,14 @@ export const MagicPromptsPane: React.FC = () => {
         },
       })
     }
-  }, [localValue, currentValue, preferences, savePreferences, currentPrompts, selectedKey])
+  }, [
+    localValue,
+    currentValue,
+    preferences,
+    savePreferences,
+    currentPrompts,
+    selectedKey,
+  ])
 
   const handleReset = useCallback(() => {
     if (!preferences) return
@@ -253,7 +276,13 @@ export const MagicPromptsPane: React.FC = () => {
         [selectedKey]: selectedConfig.defaultValue,
       },
     })
-  }, [preferences, savePreferences, currentPrompts, selectedKey, selectedConfig.defaultValue])
+  }, [
+    preferences,
+    savePreferences,
+    currentPrompts,
+    selectedKey,
+    selectedConfig.defaultValue,
+  ])
 
   const handleClaudeModelChange = useCallback(
     (model: ClaudeModel) => {
@@ -316,7 +345,8 @@ export const MagicPromptsPane: React.FC = () => {
       {/* Prompt selector grid */}
       <div className="grid grid-cols-3 gap-1.5 mb-4 shrink-0">
         {PROMPT_CONFIGS.map(config => {
-          const promptIsModified = currentPrompts[config.key] !== config.defaultValue
+          const promptIsModified =
+            currentPrompts[config.key] !== config.defaultValue
           const promptAgent =
             currentAgents[config.modelKey] ??
             DEFAULT_MAGIC_PROMPT_AGENTS[config.modelKey]
@@ -325,16 +355,16 @@ export const MagicPromptsPane: React.FC = () => {
           const promptCodexModel =
             currentCodexModels[config.modelKey] ??
             DEFAULT_MAGIC_PROMPT_CODEX_MODELS[config.modelKey]
-          const promptEffort =
-            (currentCodexEfforts[config.modelKey] ??
-              DEFAULT_MAGIC_PROMPT_CODEX_REASONING_EFFORTS[config.modelKey]) as
-              ThinkingLevel
+          const promptEffort = (currentCodexEfforts[config.modelKey] ??
+            DEFAULT_MAGIC_PROMPT_CODEX_REASONING_EFFORTS[
+              config.modelKey
+            ]) as ThinkingLevel
           const effortBadge =
-            promptCodexModel === 'gpt-5.2-codex' ? `c-${promptEffort}` : promptEffort
+            promptCodexModel === 'gpt-5.2-codex'
+              ? `c-${promptEffort}`
+              : promptEffort
           const badgeText =
-            promptAgent === 'codex'
-              ? effortBadge
-              : promptClaudeModel
+            promptAgent === 'codex' ? effortBadge : promptClaudeModel
           return (
             <button
               key={config.key}
@@ -354,10 +384,12 @@ export const MagicPromptsPane: React.FC = () => {
                     <span className="text-muted-foreground ml-1">*</span>
                   )}
                 </span>
-                <span className={cn(
-                  'text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0',
-                  'bg-muted text-muted-foreground'
-                )}>
+                <span
+                  className={cn(
+                    'text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0',
+                    'bg-muted text-muted-foreground'
+                  )}
+                >
                   {badgeText}
                 </span>
               </div>
@@ -376,7 +408,12 @@ export const MagicPromptsPane: React.FC = () => {
           </p>
           <div className="flex flex-wrap items-center gap-2 mt-2">
             <span className="text-xs text-muted-foreground">Use</span>
-            <Select value={currentAgent} onValueChange={(v: string) => handleAgentChange(v as MagicPromptAgent)}>
+            <Select
+              value={currentAgent}
+              onValueChange={(v: string) =>
+                handleAgentChange(v as MagicPromptAgent)
+              }
+            >
               <SelectTrigger className="w-[130px] h-8 text-xs">
                 <SelectValue />
               </SelectTrigger>

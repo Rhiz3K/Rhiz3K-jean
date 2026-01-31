@@ -76,8 +76,9 @@ function applyWorktreeCreated(
   }
 
   // Auto-investigate (issue)
-  const shouldInvestigateIssue =
-    useUIStore.getState().autoInvestigateWorktreeIds.has(worktree.id)
+  const shouldInvestigateIssue = useUIStore
+    .getState()
+    .autoInvestigateWorktreeIds.has(worktree.id)
   if (shouldInvestigateIssue) {
     const timeoutId = window.setTimeout(() => {
       window.removeEventListener(
@@ -101,7 +102,9 @@ function applyWorktreeCreated(
         )
         useUIStore.getState().consumeAutoInvestigate(worktree.id)
         window.dispatchEvent(
-          new CustomEvent('magic-command', { detail: { command: 'investigate' } })
+          new CustomEvent('magic-command', {
+            detail: { command: 'investigate' },
+          })
         )
       }
     }
@@ -113,8 +116,9 @@ function applyWorktreeCreated(
   }
 
   // Auto-investigate (PR)
-  const shouldInvestigatePR =
-    useUIStore.getState().autoInvestigatePRWorktreeIds.has(worktree.id)
+  const shouldInvestigatePR = useUIStore
+    .getState()
+    .autoInvestigatePRWorktreeIds.has(worktree.id)
   if (shouldInvestigatePR) {
     const prTimeoutId = window.setTimeout(() => {
       window.removeEventListener(
@@ -138,7 +142,9 @@ function applyWorktreeCreated(
         )
         useUIStore.getState().consumeAutoInvestigatePR(worktree.id)
         window.dispatchEvent(
-          new CustomEvent('magic-command', { detail: { command: 'investigate' } })
+          new CustomEvent('magic-command', {
+            detail: { command: 'investigate' },
+          })
         )
       }
     }
@@ -463,7 +469,11 @@ export function useCreateWorktree() {
         number: number
         title: string
         body?: string
-        comments: { body: string; author: { login: string }; createdAt: string }[]
+        comments: {
+          body: string
+          author: { login: string }
+          createdAt: string
+        }[]
       }
       /** PR context to pass when creating a worktree from a PR */
       prContext?: {
@@ -472,8 +482,17 @@ export function useCreateWorktree() {
         body?: string
         headRefName: string
         baseRefName: string
-        comments: { body: string; author: { login: string }; createdAt: string }[]
-        reviews: { body: string; state: string; author: { login: string }; submittedAt?: string }[]
+        comments: {
+          body: string
+          author: { login: string }
+          createdAt: string
+        }[]
+        reviews: {
+          body: string
+          state: string
+          author: { login: string }
+          submittedAt?: string
+        }[]
       }
       /** Custom worktree name (used when retrying after path conflict) */
       customName?: string
@@ -482,7 +501,13 @@ export function useCreateWorktree() {
         throw new Error('Not in Tauri context')
       }
 
-      logger.debug('Creating worktree (background)', { projectId, baseBranch, issueNumber: issueContext?.number, prNumber: prContext?.number, customName })
+      logger.debug('Creating worktree (background)', {
+        projectId,
+        baseBranch,
+        issueNumber: issueContext?.number,
+        prNumber: prContext?.number,
+        customName,
+      })
       const worktree = await invoke<Worktree>('create_worktree', {
         projectId,
         baseBranch,
@@ -542,7 +567,9 @@ export function useCreateWorktree() {
         }
 
         try {
-          const worktree = await invoke<Worktree>('get_worktree', { worktreeId })
+          const worktree = await invoke<Worktree>('get_worktree', {
+            worktreeId,
+          })
           applyWorktreeCreated(queryClient, worktree)
         } catch {
           window.setTimeout(() => {
@@ -592,7 +619,11 @@ export function useCreateWorktreeFromExistingBranch() {
         number: number
         title: string
         body?: string
-        comments: { body: string; author: { login: string }; createdAt: string }[]
+        comments: {
+          body: string
+          author: { login: string }
+          createdAt: string
+        }[]
       }
       prContext?: {
         number: number
@@ -600,21 +631,36 @@ export function useCreateWorktreeFromExistingBranch() {
         body?: string
         headRefName: string
         baseRefName: string
-        comments: { body: string; author: { login: string }; createdAt: string }[]
-        reviews: { body: string; state: string; author: { login: string }; submittedAt?: string }[]
+        comments: {
+          body: string
+          author: { login: string }
+          createdAt: string
+        }[]
+        reviews: {
+          body: string
+          state: string
+          author: { login: string }
+          submittedAt?: string
+        }[]
       }
     }): Promise<Worktree> => {
       if (!isTauri()) {
         throw new Error('Not in Tauri context')
       }
 
-      logger.debug('Creating worktree from existing branch', { projectId, branchName })
-      const worktree = await invoke<Worktree>('create_worktree_from_existing_branch', {
+      logger.debug('Creating worktree from existing branch', {
         projectId,
         branchName,
-        issueContext,
-        prContext,
       })
+      const worktree = await invoke<Worktree>(
+        'create_worktree_from_existing_branch',
+        {
+          projectId,
+          branchName,
+          issueContext,
+          prContext,
+        }
+      )
       return { ...worktree, status: 'pending' as const }
     },
     onSuccess: (pendingWorktree, { projectId }) => {
@@ -662,7 +708,9 @@ export function useCreateWorktreeFromExistingBranch() {
         }
 
         try {
-          const worktree = await invoke<Worktree>('get_worktree', { worktreeId })
+          const worktree = await invoke<Worktree>('get_worktree', {
+            worktreeId,
+          })
           applyWorktreeCreated(queryClient, worktree)
         } catch {
           window.setTimeout(() => {
@@ -684,7 +732,10 @@ export function useCreateWorktreeFromExistingBranch() {
       } else {
         message = String(error)
       }
-      logger.error('Failed to create worktree from existing branch', { error, message })
+      logger.error('Failed to create worktree from existing branch', {
+        error,
+        message,
+      })
       toast.error('Failed to create worktree', { description: message })
     },
   })
@@ -878,28 +929,45 @@ export function useWorktreeEvents() {
         queryClient.invalidateQueries({ queryKey: ['archived-worktrees'] })
 
         // Check if this worktree was marked for auto-investigate (PR)
-        const shouldInvestigatePR = useUIStore.getState().autoInvestigatePRWorktreeIds.has(worktree.id)
+        const shouldInvestigatePR = useUIStore
+          .getState()
+          .autoInvestigatePRWorktreeIds.has(worktree.id)
         if (shouldInvestigatePR) {
           const prTimeoutId = setTimeout(() => {
-            window.removeEventListener('chat-ready-for-investigate', prReadyHandler as EventListener)
+            window.removeEventListener(
+              'chat-ready-for-investigate',
+              prReadyHandler as EventListener
+            )
             useUIStore.getState().consumeAutoInvestigatePR(worktree.id)
             window.dispatchEvent(
-              new CustomEvent('magic-command', { detail: { command: 'investigate' } })
+              new CustomEvent('magic-command', {
+                detail: { command: 'investigate' },
+              })
             )
           }, 5000)
 
-          const prReadyHandler = (e: CustomEvent<{ worktreeId: string; type: string }>) => {
+          const prReadyHandler = (
+            e: CustomEvent<{ worktreeId: string; type: string }>
+          ) => {
             if (e.detail.worktreeId === worktree.id && e.detail.type === 'pr') {
               clearTimeout(prTimeoutId)
-              window.removeEventListener('chat-ready-for-investigate', prReadyHandler as EventListener)
+              window.removeEventListener(
+                'chat-ready-for-investigate',
+                prReadyHandler as EventListener
+              )
               useUIStore.getState().consumeAutoInvestigatePR(worktree.id)
               window.dispatchEvent(
-                new CustomEvent('magic-command', { detail: { command: 'investigate' } })
+                new CustomEvent('magic-command', {
+                  detail: { command: 'investigate' },
+                })
               )
             }
           }
 
-          window.addEventListener('chat-ready-for-investigate', prReadyHandler as EventListener)
+          window.addEventListener(
+            'chat-ready-for-investigate',
+            prReadyHandler as EventListener
+          )
         }
       })
     )
@@ -960,8 +1028,13 @@ export function useWorktreeEvents() {
     // Listen for branch exists conflicts
     unlistenPromises.push(
       listen<WorktreeBranchExistsEvent>('worktree:branch_exists', event => {
-        const { project_id, branch, suggested_name, issue_context, pr_context } =
-          event.payload
+        const {
+          project_id,
+          branch,
+          suggested_name,
+          issue_context,
+          pr_context,
+        } = event.payload
         logger.warn('Worktree branch already exists', {
           project_id,
           branch,
@@ -1091,7 +1164,11 @@ export function useDeleteWorktree() {
     },
     onError: error => {
       const message =
-        error instanceof Error ? error.message : typeof error === 'string' ? error : 'Unknown error occurred'
+        error instanceof Error
+          ? error.message
+          : typeof error === 'string'
+            ? error
+            : 'Unknown error occurred'
       logger.error('Failed to start worktree deletion', { error })
       toast.error('Failed to delete worktree', { description: message })
     },
@@ -1341,7 +1418,11 @@ export function useCreateBaseSession() {
     },
     onError: error => {
       const message =
-        error instanceof Error ? error.message : typeof error === 'string' ? error : 'Unknown error occurred'
+        error instanceof Error
+          ? error.message
+          : typeof error === 'string'
+            ? error
+            : 'Unknown error occurred'
       logger.error('Failed to create base session', { error })
       toast.error('Failed to create base session', { description: message })
     },
@@ -1388,7 +1469,11 @@ export function useCloseBaseSession() {
     },
     onError: error => {
       const message =
-        error instanceof Error ? error.message : typeof error === 'string' ? error : 'Unknown error occurred'
+        error instanceof Error
+          ? error.message
+          : typeof error === 'string'
+            ? error
+            : 'Unknown error occurred'
       logger.error('Failed to close session', { error })
       toast.error('Failed to close session', { description: message })
     },
@@ -1435,7 +1520,11 @@ export function useCloseBaseSessionClean() {
     },
     onError: error => {
       const message =
-        error instanceof Error ? error.message : typeof error === 'string' ? error : 'Unknown error occurred'
+        error instanceof Error
+          ? error.message
+          : typeof error === 'string'
+            ? error
+            : 'Unknown error occurred'
       logger.error('Failed to close session (clean)', { error })
       toast.error('Failed to close session', { description: message })
     },
@@ -1458,7 +1547,11 @@ export function useOpenWorktreeInFinder() {
     },
     onError: error => {
       const message =
-        error instanceof Error ? error.message : typeof error === 'string' ? error : 'Unknown error occurred'
+        error instanceof Error
+          ? error.message
+          : typeof error === 'string'
+            ? error
+            : 'Unknown error occurred'
       logger.error('Failed to open in Finder', { error })
       toast.error('Failed to open in Finder', { description: message })
     },
@@ -1481,7 +1574,11 @@ export function useOpenProjectWorktreesFolder() {
     },
     onError: error => {
       const message =
-        error instanceof Error ? error.message : typeof error === 'string' ? error : 'Unknown error occurred'
+        error instanceof Error
+          ? error.message
+          : typeof error === 'string'
+            ? error
+            : 'Unknown error occurred'
       logger.error('Failed to open worktrees folder', { error })
       toast.error('Failed to open worktrees folder', { description: message })
     },
@@ -1510,7 +1607,11 @@ export function useOpenWorktreeInTerminal() {
     },
     onError: error => {
       const message =
-        error instanceof Error ? error.message : typeof error === 'string' ? error : 'Unknown error occurred'
+        error instanceof Error
+          ? error.message
+          : typeof error === 'string'
+            ? error
+            : 'Unknown error occurred'
       logger.error('Failed to open in Terminal', { error })
       toast.error('Failed to open in Terminal', { description: message })
     },
@@ -1539,7 +1640,11 @@ export function useOpenWorktreeInEditor() {
     },
     onError: error => {
       const message =
-        error instanceof Error ? error.message : typeof error === 'string' ? error : 'Unknown error occurred'
+        error instanceof Error
+          ? error.message
+          : typeof error === 'string'
+            ? error
+            : 'Unknown error occurred'
       logger.error('Failed to open in Editor', { error })
       toast.error('Failed to open in Editor', { description: message })
     },
@@ -1623,7 +1728,11 @@ export function useOpenProjectOnGitHub() {
     },
     onError: error => {
       const message =
-        error instanceof Error ? error.message : typeof error === 'string' ? error : 'Unknown error occurred'
+        error instanceof Error
+          ? error.message
+          : typeof error === 'string'
+            ? error
+            : 'Unknown error occurred'
       logger.error('Failed to open on GitHub', { error })
       toast.error('Failed to open on GitHub', { description: message })
     },
@@ -1877,7 +1986,11 @@ export function useReorderProjects() {
         )
       }
       const message =
-        error instanceof Error ? error.message : typeof error === 'string' ? error : 'Unknown error occurred'
+        error instanceof Error
+          ? error.message
+          : typeof error === 'string'
+            ? error
+            : 'Unknown error occurred'
       logger.error('Failed to reorder projects', { error })
       toast.error('Failed to reorder projects', { description: message })
     },
@@ -1951,7 +2064,11 @@ export function useReorderWorktrees() {
         )
       }
       const message =
-        error instanceof Error ? error.message : typeof error === 'string' ? error : 'Unknown error occurred'
+        error instanceof Error
+          ? error.message
+          : typeof error === 'string'
+            ? error
+            : 'Unknown error occurred'
       logger.error('Failed to reorder worktrees', { error })
       toast.error('Failed to reorder worktrees', { description: message })
     },
@@ -1992,7 +2109,9 @@ export function useCreateFolder() {
     },
     onSuccess: async folder => {
       // Wait for query invalidation to complete so folder component exists
-      await queryClient.invalidateQueries({ queryKey: projectsQueryKeys.list() })
+      await queryClient.invalidateQueries({
+        queryKey: projectsQueryKeys.list(),
+      })
 
       // Set the folder for immediate rename and expand it
       const { setEditingFolderId, expandFolder } = useProjectsStore.getState()
@@ -2001,7 +2120,11 @@ export function useCreateFolder() {
     },
     onError: error => {
       const message =
-        error instanceof Error ? error.message : typeof error === 'string' ? error : 'Unknown error occurred'
+        error instanceof Error
+          ? error.message
+          : typeof error === 'string'
+            ? error
+            : 'Unknown error occurred'
       logger.error('Failed to create folder', { error })
       toast.error('Failed to create folder', { description: message })
     },
@@ -2036,7 +2159,11 @@ export function useRenameFolder() {
     },
     onError: error => {
       const message =
-        error instanceof Error ? error.message : typeof error === 'string' ? error : 'Unknown error occurred'
+        error instanceof Error
+          ? error.message
+          : typeof error === 'string'
+            ? error
+            : 'Unknown error occurred'
       logger.error('Failed to rename folder', { error })
       toast.error('Failed to rename folder', { description: message })
     },
@@ -2065,7 +2192,11 @@ export function useDeleteFolder() {
     },
     onError: error => {
       const message =
-        error instanceof Error ? error.message : typeof error === 'string' ? error : 'Unknown error occurred'
+        error instanceof Error
+          ? error.message
+          : typeof error === 'string'
+            ? error
+            : 'Unknown error occurred'
       logger.error('Failed to delete folder', { error })
       toast.error('Failed to delete folder', { description: message })
     },
@@ -2093,7 +2224,11 @@ export function useMoveItem() {
       }
 
       logger.debug('Moving item', { itemId, newParentId, targetIndex })
-      const item = await invoke<Project>('move_item', { itemId, newParentId, targetIndex })
+      const item = await invoke<Project>('move_item', {
+        itemId,
+        newParentId,
+        targetIndex,
+      })
       logger.info('Item moved successfully', { item })
       return item
     },
@@ -2172,7 +2307,11 @@ export function useReorderItems() {
         )
       }
       const message =
-        error instanceof Error ? error.message : typeof error === 'string' ? error : 'Unknown error occurred'
+        error instanceof Error
+          ? error.message
+          : typeof error === 'string'
+            ? error
+            : 'Unknown error occurred'
       logger.error('Failed to reorder items', { error })
       toast.error('Failed to reorder items', { description: message })
     },
