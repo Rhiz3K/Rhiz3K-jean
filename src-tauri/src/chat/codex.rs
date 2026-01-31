@@ -556,6 +556,40 @@ pub fn execute_codex_interactive(
     let mut awaiting_approval = false;
     let mut prompt_tail = String::new();
 
+    let looks_like_approval_prompt = |s: &str| -> bool {
+        // Common formats:
+        // - "... [y/N]" / "... [y/n]" (case-insensitive)
+        // - "... (y/N)" / "... (y/n)"
+        // - "Approve? y/n" / "Proceed? y/n"
+        let lower = s.to_lowercase();
+        lower.contains("[y/n]")
+            || lower.contains("(y/n)")
+            || (lower.contains("approve") && lower.contains("y/n"))
+            || (lower.contains("proceed") && lower.contains("y/n"))
+    };
+
+    let emit_approval = |prompt: &str, last_command: &Option<(String, String)>| {
+        let (tool_use_id, command) = last_command
+            .clone()
+            .unwrap_or_else(|| ("codex:approval".to_string(), "(unknown)".to_string()));
+
+        let denial = PermissionDenialEvent {
+            tool_name: "Bash".to_string(),
+            tool_use_id,
+            tool_input: serde_json::json!({
+                "command": command,
+                "description": "Codex requested approval to run this command",
+                "prompt": prompt,
+            }),
+        };
+        let event = PermissionDeniedEvent {
+            session_id: session_id.to_string(),
+            worktree_id: worktree_id.to_string(),
+            denials: vec![denial],
+        };
+        let _ = app.emit("chat:permission_denied", &event);
+    };
+
     loop {
         // Exit quickly if cancelled externally
         if !super::registry::is_process_running(session_id) {
@@ -587,6 +621,28 @@ pub fn execute_codex_interactive(
 
         let chunk = String::from_utf8_lossy(&buf[..n]);
         pending.push_str(&chunk);
+
+        // Approval prompts are sometimes printed without a trailing newline (TTY-style).
+        // If we only parse on `\n`, the UI would appear to "do nothing" while Codex waits.
+        if !awaiting_approval {
+            let probe = pending.trim();
+            if !probe.is_empty() && !probe.starts_with('{') && looks_like_approval_prompt(probe) {
+                // Keep a small tail for context
+                if prompt_tail.len() > 2_000 {
+                    prompt_tail = prompt_tail
+                        .chars()
+                        .rev()
+                        .take(2_000)
+                        .collect::<String>()
+                        .chars()
+                        .rev()
+                        .collect();
+                }
+                prompt_tail.push_str(probe);
+                emit_approval(prompt_tail.trim_end(), &last_command);
+                awaiting_approval = true;
+            }
+        }
 
         while let Some(idx) = pending.find('\n') {
             let mut line = pending[..idx].to_string();
@@ -701,34 +757,8 @@ pub fn execute_codex_interactive(
             prompt_tail.push_str(trimmed);
             prompt_tail.push('\n');
 
-            let lower = trimmed.to_lowercase();
-            let looks_like_approval = lower.contains("approve")
-                && (lower.contains("y/n") || lower.contains("y/n"))
-                || trimmed.contains("(y/N)")
-                || trimmed.contains("(y/n)")
-                || trimmed.contains("[y/N]")
-                || trimmed.contains("[y/n]");
-
-            if looks_like_approval && !awaiting_approval {
-                let (tool_use_id, command) = last_command
-                    .clone()
-                    .unwrap_or_else(|| ("codex:approval".to_string(), "(unknown)".to_string()));
-
-                let denial = PermissionDenialEvent {
-                    tool_name: "Bash".to_string(),
-                    tool_use_id,
-                    tool_input: serde_json::json!({
-                        "command": command,
-                        "description": "Codex requested approval to run this command",
-                        "prompt": prompt_tail.trim_end(),
-                    }),
-                };
-                let event = PermissionDeniedEvent {
-                    session_id: session_id.to_string(),
-                    worktree_id: worktree_id.to_string(),
-                    denials: vec![denial],
-                };
-                let _ = app.emit("chat:permission_denied", &event);
+            if looks_like_approval_prompt(trimmed) && !awaiting_approval {
+                emit_approval(prompt_tail.trim_end(), &last_command);
                 awaiting_approval = true;
             }
         }
