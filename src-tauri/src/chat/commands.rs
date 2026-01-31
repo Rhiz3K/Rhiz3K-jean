@@ -2916,11 +2916,15 @@ pub async fn get_session_debug_info(
         for run in &metadata.runs {
             let jsonl_path = session_dir.join(format!("{}.jsonl", run.run_id));
             if jsonl_path.exists() {
-                // Truncate user message preview to 50 chars
-                let preview = if run.user_message.len() > 50 {
-                    format!("{}...", &run.user_message[..47])
-                } else {
-                    run.user_message.clone()
+                // Truncate user message preview to 50 chars (unicode-safe)
+                let preview = {
+                    let char_count = run.user_message.chars().count();
+                    if char_count > 50 {
+                        let truncated: String = run.user_message.chars().take(47).collect();
+                        format!("{truncated}...")
+                    } else {
+                        run.user_message.clone()
+                    }
                 };
 
                 run_log_files.push(RunLogFileInfo {
