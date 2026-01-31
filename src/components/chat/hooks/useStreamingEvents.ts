@@ -185,18 +185,31 @@ export default function useStreamingEvents({
           thinkingLevels,
           selectedModels,
           agents,
+          setWaitingForInput,
+          removeSendingSession,
         } = useChatStore.getState()
 
         // Store the denials for the approval UI
         setPendingDenials(session_id, denials)
 
-        // Store the message context for re-send
+        const agent = agents[session_id] ?? 'claude'
+
+        // Codex BUILD mode approvals are handled interactively (y/n) and should not trigger
+        // Claude's re-send continuation flow.
+        if (agent === 'codex') {
+          setWaitingForInput(session_id, true)
+          // Pause streaming UI while Codex waits for y/n input
+          removeSendingSession(session_id)
+          return
+        }
+
+        // Store the message context for Claude re-send
         const originalMessage = lastSentMessages[session_id]
         if (originalMessage) {
           setDeniedMessageContext(session_id, {
             message: originalMessage,
             model: selectedModels[session_id],
-            agent: agents[session_id] ?? 'claude',
+            agent,
             executionMode: executionModes[session_id] ?? 'plan',
             thinkingLevel: thinkingLevels[session_id] ?? 'off',
           })
@@ -484,7 +497,9 @@ export default function useStreamingEvents({
 
       // Ensure the persisted run log becomes the source of truth (prevents stale placeholder
       // messages like "Response lost..." from lingering after resume/recovery).
-      queryClient.invalidateQueries({ queryKey: chatQueryKeys.session(sessionId) })
+      queryClient.invalidateQueries({
+        queryKey: chatQueryKeys.session(sessionId),
+      })
 
       // Detect PR_CREATED marker and save PR info (async, after main flow)
       // Format: PR_CREATED: #<number> <url>

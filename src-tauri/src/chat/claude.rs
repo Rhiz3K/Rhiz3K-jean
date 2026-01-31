@@ -1,8 +1,8 @@
 use tauri::Manager;
 
 use super::events::{
-    ChunkEvent, DoneEvent, ErrorEvent, ThinkingEvent, ToolBlockEvent, ToolResultEvent,
-    ToolUseEvent,
+    ChunkEvent, DoneEvent, ErrorEvent, PermissionDenialEvent, PermissionDeniedEvent, ThinkingEvent,
+    ToolBlockEvent, ToolResultEvent, ToolUseEvent,
 };
 use super::types::{
     CompactMetadata, ContentBlock, EffortLevel, ThinkingLevel, ToolCall, UsageData,
@@ -932,7 +932,7 @@ pub fn tail_claude_output(
                     if let Some(denials) = msg.get("permission_denials").and_then(|v| v.as_array())
                     {
                         if !denials.is_empty() {
-                            let denial_events: Vec<PermissionDenial> = denials
+                            let denial_events: Vec<PermissionDenialEvent> = denials
                                 .iter()
                                 .filter_map(|d| {
                                     let tool_name = d.get("tool_name")?.as_str()?;
@@ -955,7 +955,7 @@ pub fn tail_claude_output(
                                         }
                                     }
 
-                                    Some(PermissionDenial {
+                                    Some(PermissionDenialEvent {
                                         tool_name: tool_name.to_string(),
                                         tool_use_id: d.get("tool_use_id")?.as_str()?.to_string(),
                                         tool_input: tool_input.clone(),

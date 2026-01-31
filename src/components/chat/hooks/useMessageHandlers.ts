@@ -1,5 +1,6 @@
 import { useCallback, type RefObject } from 'react'
 import type { QueryClient } from '@tanstack/react-query'
+import { invoke } from '@tauri-apps/api/core'
 import { toast } from 'sonner'
 import { invoke } from '@/lib/transport'
 import {
@@ -7,6 +8,7 @@ import {
   markPlanApproved as markPlanApprovedService,
 } from '@/services/chat'
 import { useChatStore } from '@/store/chat-store'
+import { isTauri } from '@/services/projects'
 import type {
   ChatMessage,
   ChatAgent,
@@ -694,7 +696,26 @@ export function useMessageHandlers({
         setAgent,
         setExecutingMode,
         setWaitingForInput,
+        agents,
       } = useChatStore.getState()
+
+      const currentAgent = agents[sessionId] ?? selectedAgentRef.current
+      if (currentAgent === 'codex') {
+        // Codex BUILD mode runs interactively; approvals are y/n replies, not a re-send.
+        clearPendingDenials(sessionId)
+        clearDeniedMessageContext(sessionId)
+        setWaitingForInput(sessionId, false)
+        addSendingSession(sessionId)
+
+        if (isTauri()) {
+          invoke('codex_approval_reply', { sessionId, approved: true }).catch(
+            error => {
+              console.warn('[Codex] approval reply failed', { error })
+            }
+          )
+        }
+        return
+      }
 
       // Add approved patterns to session store
       for (const pattern of approvedPatterns) {
@@ -821,7 +842,25 @@ export function useMessageHandlers({
         setExecutingMode,
         setExecutionMode: setMode,
         setWaitingForInput,
+        agents,
       } = useChatStore.getState()
+
+      const currentAgent = agents[sessionId] ?? selectedAgentRef.current
+      if (currentAgent === 'codex') {
+        // Codex cannot switch to YOLO mid-run; treat as a normal approve.
+        clearPendingDenials(sessionId)
+        clearDeniedMessageContext(sessionId)
+        setWaitingForInput(sessionId, false)
+        addSendingSession(sessionId)
+        if (isTauri()) {
+          invoke('codex_approval_reply', { sessionId, approved: true }).catch(
+            error => {
+              console.warn('[Codex] approval reply failed', { error })
+            }
+          )
+        }
+        return
+      }
 
       // Add approved patterns to session store
       for (const pattern of approvedPatterns) {
@@ -931,7 +970,27 @@ export function useMessageHandlers({
       clearDeniedMessageContext,
       setWaitingForInput,
       removeSendingSession,
+      addSendingSession,
+      agents,
     } = useChatStore.getState()
+
+    const currentAgent = agents[sessionId] ?? 'claude'
+    if (currentAgent === 'codex') {
+      // Deny interactive Codex approval prompt
+      clearPendingDenials(sessionId)
+      clearDeniedMessageContext(sessionId)
+      setWaitingForInput(sessionId, false)
+      addSendingSession(sessionId)
+      if (isTauri()) {
+        invoke('codex_approval_reply', { sessionId, approved: false }).catch(
+          error => {
+            console.warn('[Codex] deny reply failed', { error })
+          }
+        )
+      }
+      return
+    }
+
     clearPendingDenials(sessionId)
     clearDeniedMessageContext(sessionId)
     setWaitingForInput(sessionId, false)
