@@ -20,6 +20,7 @@ import {
   AlertDialogTitle,
   AlertDialogDescription,
   AlertDialogFooter,
+  AlertDialogAction,
   AlertDialogCancel,
 } from '@/components/ui/alert-dialog'
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary'
@@ -351,6 +352,31 @@ export function ChatWindow({
     ? canvasOnlyMode || isViewingCanvasTabRaw
     : false
   const sessionModalOpen = useUIStore(state => state.sessionChatModalOpen)
+
+  // Per-run (non-persisted) override for Codex build sandbox network access.
+  // When unset, falls back to saved preferences.
+  const [codexBuildNetworkAccessOverride, setCodexBuildNetworkAccessOverride] =
+    useState<boolean | null>(null)
+  const codexBuildNetworkAccessPreference =
+    preferences?.codex_build_network_access ?? false
+  const codexBuildNetworkAccess =
+    codexBuildNetworkAccessOverride ?? codexBuildNetworkAccessPreference
+
+  // YOLO confirmation gate (for mode switch + "approve with yolo")
+  const [yoloConfirmOpen, setYoloConfirmOpen] = useState(false)
+  const pendingYoloActionRef = useRef<(() => void) | null>(null)
+
+  const requestYoloConfirmation = useCallback((action: () => void) => {
+    pendingYoloActionRef.current = action
+    setYoloConfirmOpen(true)
+  }, [])
+
+  const handleConfirmYolo = useCallback(() => {
+    const action = pendingYoloActionRef.current
+    pendingYoloActionRef.current = null
+    setYoloConfirmOpen(false)
+    action?.()
+  }, [])
   const focusChatShortcut = formatShortcutDisplay(
     (preferences?.keybindings?.focus_chat_input ??
       DEFAULT_KEYBINDINGS.focus_chat_input) as string
@@ -438,6 +464,12 @@ export function ChatWindow({
   const { data: attachedSavedContexts } = useAttachedSavedContexts(
     activeWorktreeId ?? null
   )
+  // Use live status if available, otherwise fall back to cached
+  const behindCount =
+    gitStatus?.behind_count ?? worktree?.cached_behind_count ?? 0
+  const aheadCount =
+    gitStatus?.unpushed_count ?? worktree?.cached_unpushed_count ?? 0
+  const hasBranchUpdates = behindCount > 0
   // Diff stats with cached fallback
   const uncommittedAdded =
     gitStatus?.uncommitted_added ?? worktree?.cached_uncommitted_added ?? 0
@@ -469,7 +501,9 @@ export function ChatWindow({
   )
   const selectedAgent: ChatAgent =
     storedAgent ??
-    (session?.codex_session_id && !session?.claude_session_id ? 'codex' : 'claude')
+    (session?.codex_session_id && !session?.claude_session_id
+      ? 'codex'
+      : 'claude')
 
   // Per-session model selection
   // - Claude: uses preferences default (sonnet/opus/haiku) unless overridden per-session
@@ -715,6 +749,7 @@ export function ChatWindow({
   const executionModeRef = useRef(executionMode)
   const enabledMcpServersRef = useRef(enabledMcpServers)
   const mcpServersDataRef = useRef<McpServerInfo[]>(availableMcpServers)
+  const codexBuildNetworkAccessRef = useRef(codexBuildNetworkAccess)
 
   // Keep refs in sync with current values (runs on every render, but cheap)
   activeSessionIdRef.current = activeSessionId
@@ -728,6 +763,7 @@ export function ChatWindow({
   executionModeRef.current = executionMode
   enabledMcpServersRef.current = enabledMcpServers
   mcpServersDataRef.current = availableMcpServers
+  codexBuildNetworkAccessRef.current = codexBuildNetworkAccess
 
   // Stable callback for useMessageHandlers to build MCP config from current refs
   const getMcpConfig = useCallback(
@@ -1045,6 +1081,21 @@ export function ChatWindow({
     return () => window.removeEventListener('open-git-diff', handleOpenGitDiff)
   }, [activeWorktreePath, gitStatus?.base_branch])
 
+  // Listen for global run command from keybinding (CMD+R by default)
+  useEffect(() => {
+    const handleToggleWorkspaceRun = () => {
+      if (!activeWorktreeId || !runScript) return
+      useTerminalStore.getState().startRun(activeWorktreeId, runScript)
+    }
+
+    window.addEventListener('toggle-workspace-run', handleToggleWorkspaceRun)
+    return () =>
+      window.removeEventListener(
+        'toggle-workspace-run',
+        handleToggleWorkspaceRun
+      )
+  }, [activeWorktreeId, runScript])
+
   // Global Cmd+Option+Backspace (Mac) / Ctrl+Alt+Backspace (Windows/Linux) listener for cancellation
   // (works even when textarea is disabled)
   useEffect(() => {
@@ -1190,6 +1241,7 @@ export function ChatWindow({
           disableThinkingForMode: queuedMsg.disableThinkingForMode,
           effortLevel: queuedMsg.effortLevel,
           mcpConfig: queuedMsg.mcpConfig,
+          codexBuildNetworkAccess: queuedMsg.codexBuildNetworkAccess,
           parallelExecutionPromptEnabled:
             preferences?.parallel_execution_prompt_enabled ?? false,
           chromeEnabled: preferences?.chrome_enabled ?? false,
@@ -1293,6 +1345,8 @@ export function ChatWindow({
             mcpServersDataRef.current,
             enabledMcpServersRef.current
           ),
+          codexBuildNetworkAccess:
+            agent === 'codex' ? codexBuildNetworkAccessRef.current : undefined,
           parallelExecutionPromptEnabled:
             preferences?.parallel_execution_prompt_enabled ?? false,
           chromeEnabled: preferences?.chrome_enabled ?? false,
@@ -1411,6 +1465,10 @@ export function ChatWindow({
           mcpServersDataRef.current,
           enabledMcpServersRef.current
         ),
+        codexBuildNetworkAccess:
+          agent === 'codex' && mode === 'build'
+            ? codexBuildNetworkAccessRef.current
+            : undefined,
         queuedAt: Date.now(),
       }
 
@@ -1506,6 +1564,15 @@ export function ChatWindow({
     useChatStore.getState().setAgent(sessionId, agent)
   }, [])
 
+  const handleToolbarCodexBuildNetworkAccessChange = useCallback(
+    (enabled: boolean) => {
+      setCodexBuildNetworkAccessOverride(
+        enabled === codexBuildNetworkAccessPreference ? null : enabled
+      )
+    },
+    [codexBuildNetworkAccessPreference]
+  )
+
   const handleToolbarModelChange = useCallback(
     (model: string) => {
       if (activeSessionId && activeWorktreeId && activeWorktreePath) {
@@ -1586,19 +1653,35 @@ export function ChatWindow({
 
   const handleToolbarSetExecutionMode = useCallback(
     (mode: ExecutionMode) => {
-      if (activeSessionId) {
-        setExecutionMode(activeSessionId, mode)
-        // Broadcast to other clients (fire-and-forget)
-        invoke('broadcast_session_setting', {
-          sessionId: activeSessionId,
-          key: 'executionMode',
-          value: mode,
-        }).catch(() => {
-          /* noop */
+      if (!activeSessionId) return
+
+      // Gate entering yolo
+      if (mode === 'yolo' && executionModeRef.current !== 'yolo') {
+        requestYoloConfirmation(() => {
+          setExecutionMode(activeSessionId, mode)
+          // Broadcast to other clients (fire-and-forget)
+          invoke('broadcast_session_setting', {
+            sessionId: activeSessionId,
+            key: 'executionMode',
+            value: mode,
+          }).catch(() => {
+            /* noop */
+          })
         })
+        return
       }
+
+      setExecutionMode(activeSessionId, mode)
+      // Broadcast to other clients (fire-and-forget)
+      invoke('broadcast_session_setting', {
+        sessionId: activeSessionId,
+        key: 'executionMode',
+        value: mode,
+      }).catch(() => {
+        /* noop */
+      })
     },
-    [activeSessionId, setExecutionMode]
+    [activeSessionId, setExecutionMode, requestYoloConfirmation]
   )
 
   const handleOpenMagicModal = useCallback(() => {
@@ -1759,24 +1842,27 @@ Begin your investigation now.`
 
     // Send message
     const agent =
-      (preferences?.magic_prompt_agents?.investigate_model as ChatAgent | undefined) ??
-      selectedAgentRef.current
+      (preferences?.magic_prompt_agents?.investigate_model as
+        | ChatAgent
+        | undefined) ?? selectedAgentRef.current
 
     const investigateModel =
       agent === 'claude'
-        ? preferences?.magic_prompt_models?.investigate_model ??
-          selectedModelRef.current
-        : preferences?.magic_prompt_codex_models?.investigate_model ??
-          selectedModelRef.current
+        ? (preferences?.magic_prompt_models?.investigate_model ??
+          selectedModelRef.current)
+        : (preferences?.magic_prompt_codex_models?.investigate_model ??
+          selectedModelRef.current)
 
     const mode = executionModeRef.current
     const thinkingLevel: ThinkingLevel =
       agent === 'codex'
-        ? ((preferences?.magic_prompt_codex_reasoning_efforts?.investigate_model ??
-            'high') as ThinkingLevel)
+        ? ((preferences?.magic_prompt_codex_reasoning_efforts
+            ?.investigate_model ?? 'high') as ThinkingLevel)
         : selectedThinkingLevelRef.current
     const modelForSend = investigateModel
-    const hasManualOverride = useChatStore.getState().hasManualThinkingOverride(sessionId)
+    const hasManualOverride = useChatStore
+      .getState()
+      .hasManualThinkingOverride(sessionId)
     const disableByPreference =
       agent === 'claude'
         ? (preferences?.disable_thinking_in_non_plan_modes ?? true)
@@ -1820,6 +1906,10 @@ Begin your investigation now.`
           mcpServersDataRef.current,
           enabledMcpServersRef.current
         ),
+        codexBuildNetworkAccess:
+          agent === 'codex' && mode === 'build'
+            ? codexBuildNetworkAccessRef.current
+            : undefined,
         parallelExecutionPromptEnabled:
           preferences?.parallel_execution_prompt_enabled ?? false,
         chromeEnabled: preferences?.chrome_enabled ?? false,
@@ -2051,6 +2141,26 @@ Begin your investigation now.`
     }
   }, [])
 
+  const handlePlanApprovalYoloGuarded = useCallback(
+    (messageId: string) => {
+      requestYoloConfirmation(() => handlePlanApprovalYolo(messageId))
+    },
+    [handlePlanApprovalYolo, requestYoloConfirmation]
+  )
+
+  const handleStreamingPlanApprovalYoloGuarded = useCallback(() => {
+    requestYoloConfirmation(() => handleStreamingPlanApprovalYolo())
+  }, [handleStreamingPlanApprovalYolo, requestYoloConfirmation])
+
+  const handlePermissionApprovalYoloGuarded = useCallback(
+    (sessionId: string, approvedPatterns: string[]) => {
+      requestYoloConfirmation(() =>
+        handlePermissionApprovalYolo(sessionId, approvedPatterns)
+      )
+    },
+    [handlePermissionApprovalYolo, requestYoloConfirmation]
+  )
+
   // Listen for approve-plan keyboard shortcut event
   // Skip when on canvas view (non-modal) - CanvasGrid handles it there
   useEffect(() => {
@@ -2173,6 +2283,10 @@ Begin your investigation now.`
               mcpServersDataRef.current,
               enabledMcpServersRef.current
             ),
+            codexBuildNetworkAccess:
+              agent === 'codex'
+                ? codexBuildNetworkAccessRef.current
+                : undefined,
             parallelExecutionPromptEnabled:
               preferences?.parallel_execution_prompt_enabled ?? false,
             chromeEnabled: preferences?.chrome_enabled ?? false,
@@ -2301,6 +2415,11 @@ Begin your investigation now.`
           mcpServersDataRef.current,
           enabledMcpServersRef.current
         ),
+        codexBuildNetworkAccess:
+          selectedAgentRef.current === 'codex' &&
+          executionModeRef.current === 'build'
+            ? codexBuildNetworkAccessRef.current
+            : undefined,
         queuedAt: Date.now(),
       }
 
@@ -2496,7 +2615,7 @@ Begin your investigation now.`
                             approveButtonRef={approveButtonRef}
                             isSending={isSending}
                             onPlanApproval={handlePlanApproval}
-                            onPlanApprovalYolo={handlePlanApprovalYolo}
+                            onPlanApprovalYolo={handlePlanApprovalYoloGuarded}
                             onQuestionAnswer={handleQuestionAnswer}
                             onQuestionSkip={handleSkipQuestion}
                             onFileClick={setViewingFilePath}
@@ -2536,7 +2655,7 @@ Begin your investigation now.`
                               handleStreamingPlanApproval
                             }
                             onStreamingPlanApprovalYolo={
-                              handleStreamingPlanApprovalYolo
+                              handleStreamingPlanApprovalYoloGuarded
                             }
                           />
                         )}
@@ -2550,7 +2669,9 @@ Begin your investigation now.`
                               sessionId={activeSessionId}
                               denials={pendingDenials}
                               onApprove={handlePermissionApproval}
-                              onApproveYolo={handlePermissionApprovalYolo}
+                              onApproveYolo={
+                                handlePermissionApprovalYoloGuarded
+                              }
                               onDeny={handlePermissionDeny}
                             />
                           )}
@@ -2709,6 +2830,7 @@ Begin your investigation now.`
                         }
                         useAdaptiveThinking={useAdaptiveThinkingFlag}
                         queuedMessageCount={currentQueuedMessages.length}
+                        codexBuildNetworkAccess={codexBuildNetworkAccess}
                         hasBranchUpdates={hasBranchUpdates}
                         behindCount={behindCount}
                         aheadCount={aheadCount}
@@ -2748,6 +2870,9 @@ Begin your investigation now.`
                         onThinkingLevelChange={handleToolbarThinkingLevelChange}
                         onEffortLevelChange={handleToolbarEffortLevelChange}
                         onSetExecutionMode={handleToolbarSetExecutionMode}
+                        onCodexBuildNetworkAccessChange={
+                          handleToolbarCodexBuildNetworkAccessChange
+                        }
                         onCancel={handleCancel}
                         availableMcpServers={availableMcpServers}
                         enabledMcpServers={enabledMcpServers}
@@ -3137,6 +3262,37 @@ Begin your investigation now.`
               }}
             />
           ) : null)}
+
+        {/* YOLO confirmation dialog */}
+        <AlertDialog
+          open={yoloConfirmOpen}
+          onOpenChange={open => {
+            setYoloConfirmOpen(open)
+            if (!open) {
+              pendingYoloActionRef.current = null
+            }
+          }}
+        >
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Enter YOLO mode?</AlertDialogTitle>
+              <AlertDialogDescription>
+                YOLO removes safety restrictions. Tools may run without further
+                approval and can modify your workspace. Proceed only if you
+                understand and trust what will run.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleConfirmYolo}
+                className="bg-red-600 text-white hover:bg-red-600/90"
+              >
+                Enter YOLO
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
         {/* Merge options dialog */}
         <AlertDialog open={showMergeDialog} onOpenChange={setShowMergeDialog}>

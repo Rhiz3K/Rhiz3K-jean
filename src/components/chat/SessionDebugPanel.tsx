@@ -5,7 +5,12 @@ import { isNativeApp } from '@/lib/environment'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Copy, FileText } from 'lucide-react'
-import type { SessionDebugInfo, RunStatus, UsageData } from '@/types/chat'
+import type {
+  SessionDebugInfo,
+  RunStatus,
+  UsageData,
+  RunLogFileInfo,
+} from '@/types/chat'
 import { cn } from '@/lib/utils'
 
 interface SessionDebugPanelProps {
@@ -30,6 +35,25 @@ function formatTokens(tokens: number): string {
 function formatUsage(usage: UsageData | undefined): string {
   if (!usage) return ''
   return `${formatTokens(usage.input_tokens)} in / ${formatTokens(usage.output_tokens)} out`
+}
+
+function formatRunPolicy(file: RunLogFileInfo): string {
+  const mode = file.execution_mode
+  if (file.agent !== 'codex') {
+    return mode ? `${file.agent} ${mode}` : file.agent
+  }
+
+  const parts: string[] = ['codex']
+  if (mode) parts.push(mode)
+  if (mode === 'build') {
+    const net = file.policy?.codex_build_network_access
+    if (typeof net === 'boolean') {
+      parts.push(`net:${net ? 'on' : 'off'}`)
+    }
+  }
+  const sandbox = file.policy?.codex_sandbox
+  if (sandbox) parts.push(`sb:${sandbox}`)
+  return parts.join(' ')
 }
 
 /** Get status color */
@@ -92,7 +116,7 @@ export function SessionDebugPanel({
       `Run logs (${debugInfo.run_log_files.length}):`,
       ...debugInfo.run_log_files.map(
         f =>
-          `  ${getStatusText(f.status)} ${f.usage ? `(${formatUsage(f.usage)})` : ''} ${f.user_message_preview}`
+          `  ${getStatusText(f.status)} ${formatRunPolicy(f)} ${f.usage ? `(${formatUsage(f.usage)})` : ''} ${f.user_message_preview}`
       ),
     ]
 
@@ -236,6 +260,9 @@ export function SessionDebugPanel({
                   )}
                 >
                   {getStatusText(file.status)}
+                </span>
+                <span className="text-muted-foreground font-mono text-xs shrink-0">
+                  {formatRunPolicy(file)}
                 </span>
                 {file.usage && (
                   <span className="text-muted-foreground font-mono text-xs shrink-0">

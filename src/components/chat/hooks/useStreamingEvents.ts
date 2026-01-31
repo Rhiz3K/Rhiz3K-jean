@@ -21,6 +21,7 @@ import type {
   ToolResultEvent,
   DoneEvent,
   ErrorEvent,
+  StreamWarningEvent,
   CancelledEvent,
   ThinkingEvent,
   PermissionDeniedEvent,
@@ -40,7 +41,7 @@ interface UseStreamingEventsParams {
  *
  * Handles: chat:chunk, chat:tool_use, chat:tool_block, chat:thinking,
  * chat:tool_result, chat:permission_denied, chat:done, chat:error,
- * chat:cancelled, chat:compacted
+ * chat:cancelled, chat:compacted, chat:stream_warning
  */
 export default function useStreamingEvents({
   queryClient,
@@ -50,6 +51,8 @@ export default function useStreamingEvents({
 
   useEffect(() => {
     if (!isTauri()) return
+
+    const warnedSessions = new Set<string>()
 
     const {
       appendStreamingContent,
@@ -101,6 +104,19 @@ export default function useStreamingEvents({
       })
       addToolCall(session_id, { id, name, input, parent_tool_use_id })
     })
+
+    const unlistenStreamWarning = listen<StreamWarningEvent>(
+      'chat:stream_warning',
+      event => {
+        const { session_id, message } = event.payload
+        console.warn('[ChatWindow] Stream warning:', event.payload)
+
+        if (!warnedSessions.has(session_id)) {
+          warnedSessions.add(session_id)
+          toast.warning('Streaming warning', { description: message })
+        }
+      }
+    )
 
     const unlistenToolBlock = listen<ToolBlockEvent>(
       'chat:tool_block',
@@ -924,6 +940,7 @@ export default function useStreamingEvents({
       unlistenSending.then(f => f())
       unlistenChunk.then(f => f())
       unlistenToolUse.then(f => f())
+      unlistenStreamWarning.then(f => f())
       unlistenToolBlock.then(f => f())
       unlistenThinking.then(f => f())
       unlistenToolResult.then(f => f())

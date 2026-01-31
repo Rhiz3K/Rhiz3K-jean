@@ -24,6 +24,7 @@ import {
   GitCommitHorizontal,
   GitMerge,
   GitPullRequest,
+  Globe,
   Hammer,
   Loader2,
   MoreHorizontal,
@@ -48,6 +49,7 @@ import {
 } from '@/components/ui/select'
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
@@ -209,6 +211,8 @@ interface ChatToolbarProps {
   selectedEffortLevel: EffortLevel
   thinkingOverrideActive: boolean // True when thinking is disabled in build/yolo due to preference
   useAdaptiveThinking: boolean // True when model supports effort (Opus on CLI >= 2.1.32)
+  queuedMessageCount: number
+  codexBuildNetworkAccess: boolean
 
   // Git state
   baseBranch: string
@@ -257,6 +261,7 @@ interface ChatToolbarProps {
   onThinkingLevelChange: (level: ThinkingLevel) => void
   onEffortLevelChange: (level: EffortLevel) => void
   onSetExecutionMode: (mode: ExecutionMode) => void
+  onCodexBuildNetworkAccessChange: (enabled: boolean) => void
   onCancel: () => void
 
   // MCP servers
@@ -325,6 +330,11 @@ export const ChatToolbar = memo(function ChatToolbar({
   selectedEffortLevel,
   thinkingOverrideActive,
   useAdaptiveThinking,
+  queuedMessageCount,
+  codexBuildNetworkAccess,
+  hasBranchUpdates,
+  behindCount,
+  aheadCount,
   baseBranch,
   uncommittedAdded,
   uncommittedRemoved,
@@ -361,6 +371,7 @@ export const ChatToolbar = memo(function ChatToolbar({
   onThinkingLevelChange,
   onEffortLevelChange,
   onSetExecutionMode,
+  onCodexBuildNetworkAccessChange,
   onCancel,
   availableMcpServers,
   enabledMcpServers,
@@ -417,6 +428,10 @@ export const ChatToolbar = memo(function ChatToolbar({
       onEffortLevelChange(value as EffortLevel)
     },
     [onEffortLevelChange]
+  )
+
+  const loadingOperation = useChatStore(state =>
+    worktreeId ? (state.worktreeLoadingOperations[worktreeId] ?? null) : null
   )
 
   const handlePullClick = useCallback(async () => {
@@ -563,6 +578,9 @@ export const ChatToolbar = memo(function ChatToolbar({
   const isDisabled = isSending || hasPendingQuestions
   const canSend = hasInputValue || hasPendingAttachments
 
+  const showCodexBuildNetworkToggle =
+    selectedAgent === 'codex' && executionMode === 'build'
+
   const baseModelOptions =
     selectedAgent === 'codex' ? CODEX_MODEL_OPTIONS : CLAUDE_MODEL_OPTIONS
   const modelOptions =
@@ -613,9 +631,15 @@ export const ChatToolbar = memo(function ChatToolbar({
             <DropdownMenuItem onClick={onLoadContext}>
               <FolderOpen className="h-4 w-4" />
               Load Context
-              <span className="ml-auto text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
-                L
-              </span>
+              {loadedIssueCount + loadedPRCount + loadedContextCount > 0 ? (
+                <span className="ml-auto text-xs text-muted-foreground">
+                  {loadedIssueCount + loadedPRCount + loadedContextCount} loaded
+                </span>
+              ) : (
+                <span className="ml-auto text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+                  L
+                </span>
+              )}
             </DropdownMenuItem>
 
             <DropdownMenuSeparator />
@@ -971,6 +995,36 @@ export const ChatToolbar = memo(function ChatToolbar({
                 </DropdownMenuRadioGroup>
               </DropdownMenuSubContent>
             </DropdownMenuSub>
+
+            {showCodexBuildNetworkToggle && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuCheckboxItem
+                  checked={codexBuildNetworkAccess}
+                  onCheckedChange={checked =>
+                    onCodexBuildNetworkAccessChange(checked === true)
+                  }
+                  disabled={isDisabled}
+                >
+                  <Globe className="h-4 w-4" />
+                  <span>Build network</span>
+                  <span className="ml-auto text-xs text-muted-foreground">
+                    {codexBuildNetworkAccess ? 'On' : 'Off'}
+                  </span>
+                </DropdownMenuCheckboxItem>
+              </>
+            )}
+
+            {/* Queue indicator */}
+            {queuedMessageCount > 0 && (
+              <>
+                <DropdownMenuSeparator />
+                <div className="flex items-center gap-2 px-2 py-1.5 text-sm text-muted-foreground">
+                  <Clock className="h-4 w-4" />
+                  <span>{queuedMessageCount} queued</span>
+                </div>
+              </>
+            )}
           </DropdownMenuContent>
         </DropdownMenu>
 
@@ -1446,6 +1500,46 @@ export const ChatToolbar = memo(function ChatToolbar({
             </DropdownMenuRadioGroup>
           </DropdownMenuContent>
         </DropdownMenu>
+
+
+        {/* Codex build network toggle - desktop only */}
+        {showCodexBuildNetworkToggle && (
+          <>
+            <div className="hidden @md:block h-4 w-px bg-border/50" />
+            <button
+              type="button"
+              disabled={hasPendingQuestions}
+              onClick={() =>
+                onCodexBuildNetworkAccessChange(!codexBuildNetworkAccess)
+              }
+              className={cn(
+                'hidden @md:flex h-8 items-center gap-1.5 px-3 text-sm text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground disabled:pointer-events-none disabled:opacity-50',
+                codexBuildNetworkAccess &&
+                  'border border-emerald-600/40 bg-emerald-500/10 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-400'
+              )}
+              title={`Codex build policy: sandbox=workspace-write, network=${
+                codexBuildNetworkAccess ? 'on' : 'off'
+              } (per-run override)`}
+            >
+              <Globe className="h-3.5 w-3.5" />
+              <span>Net</span>
+              <span className="text-xs opacity-70">
+                {codexBuildNetworkAccess ? 'On' : 'Off'}
+              </span>
+            </button>
+          </>
+        )}
+
+        {/* Queue indicator - desktop only */}
+        {queuedMessageCount > 0 && (
+          <>
+            <div className="hidden @md:block h-4 w-px bg-border/50" />
+            <div className="hidden @md:flex h-8 items-center gap-1.5 px-2 text-sm text-muted-foreground">
+              <Clock className="h-3 w-3" />
+              <span>{queuedMessageCount} queued</span>
+            </div>
+          </>
+        )}
 
         {/* Divider */}
         <div className="h-4 w-px bg-border/50" />

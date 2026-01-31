@@ -1123,6 +1123,7 @@ export function useSendMessage() {
       thinkingLevel,
       effortLevel,
       disableThinkingForMode,
+      codexBuildNetworkAccess,
       parallelExecutionPromptEnabled,
       aiLanguage,
       allowedTools,
@@ -1139,6 +1140,7 @@ export function useSendMessage() {
       thinkingLevel?: ThinkingLevel
       effortLevel?: string
       disableThinkingForMode?: boolean
+      codexBuildNetworkAccess?: boolean
       parallelExecutionPromptEnabled?: boolean
       aiLanguage?: string
       allowedTools?: string[]
@@ -1158,6 +1160,7 @@ export function useSendMessage() {
         thinkingLevel,
         effortLevel,
         disableThinkingForMode,
+        codexBuildNetworkAccess,
         parallelExecutionPromptEnabled,
         aiLanguage,
         allowedTools,
@@ -1175,6 +1178,7 @@ export function useSendMessage() {
         thinkingLevel,
         effortLevel,
         disableThinkingForMode,
+        codexBuildNetworkAccess,
         parallelExecutionPromptEnabled,
         aiLanguage,
         allowedTools,

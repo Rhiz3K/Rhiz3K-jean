@@ -13,7 +13,11 @@ import {
   useClaudeCliAuth,
   claudeCliQueryKeys,
 } from '@/services/claude-cli'
-import { useCodexCliStatus, useCodexCliAuth, codexCliQueryKeys } from '@/services/codex-cli'
+import {
+  useCodexCliStatus,
+  useCodexCliAuth,
+  codexCliQueryKeys,
+} from '@/services/codex-cli'
 import { useGhCliStatus, useGhCliAuth, ghCliQueryKeys } from '@/services/gh-cli'
 import { useUIStore } from '@/store/ui-store'
 import type { ClaudeAuthStatus } from '@/types/claude-cli'
@@ -334,7 +338,9 @@ export const GeneralPane: React.FC = () => {
     // First check if already authenticated
     setCheckingCodexAuth(true)
     try {
-      await queryClient.invalidateQueries({ queryKey: codexCliQueryKeys.auth() })
+      await queryClient.invalidateQueries({
+        queryKey: codexCliQueryKeys.auth(),
+      })
       const result = await queryClient.fetchQuery<CodexAuthStatus>({
         queryKey: codexCliQueryKeys.auth(),
       })
@@ -514,11 +520,7 @@ export const GeneralPane: React.FC = () => {
             ) : codexAuth?.authenticated ? (
               <span className="text-sm text-muted-foreground">Logged in</span>
             ) : (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleCodexLogin}
-              >
+              <Button variant="outline" size="sm" onClick={handleCodexLogin}>
                 Login
               </Button>
             )
@@ -727,6 +729,23 @@ export const GeneralPane: React.FC = () => {
                   savePreferences.mutate({
                     ...preferences,
                     codex_disable_reasoning_in_non_plan_modes: checked,
+                  })
+                }
+              }}
+            />
+          </InlineField>
+
+          <InlineField
+            label="Allow network in build mode"
+            description="Enable outbound network inside Codex workspace-write sandbox (needed for gh and some CLIs)"
+          >
+            <Switch
+              checked={preferences?.codex_build_network_access ?? false}
+              onCheckedChange={checked => {
+                if (preferences) {
+                  savePreferences.mutate({
+                    ...preferences,
+                    codex_build_network_access: checked,
                   })
                 }
               }}
