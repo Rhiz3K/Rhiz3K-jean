@@ -48,8 +48,10 @@ const createTestQueryClient = () =>
   })
 
 const createWrapper = (queryClient: QueryClient) => {
-  return ({ children }: { children: React.ReactNode }) =>
+  const Wrapper = ({ children }: { children: React.ReactNode }) =>
     createElement(QueryClientProvider, { client: queryClient }, children)
+  Wrapper.displayName = 'TestQueryClientProvider'
+  return Wrapper
 }
 
 describe('preferences service', () => {
@@ -103,6 +105,7 @@ describe('preferences service', () => {
         syntax_theme_light: 'github-light',
         disable_thinking_in_non_plan_modes: true,
         codex_disable_reasoning_in_non_plan_modes: true,
+        codex_web_search_mode: 'cached',
         codex_build_network_access: false,
         session_recap_enabled: false,
         session_recap_model: 'haiku',
@@ -188,6 +191,7 @@ describe('preferences service', () => {
         syntax_theme_light: 'github-light',
         disable_thinking_in_non_plan_modes: true,
         codex_disable_reasoning_in_non_plan_modes: true,
+        codex_web_search_mode: 'cached',
         codex_build_network_access: false,
         session_recap_enabled: false,
         session_recap_model: 'haiku',
@@ -250,6 +254,7 @@ describe('preferences service', () => {
         syntax_theme_light: 'github-light',
         disable_thinking_in_non_plan_modes: false,
         codex_disable_reasoning_in_non_plan_modes: false,
+        codex_web_search_mode: 'cached',
         codex_build_network_access: false,
         session_recap_enabled: false,
         session_recap_model: 'haiku',
@@ -310,6 +315,7 @@ describe('preferences service', () => {
         syntax_theme_light: 'github-light',
         disable_thinking_in_non_plan_modes: true,
         codex_disable_reasoning_in_non_plan_modes: true,
+        codex_web_search_mode: 'cached',
         codex_build_network_access: false,
         session_recap_enabled: false,
         session_recap_model: 'haiku',
@@ -370,6 +376,7 @@ describe('preferences service', () => {
         syntax_theme_light: 'github-light',
         disable_thinking_in_non_plan_modes: true,
         codex_disable_reasoning_in_non_plan_modes: true,
+        codex_web_search_mode: 'cached',
         codex_build_network_access: false,
         session_recap_enabled: false,
         session_recap_model: 'haiku',
@@ -428,6 +435,7 @@ describe('preferences service', () => {
         syntax_theme_light: 'github-light',
         disable_thinking_in_non_plan_modes: true,
         codex_disable_reasoning_in_non_plan_modes: true,
+        codex_web_search_mode: 'cached',
         codex_build_network_access: false,
         session_recap_enabled: false,
         session_recap_model: 'haiku',

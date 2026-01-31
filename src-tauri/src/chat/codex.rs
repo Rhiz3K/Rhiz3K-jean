@@ -7,7 +7,9 @@ use super::events::{
     CancelledEvent, ChunkEvent, DoneEvent, ErrorEvent, StreamWarningEvent, ThinkingEvent,
     ToolBlockEvent, ToolResultEvent, ToolUseEvent,
 };
-use super::mode_policy::{codex_detached_policy, push_codex_detached_mode_args, ExecutionMode};
+use super::mode_policy::{
+    codex_detached_policy, push_codex_detached_mode_args, CodexWebSearchMode, ExecutionMode,
+};
 use super::types::{ChatAgent, ContentBlock, ThinkingLevel, ToolCall, UsageData};
 
 /// Response from Codex CLI execution
@@ -42,6 +44,7 @@ fn build_codex_args_detached(
     reasoning_effort: Option<&ThinkingLevel>,
     execution_mode: Option<&str>,
     codex_build_network_access: bool,
+    codex_web_search_mode: CodexWebSearchMode,
     working_dir: &std::path::Path,
     ai_language: Option<&str>,
 ) -> (Vec<String>, Vec<(String, String)>) {
@@ -53,6 +56,7 @@ fn build_codex_args_detached(
     if mode == ExecutionMode::Build {
         policy.workspace_write_network_access = codex_build_network_access;
     }
+    policy.web_search = codex_web_search_mode;
     push_codex_detached_mode_args(&mut args, &policy);
 
     // Command: codex exec ...
@@ -146,6 +150,7 @@ pub fn execute_codex_detached(
     reasoning_effort: Option<&ThinkingLevel>,
     execution_mode: Option<&str>,
     codex_build_network_access: bool,
+    codex_web_search_mode: CodexWebSearchMode,
     ai_language: Option<&str>,
 ) -> Result<(u32, CodexResponse), String> {
     use super::detached::spawn_detached_codex;
@@ -193,6 +198,7 @@ pub fn execute_codex_detached(
         reasoning_effort,
         execution_mode,
         codex_build_network_access,
+        codex_web_search_mode,
         working_dir,
         ai_language,
     );
@@ -930,12 +936,21 @@ fn emit_cancelled(app: &tauri::AppHandle, session_id: &str, worktree_id: &str, u
 mod tests {
     use super::*;
 
+    fn has_config(args: &[String], expected: &str) -> bool {
+        args.windows(2)
+            .any(|w| w[0] == "--config" && w[1] == expected)
+    }
+
     fn args_for(
         existing_session_id: Option<&str>,
         execution_mode: Option<&str>,
         model: Option<&str>,
         reasoning_effort: Option<ThinkingLevel>,
     ) -> Vec<String> {
+        let web_search = match execution_mode {
+            Some("yolo") => CodexWebSearchMode::Live,
+            _ => CodexWebSearchMode::Cached,
+        };
         build_codex_args_detached(
             "s1",
             "w1",
@@ -944,6 +959,7 @@ mod tests {
             reasoning_effort.as_ref(),
             execution_mode,
             true,
+            web_search,
             std::path::Path::new("/tmp"),
             None,
         )
@@ -954,11 +970,20 @@ mod tests {
     fn codex_args_global_flags_are_first() {
         let args = args_for(None, Some("plan"), Some("gpt-5.2-codex"), None);
         let exec_idx = args.iter().position(|a| a == "exec").unwrap();
-        assert_eq!(args.get(0).map(String::as_str), Some("--search"));
+        assert_eq!(args.get(0).map(String::as_str), Some("--config"));
+        assert!(has_config(&args, "web_search=\"cached\""));
+        assert!(!args.iter().any(|a| a == "--search"));
         // plan/build detached runs also include `--ask-for-approval never` (before `exec`)
         assert!(args.iter().any(|a| a == "--ask-for-approval"));
         assert!(args.iter().any(|a| a == "never"));
         assert!(exec_idx > 0);
+    }
+
+    #[test]
+    fn codex_args_yolo_sets_web_search_live_and_never_uses_search_flag() {
+        let args = args_for(None, Some("yolo"), Some("gpt-5.2-codex"), None);
+        assert!(has_config(&args, "web_search=\"live\""));
+        assert!(!args.iter().any(|a| a == "--search"));
     }
 
     #[test]
@@ -1016,6 +1041,8 @@ mod tests {
             args.get(sandbox_idx + 1).map(String::as_str),
             Some("workspace-write")
         );
+        assert!(has_config(&args, "web_search=\"cached\""));
+        assert!(!args.iter().any(|a| a == "--search"));
         assert!(args
             .iter()
             .any(|a| a == "sandbox_workspace_write.network_access=true"));
@@ -1031,6 +1058,7 @@ mod tests {
             None,
             Some("build"),
             false,
+            CodexWebSearchMode::Cached,
             std::path::Path::new("/tmp"),
             None,
         )
@@ -1068,11 +1096,7 @@ mod tests {
             Some("gpt-5.2"),
             Some(ThinkingLevel::High),
         );
-        let config_idx = args.iter().position(|a| a == "--config").unwrap();
-        assert_eq!(
-            args.get(config_idx + 1).map(String::as_str),
-            Some("model_reasoning_effort=\"high\"")
-        );
+        assert!(has_config(&args, "model_reasoning_effort=\"high\""));
     }
 
     #[test]
@@ -1083,10 +1107,6 @@ mod tests {
             Some("gpt-5.2"),
             Some(ThinkingLevel::Minimal),
         );
-        let config_idx = args.iter().position(|a| a == "--config").unwrap();
-        assert_eq!(
-            args.get(config_idx + 1).map(String::as_str),
-            Some("model_reasoning_effort=\"low\"")
-        );
+        assert!(has_config(&args, "model_reasoning_effort=\"low\""));
     }
 }

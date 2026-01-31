@@ -45,6 +45,16 @@ function formatRunPolicy(file: RunLogFileInfo): string {
 
   const parts: string[] = ['codex']
   if (mode) parts.push(mode)
+
+  const ws =
+    file.policy?.codex_web_search ??
+    (typeof file.policy?.codex_search === 'boolean'
+      ? file.policy?.codex_search
+        ? 'live'
+        : 'disabled'
+      : undefined)
+  if (ws) parts.push(`ws:${ws}`)
+
   if (mode === 'build') {
     const net = file.policy?.codex_build_network_access
     if (typeof net === 'boolean') {
@@ -182,7 +192,10 @@ export function SessionDebugPanel({
         {debugInfo.manifest_file ? (
           <span
             className="text-foreground/70 cursor-pointer hover:underline"
-            onClick={() => onFileClick?.(debugInfo.manifest_file!)}
+            onClick={() => {
+              const path = debugInfo.manifest_file
+              if (path) onFileClick?.(path)
+            }}
           >
             ...{debugInfo.manifest_file.slice(-55)}
           </span>
@@ -198,7 +211,10 @@ export function SessionDebugPanel({
           claude jsonl:{' '}
           <span
             className="text-foreground/70 cursor-pointer hover:underline"
-            onClick={() => onFileClick?.(debugInfo.claude_jsonl_file!)}
+            onClick={() => {
+              const path = debugInfo.claude_jsonl_file
+              if (path) onFileClick?.(path)
+            }}
           >
             ...{debugInfo.claude_jsonl_file.slice(-55)}
           </span>

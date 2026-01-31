@@ -81,6 +81,8 @@ pub struct AppPreferences {
     pub thinking_level: String, // Thinking level: off, think, megathink, ultrathink
     #[serde(default = "default_codex_reasoning_effort")]
     pub codex_reasoning_effort: String, // Codex reasoning effort: minimal, low, medium, high, xhigh
+    #[serde(default = "default_codex_web_search_mode")]
+    pub codex_web_search_mode: String, // Codex web search mode: cached, live, disabled
     #[serde(default = "default_codex_build_network_access")]
     pub codex_build_network_access: bool, // Allow outbound network in Codex build mode sandbox
     #[serde(default = "default_terminal")]
@@ -195,6 +197,10 @@ fn default_thinking_level() -> String {
 
 fn default_codex_reasoning_effort() -> String {
     "medium".to_string()
+}
+
+fn default_codex_web_search_mode() -> String {
+    "cached".to_string()
 }
 
 fn default_codex_build_network_access() -> bool {
@@ -626,6 +632,7 @@ impl Default for AppPreferences {
             thinking_level: default_thinking_level(),
             codex_selected_model: default_codex_model(),
             codex_reasoning_effort: default_codex_reasoning_effort(),
+            codex_web_search_mode: default_codex_web_search_mode(),
             codex_build_network_access: default_codex_build_network_access(),
             terminal: default_terminal(),
             editor: default_editor(),
@@ -645,7 +652,8 @@ impl Default for AppPreferences {
             syntax_theme_dark: default_syntax_theme_dark(),
             syntax_theme_light: default_syntax_theme_light(),
             disable_thinking_in_non_plan_modes: default_disable_thinking_in_non_plan_modes(),
-            codex_disable_reasoning_in_non_plan_modes: default_codex_disable_reasoning_in_non_plan_modes(),
+            codex_disable_reasoning_in_non_plan_modes:
+                default_codex_disable_reasoning_in_non_plan_modes(),
             session_recap_enabled: default_session_recap_enabled(),
             session_recap_model: default_session_recap_model(),
             parallel_execution_prompt_enabled: default_parallel_execution_prompt_enabled(),

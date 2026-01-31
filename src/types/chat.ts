@@ -830,7 +830,11 @@ export interface RunLogFileInfo {
 
 /** Snapshot of the effective execution policy for a run (debug/restore). */
 export interface RunPolicySnapshot {
+  /** Backward-compat: older runs used a boolean and forced live via `--search` */
   codex_search?: boolean
+
+  /** Codex web search mode: cached | live | disabled */
+  codex_web_search?: string
   codex_sandbox?: string
   codex_build_network_access?: boolean
   codex_ask_for_approval?: string

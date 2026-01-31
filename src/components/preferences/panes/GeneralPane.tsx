@@ -46,6 +46,7 @@ import {
   thinkingLevelOptions,
   codexModelOptions,
   codexReasoningEffortOptions,
+  codexWebSearchModeOptions,
   terminalOptions,
   editorOptions,
   gitPollIntervalOptions,
@@ -54,6 +55,7 @@ import {
   notificationSoundOptions,
   type ClaudeModel,
   type CodexModel,
+  type CodexWebSearchMode,
   type TerminalApp,
   type EditorApp,
   type NotificationSound,
@@ -693,6 +695,41 @@ export const GeneralPane: React.FC = () => {
                 }
               }}
             />
+          </InlineField>
+
+          <InlineField
+            label="Web search"
+            description="Controls Codex WebSearch tool (separate from sandbox network)"
+          >
+            <div className="space-y-1">
+              <Select
+                value={preferences?.codex_web_search_mode ?? 'cached'}
+                onValueChange={(value: CodexWebSearchMode) => {
+                  if (preferences) {
+                    savePreferences.mutate({
+                      ...preferences,
+                      codex_web_search_mode: value,
+                    })
+                  }
+                }}
+              >
+                <SelectTrigger className="w-40">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {codexWebSearchModeOptions.map(option => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {preferences?.codex_web_search_mode === 'live' && (
+                <div className="text-xs text-amber-600 dark:text-amber-500">
+                  Live fetches untrusted content; higher prompt-injection risk.
+                </div>
+              )}
+            </div>
           </InlineField>
 
           <InlineField

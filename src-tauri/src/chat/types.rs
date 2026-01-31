@@ -664,9 +664,13 @@ pub struct AllSessionsResponse {
 /// actually enabled (vs what the current preferences are).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RunPolicySnapshot {
-    /// Whether Codex web search was enabled for the run.
+    /// Backward-compat: older runs used a boolean and forced live search via `--search`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub codex_search: Option<bool>,
+
+    /// Codex web search mode: "cached" (default), "live", or "disabled".
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub codex_web_search: Option<String>,
 
     /// Codex sandbox mode ("read-only", "workspace-write"), if any.
     #[serde(default, skip_serializing_if = "Option::is_none")]

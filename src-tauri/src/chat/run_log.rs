@@ -412,6 +412,7 @@ pub fn write_codex_input_file(
     message: &str,
     execution_mode: Option<&str>,
     codex_build_network_access: bool,
+    codex_web_search_mode: super::mode_policy::CodexWebSearchMode,
     ai_language: Option<&str>,
     parallel_execution_prompt_enabled: bool,
 ) -> Result<PathBuf, String> {
@@ -442,12 +443,15 @@ In build/execute mode, try to parallelize work for faster implementation.\n\n",
     // outbound network access, so commands that hit GitHub APIs (e.g. `gh repo list`) will fail.
     // In yolo mode we bypass the sandbox.
     {
-        use super::mode_policy::{codex_detached_policy, CodexSandbox, ExecutionMode};
+        use super::mode_policy::{
+            codex_detached_policy, CodexSandbox, CodexWebSearchMode, ExecutionMode,
+        };
         let mode = ExecutionMode::from_optional_str(execution_mode);
         let mut policy = codex_detached_policy(mode);
         if mode == ExecutionMode::Build {
             policy.workspace_write_network_access = codex_build_network_access;
         }
+        policy.web_search = codex_web_search_mode;
 
         if policy.sandbox == Some(CodexSandbox::ReadOnly) {
             prompt.push_str(
@@ -462,6 +466,16 @@ Avoid using `gh`/GitHub API calls here. If GitHub data is required, ask the user
                 "Note: In build mode, Codex runs in a workspace-write sandbox with outbound network disabled by default. \
 Commands like `gh` may fail. If needed, enable: Settings > General > Codex > Allow network in build mode.\n\n",
             );
+        }
+
+        if policy.web_search == CodexWebSearchMode::Live {
+            prompt.push_str(
+                "Note: Web search is set to LIVE. Live fetches untrusted content and increases prompt-injection risk.\n\n",
+            );
+        }
+
+        if policy.web_search == CodexWebSearchMode::Disabled {
+            prompt.push_str("Note: Web search is disabled for this run (no WebSearch tool).\n\n");
         }
     }
 
