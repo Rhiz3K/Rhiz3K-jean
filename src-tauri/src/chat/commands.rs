@@ -1132,69 +1132,23 @@ pub async fn send_chat_message(
                     thinking_level.as_ref()
                 };
                 let (pid, response) = loop {
-                    let mode = execution_mode.as_deref().unwrap_or("plan");
+                    log::trace!("About to call execute_codex_detached...");
 
-                    // BUILD mode: run Codex interactively so approval prompts can be handled
-                    // via Jean's existing permission approval UI.
-                    let result = if mode == "build" {
-                        log::trace!("About to call execute_codex_interactive...");
-                        match super::codex::execute_codex_interactive(
-                            &app,
-                            &session_id,
-                            &worktree_id,
-                            &input_file,
-                            &output_file,
-                            context.worktree_path.as_ref(),
-                            codex_session_id_for_call.as_deref(),
-                            model.as_deref(),
-                            effective_thinking_level_for_codex,
-                            execution_mode.as_deref(),
-                            ai_language.as_deref(),
-                        ) {
-                            Ok(v) => Ok(v),
-                            Err(e) => {
-                                if e.to_lowercase().contains("prompt too large") {
-                                    log::warn!(
-                                        "Codex interactive run fallback to detached: {e}"
-                                    );
-                                    super::codex::execute_codex_detached(
-                                        &app,
-                                        &session_id,
-                                        &worktree_id,
-                                        &input_file,
-                                        &output_file,
-                                        context.worktree_path.as_ref(),
-                                        codex_session_id_for_call.as_deref(),
-                                        model.as_deref(),
-                                        effective_thinking_level_for_codex,
-                                        execution_mode.as_deref(),
-                                        ai_language.as_deref(),
-                                    )
-                                } else {
-                                    Err(e)
-                                }
-                            }
-                        }
-                    } else {
-                        log::trace!("About to call execute_codex_detached...");
-                        super::codex::execute_codex_detached(
-                            &app,
-                            &session_id,
-                            &worktree_id,
-                            &input_file,
-                            &output_file,
-                            context.worktree_path.as_ref(),
-                            codex_session_id_for_call.as_deref(),
-                            model.as_deref(),
-                            effective_thinking_level_for_codex,
-                            execution_mode.as_deref(),
-                            ai_language.as_deref(),
-                        )
-                    };
-
-                    match result {
+                    match super::codex::execute_codex_detached(
+                        &app,
+                        &session_id,
+                        &worktree_id,
+                        &input_file,
+                        &output_file,
+                        context.worktree_path.as_ref(),
+                        codex_session_id_for_call.as_deref(),
+                        model.as_deref(),
+                        effective_thinking_level_for_codex,
+                        execution_mode.as_deref(),
+                        ai_language.as_deref(),
+                    ) {
                         Ok((pid, response)) => {
-                            log::trace!("execute_codex_* succeeded (PID: {pid})");
+                            log::trace!("execute_codex_detached succeeded (PID: {pid})");
                             break (pid, response);
                         }
                         Err(e) => {
@@ -1220,7 +1174,7 @@ pub async fn send_chat_message(
                                 continue;
                             }
 
-                            log::error!("execute_codex_* FAILED: {e}");
+                            log::error!("execute_codex_detached FAILED: {e}");
                             // Ensure the run isn't left in a "Running" limbo if the agent fails
                             // before producing a usable response.
                             if let Err(err) = run_log_writer.crash() {
@@ -1470,19 +1424,6 @@ pub async fn cancel_chat_message(
 ) -> Result<bool, String> {
     log::trace!("Cancel chat message requested for session: {session_id}");
     cancel_process(&app, &session_id, &worktree_id)
-}
-
-/// Reply to an interactive Codex approval prompt (y/n).
-///
-/// Used when Codex is running in BUILD mode interactively under a PTY.
-#[tauri::command]
-pub async fn codex_approval_reply(session_id: String, approved: bool) -> Result<(), String> {
-    let input = if approved { "y\n" } else { "n\n" };
-    log::trace!(
-        "Codex approval reply for session {session_id}: {}",
-        if approved { "approve" } else { "deny" }
-    );
-    super::codex::codex_pty_write(&session_id, input)
 }
 
 /// Check if any sessions have running Claude processes

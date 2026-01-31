@@ -164,25 +164,13 @@ export default function useStreamingEvents({
           thinkingLevels,
           selectedModels,
           agents,
-          setWaitingForInput,
-          removeSendingSession,
         } = useChatStore.getState()
 
         // Store the denials for the approval UI
         setPendingDenials(session_id, denials)
 
-        const agent = agents[session_id] ?? 'claude'
-
-        // Codex BUILD mode approvals are handled interactively (y/n) and should not trigger
-        // Claude's re-send continuation flow.
-        if (agent === 'codex') {
-          setWaitingForInput(session_id, true)
-          // Pause streaming UI while Codex waits for y/n input
-          removeSendingSession(session_id)
-          return
-        }
-
         // Store the message context for Claude re-send
+        const agent = agents[session_id] ?? 'claude'
         const originalMessage = lastSentMessages[session_id]
         if (originalMessage) {
           setDeniedMessageContext(session_id, {
