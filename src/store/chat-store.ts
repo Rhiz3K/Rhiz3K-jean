@@ -153,6 +153,9 @@ interface ChatUIState {
   // Last compaction timestamp and trigger per session
   lastCompaction: Record<string, { timestamp: number; trigger: string }>
 
+  // Sessions currently compacting context
+  compactingSessions: Record<string, boolean>
+
   // Sessions marked as "reviewing" (manual session board status, persisted)
   reviewingSessions: Record<string, boolean>
 
@@ -372,6 +375,7 @@ interface ChatUIState {
   clearSessionState: (sessionId: string) => void
 
   // Actions - Compaction tracking
+  setCompacting: (sessionId: string, compacting: boolean) => void
   setLastCompaction: (sessionId: string, trigger: string) => void
   getLastCompaction: (
     sessionId: string
@@ -443,6 +447,7 @@ export const useChatStore = create<ChatUIState>()(
       pendingPermissionDenials: {},
       deniedMessageContext: {},
       lastCompaction: {},
+      compactingSessions: {},
       reviewingSessions: {},
       savingContext: {},
       skippedQuestionSessions: {},
@@ -1546,6 +1551,23 @@ export const useChatStore = create<ChatUIState>()(
         ),
 
       // Compaction tracking
+      setCompacting: (sessionId, compacting) =>
+        set(
+          state => ({
+            compactingSessions: {
+              ...state.compactingSessions,
+              ...(compacting
+                ? { [sessionId]: true }
+                : (() => {
+                    const { [sessionId]: _, ...rest } = state.compactingSessions
+                    return rest
+                  })()),
+            },
+          }),
+          undefined,
+          'setCompacting'
+        ),
+
       setLastCompaction: (sessionId, trigger) =>
         set(
           state => ({

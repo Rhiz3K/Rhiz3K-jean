@@ -7,7 +7,7 @@ import { useChatStore } from '@/store/chat-store'
 import { useProjectsStore } from '@/store/projects-store'
 import { chatQueryKeys } from '@/services/chat'
 import { saveWorktreePr, projectsQueryKeys } from '@/services/projects'
-import { triggerImmediateGitPoll } from '@/services/git-status'
+import { gitPull, gitPush, triggerImmediateGitPoll } from '@/services/git-status'
 import { isBaseSession } from '@/types/projects'
 import type {
   CreatePrResponse,
@@ -37,6 +37,10 @@ interface UseGitOperationsReturn {
   handleCommit: () => Promise<void>
   /** Creates commit with AI-generated message and pushes to remote */
   handleCommitAndPush: () => Promise<void>
+  /** Pulls changes from remote */
+  handlePull: () => Promise<void>
+  /** Pushes commits to remote */
+  handlePush: () => Promise<void>
   /** Creates PR with AI-generated title and description */
   handleOpenPr: () => Promise<void>
   /** Runs AI code review */
@@ -180,6 +184,49 @@ export function useGitOperations({
     preferences?.magic_prompt_codex_models?.commit_message_model,
     preferences?.magic_prompt_codex_reasoning_efforts?.commit_message_model,
   ])
+
+  // Handle Pull - pulls changes from remote
+  const handlePull = useCallback(async () => {
+    if (!activeWorktreePath || !activeWorktreeId) return
+
+    const { setWorktreeLoading, clearWorktreeLoading } = useChatStore.getState()
+    setWorktreeLoading(activeWorktreeId, 'commit')
+    const toastId = toast.loading('Pulling changes...')
+
+    try {
+      const baseBranch = project?.default_branch ?? 'main'
+      await gitPull(activeWorktreePath, baseBranch)
+      triggerImmediateGitPoll()
+      toast.success('Changes pulled', { id: toastId })
+    } catch (error) {
+      if (String(error).includes('Merge conflicts in:')) {
+        toast.warning('Pull resulted in conflicts', { id: toastId })
+      } else {
+        toast.error(`Pull failed: ${error}`, { id: toastId })
+      }
+    } finally {
+      clearWorktreeLoading(activeWorktreeId)
+    }
+  }, [activeWorktreeId, activeWorktreePath, project?.default_branch])
+
+  // Handle Push - pushes commits to remote
+  const handlePush = useCallback(async () => {
+    if (!activeWorktreePath || !activeWorktreeId) return
+
+    const { setWorktreeLoading, clearWorktreeLoading } = useChatStore.getState()
+    setWorktreeLoading(activeWorktreeId, 'commit')
+    const toastId = toast.loading('Pushing changes...')
+
+    try {
+      await gitPush(activeWorktreePath, worktree?.pr_number)
+      triggerImmediateGitPoll()
+      toast.success('Changes pushed', { id: toastId })
+    } catch (error) {
+      toast.error(`Push failed: ${error}`, { id: toastId })
+    } finally {
+      clearWorktreeLoading(activeWorktreeId)
+    }
+  }, [activeWorktreeId, activeWorktreePath, worktree?.pr_number])
 
   // Handle Open PR - creates PR with AI-generated title and description in background
   const handleOpenPr = useCallback(async () => {
@@ -693,6 +740,8 @@ ${resolveInstructions}`
   return {
     handleCommit,
     handleCommitAndPush,
+    handlePull,
+    handlePush,
     handleOpenPr,
     handleReview,
     handleMerge,
