@@ -164,18 +164,31 @@ export default function useStreamingEvents({
           thinkingLevels,
           selectedModels,
           agents,
+          setWaitingForInput,
+          removeSendingSession,
         } = useChatStore.getState()
 
         // Store the denials for the approval UI
         setPendingDenials(session_id, denials)
 
-        // Store the message context for re-send
+        const agent = agents[session_id] ?? 'claude'
+
+        // Codex BUILD mode approvals are handled interactively (y/n) and should not trigger
+        // Claude's re-send continuation flow.
+        if (agent === 'codex') {
+          setWaitingForInput(session_id, true)
+          // Pause streaming UI while Codex waits for y/n input
+          removeSendingSession(session_id)
+          return
+        }
+
+        // Store the message context for Claude re-send
         const originalMessage = lastSentMessages[session_id]
         if (originalMessage) {
           setDeniedMessageContext(session_id, {
             message: originalMessage,
             model: selectedModels[session_id],
-            agent: agents[session_id] ?? 'claude',
+            agent,
             executionMode: executionModes[session_id] ?? 'plan',
             thinkingLevel: thinkingLevels[session_id] ?? 'off',
           })
@@ -210,26 +223,38 @@ export default function useStreamingEvents({
       const isCurrentlyViewing = isActiveWorktree && isActiveSession
 
       // Check if session recap is enabled in preferences
-      const preferences = queryClient.getQueryData<AppPreferences>(preferencesQueryKeys.preferences())
+      const preferences = queryClient.getQueryData<AppPreferences>(
+        preferencesQueryKeys.preferences()
+      )
       const sessionRecapEnabled = preferences?.session_recap_enabled ?? false
 
       // Only generate digest if status is CHANGING to review (not already reviewing)
       // This prevents generating digests for all restored sessions on app startup
-      const wasAlreadyReviewing = useChatStore.getState().reviewingSessions[sessionId] ?? false
+      const wasAlreadyReviewing =
+        useChatStore.getState().reviewingSessions[sessionId] ?? false
 
       if (!isCurrentlyViewing && sessionRecapEnabled && !wasAlreadyReviewing) {
         // Mark for digest and generate it in the background immediately
         markSessionNeedsDigest(sessionId)
-        console.log('[useStreamingEvents] Session completed while not viewing, generating digest:', sessionId)
+        console.log(
+          '[useStreamingEvents] Session completed while not viewing, generating digest:',
+          sessionId
+        )
 
         // Generate digest in background (fire and forget)
         invoke<SessionDigest>('generate_session_digest', { sessionId })
           .then(digest => {
             useChatStore.getState().setSessionDigest(sessionId, digest)
-            console.log('[useStreamingEvents] Digest generated for session:', sessionId)
+            console.log(
+              '[useStreamingEvents] Digest generated for session:',
+              sessionId
+            )
           })
           .catch(err => {
-            console.error('[useStreamingEvents] Failed to generate digest:', err)
+            console.error(
+              '[useStreamingEvents] Failed to generate digest:',
+              err
+            )
           })
       }
 
@@ -290,7 +315,8 @@ export default function useStreamingEvents({
 
           // Play waiting sound if not currently viewing this session
           if (!isCurrentlyViewing) {
-            const waitingSound = (preferences?.waiting_sound ?? 'none') as NotificationSound
+            const waitingSound = (preferences?.waiting_sound ??
+              'none') as NotificationSound
             playNotificationSound(waitingSound)
           }
         }
@@ -307,7 +333,8 @@ export default function useStreamingEvents({
 
         // Play review sound if not currently viewing this session
         if (!isCurrentlyViewing) {
-          const reviewSound = (preferences?.review_sound ?? 'none') as NotificationSound
+          const reviewSound = (preferences?.review_sound ??
+            'none') as NotificationSound
           playNotificationSound(reviewSound)
         }
       }
@@ -340,7 +367,9 @@ export default function useStreamingEvents({
 
       // Ensure the persisted run log becomes the source of truth (prevents stale placeholder
       // messages like "Response lost..." from lingering after resume/recovery).
-      queryClient.invalidateQueries({ queryKey: chatQueryKeys.session(sessionId) })
+      queryClient.invalidateQueries({
+        queryKey: chatQueryKeys.session(sessionId),
+      })
 
       // Detect PR_CREATED marker and save PR info (async, after main flow)
       // Format: PR_CREATED: #<number> <url>
@@ -409,7 +438,8 @@ export default function useStreamingEvents({
 
       // Check if this session is currently being viewed
       // Look up the worktree from sessionWorktreeMap since ErrorEvent may not have it
-      const sessionWorktreeId = useChatStore.getState().sessionWorktreeMap[session_id]
+      const sessionWorktreeId =
+        useChatStore.getState().sessionWorktreeMap[session_id]
       const isActiveWorktree = sessionWorktreeId === activeWorktreeId
       const isActiveSession = sessionWorktreeId
         ? activeSessionIds[sessionWorktreeId] === session_id
@@ -417,23 +447,34 @@ export default function useStreamingEvents({
       const isCurrentlyViewing = isActiveWorktree && isActiveSession
 
       // Check if session recap is enabled in preferences
-      const preferences = queryClient.getQueryData<AppPreferences>(preferencesQueryKeys.preferences())
+      const preferences = queryClient.getQueryData<AppPreferences>(
+        preferencesQueryKeys.preferences()
+      )
       const sessionRecapEnabled = preferences?.session_recap_enabled ?? false
 
       // Only generate digest if status is CHANGING to review (not already reviewing)
-      const wasAlreadyReviewing = useChatStore.getState().reviewingSessions[session_id] ?? false
+      const wasAlreadyReviewing =
+        useChatStore.getState().reviewingSessions[session_id] ?? false
 
       if (!isCurrentlyViewing && sessionRecapEnabled && !wasAlreadyReviewing) {
         // Mark for digest and generate it in the background immediately
         markSessionNeedsDigest(session_id)
-        console.log('[useStreamingEvents] Session errored while not viewing, generating digest:', session_id)
+        console.log(
+          '[useStreamingEvents] Session errored while not viewing, generating digest:',
+          session_id
+        )
 
-        invoke<SessionDigest>('generate_session_digest', { sessionId: session_id })
+        invoke<SessionDigest>('generate_session_digest', {
+          sessionId: session_id,
+        })
           .then(digest => {
             useChatStore.getState().setSessionDigest(session_id, digest)
           })
           .catch(err => {
-            console.error('[useStreamingEvents] Failed to generate digest:', err)
+            console.error(
+              '[useStreamingEvents] Failed to generate digest:',
+              err
+            )
           })
       }
 
@@ -457,7 +498,8 @@ export default function useStreamingEvents({
       setWaitingForInput(session_id, false)
 
       // Clear executing planning mode and set reviewing state
-      const { clearExecutingMode, setSessionReviewing } = useChatStore.getState()
+      const { clearExecutingMode, setSessionReviewing } =
+        useChatStore.getState()
       clearExecutingMode(session_id)
       setSessionReviewing(session_id, true)
 
@@ -516,7 +558,8 @@ export default function useStreamingEvents({
         const contentBlocks = streamingContentBlocks[session_id]
 
         // Check if this session is currently being viewed
-        const sessionWorktreeId = useChatStore.getState().sessionWorktreeMap[session_id]
+        const sessionWorktreeId =
+          useChatStore.getState().sessionWorktreeMap[session_id]
         const isActiveWorktree = sessionWorktreeId === activeWorktreeId
         const isActiveSession = sessionWorktreeId
           ? activeSessionIds[sessionWorktreeId] === session_id
@@ -524,23 +567,38 @@ export default function useStreamingEvents({
         const isCurrentlyViewing = isActiveWorktree && isActiveSession
 
         // Check if session recap is enabled in preferences
-        const preferences = queryClient.getQueryData<AppPreferences>(preferencesQueryKeys.preferences())
+        const preferences = queryClient.getQueryData<AppPreferences>(
+          preferencesQueryKeys.preferences()
+        )
         const sessionRecapEnabled = preferences?.session_recap_enabled ?? false
 
         // Only generate digest if status is CHANGING to review (not already reviewing)
-        const wasAlreadyReviewing = useChatStore.getState().reviewingSessions[session_id] ?? false
+        const wasAlreadyReviewing =
+          useChatStore.getState().reviewingSessions[session_id] ?? false
 
-        if (!isCurrentlyViewing && sessionRecapEnabled && !wasAlreadyReviewing) {
+        if (
+          !isCurrentlyViewing &&
+          sessionRecapEnabled &&
+          !wasAlreadyReviewing
+        ) {
           // Mark for digest and generate it in the background immediately
           markSessionNeedsDigest(session_id)
-          console.log('[useStreamingEvents] Session cancelled while not viewing, generating digest:', session_id)
+          console.log(
+            '[useStreamingEvents] Session cancelled while not viewing, generating digest:',
+            session_id
+          )
 
-          invoke<SessionDigest>('generate_session_digest', { sessionId: session_id })
+          invoke<SessionDigest>('generate_session_digest', {
+            sessionId: session_id,
+          })
             .then(digest => {
               useChatStore.getState().setSessionDigest(session_id, digest)
             })
             .catch(err => {
-              console.error('[useStreamingEvents] Failed to generate digest:', err)
+              console.error(
+                '[useStreamingEvents] Failed to generate digest:',
+                err
+              )
             })
         }
 

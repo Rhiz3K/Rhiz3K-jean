@@ -74,3 +74,21 @@ pub struct CancelledEvent {
     pub undo_send: bool, // True if user message should be restored to input (instant cancellation)
 }
 
+/// A single permission denial for the permission approval UI.
+#[derive(serde::Serialize, Clone)]
+pub struct PermissionDenialEvent {
+    pub tool_name: String,
+    pub tool_use_id: String,
+    pub tool_input: serde_json::Value,
+}
+
+/// Payload for permission denied events sent to frontend.
+///
+/// Claude emits this when its CLI returns `permission_denials`.
+/// Codex can also emit this when running interactively and waiting for y/n input.
+#[derive(serde::Serialize, Clone)]
+pub struct PermissionDeniedEvent {
+    pub session_id: String,
+    pub worktree_id: String, // Kept for backward compatibility
+    pub denials: Vec<PermissionDenialEvent>,
+}

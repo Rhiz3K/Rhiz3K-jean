@@ -1,8 +1,8 @@
 use tauri::{Emitter, Manager};
 
 use super::events::{
-    ChunkEvent, DoneEvent, ErrorEvent, ThinkingEvent, ToolBlockEvent, ToolResultEvent,
-    ToolUseEvent,
+    ChunkEvent, DoneEvent, ErrorEvent, PermissionDenialEvent, PermissionDeniedEvent, ThinkingEvent,
+    ToolBlockEvent, ToolResultEvent, ToolUseEvent,
 };
 use super::types::{ContentBlock, ThinkingLevel, ToolCall, UsageData};
 use crate::projects::github_issues::{
@@ -27,23 +27,6 @@ pub struct ClaudeResponse {
     pub cancelled: bool,
     /// Token usage for this response
     pub usage: Option<UsageData>,
-}
-
-/// A single permission denial from Claude CLI
-#[derive(serde::Serialize, Clone)]
-struct PermissionDenial {
-    tool_name: String,
-    tool_use_id: String,
-    tool_input: serde_json::Value,
-}
-
-/// Payload for permission denied events sent to frontend
-/// Sent when Claude CLI returns permission_denials (tools that require approval)
-#[derive(serde::Serialize, Clone)]
-struct PermissionDeniedEvent {
-    session_id: String,
-    worktree_id: String, // Kept for backward compatibility
-    denials: Vec<PermissionDenial>,
 }
 
 // =============================================================================
@@ -817,7 +800,7 @@ pub fn tail_claude_output(
                     if let Some(denials) = msg.get("permission_denials").and_then(|v| v.as_array())
                     {
                         if !denials.is_empty() {
-                            let denial_events: Vec<PermissionDenial> = denials
+                            let denial_events: Vec<PermissionDenialEvent> = denials
                                 .iter()
                                 .filter_map(|d| {
                                     let tool_name = d.get("tool_name")?.as_str()?;
@@ -840,7 +823,7 @@ pub fn tail_claude_output(
                                         }
                                     }
 
-                                    Some(PermissionDenial {
+                                    Some(PermissionDenialEvent {
                                         tool_name: tool_name.to_string(),
                                         tool_use_id: d.get("tool_use_id")?.as_str()?.to_string(),
                                         tool_input: tool_input.clone(),
