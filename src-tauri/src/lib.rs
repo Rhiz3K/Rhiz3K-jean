@@ -1908,7 +1908,6 @@ pub fn run() {
             chat::set_session_model,
             chat::set_session_thinking_level,
             chat::cancel_chat_message,
-            chat::codex_approval_reply,
             chat::has_running_sessions,
             chat::save_cancelled_message,
             chat::mark_plan_approved,
