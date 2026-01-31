@@ -94,10 +94,6 @@ fn build_codex_args_detached(
     // Enable live web search (Codex Responses web_search tool)
     args.push("--search".to_string());
 
-    // Disable ANSI color in output (helps keep stdout machine-readable)
-    args.push("--color".to_string());
-    args.push("never".to_string());
-
     // Sandbox/network mapping
     // - plan: read-only sandbox (network disabled)
     // - build: workspace-write sandbox (network enabled)
@@ -121,6 +117,11 @@ fn build_codex_args_detached(
 
     // Command: codex exec ...
     args.push("exec".to_string());
+
+    // Disable ANSI color in output (helps keep stdout machine-readable)
+    // Note: `--color` is an `exec` option (not a global Codex flag).
+    args.push("--color".to_string());
+    args.push("never".to_string());
 
     // Allow running outside a Git repository (some worktrees may not be git repos)
     args.push("--skip-git-repo-check".to_string());
@@ -211,10 +212,6 @@ fn build_codex_args_interactive(
     // Enable live web search (Codex Responses web_search tool)
     args.push("--search".to_string());
 
-    // Disable ANSI color in output (helps keep stdout machine-readable)
-    args.push("--color".to_string());
-    args.push("never".to_string());
-
     // Sandbox/network mapping
     match mode {
         "build" => {
@@ -235,6 +232,11 @@ fn build_codex_args_interactive(
 
     // Command: codex exec ...
     args.push("exec".to_string());
+
+    // Disable ANSI color in output (helps keep stdout machine-readable)
+    // Note: `--color` is an `exec` option (not a global Codex flag).
+    args.push("--color".to_string());
+    args.push("never".to_string());
 
     // Allow running outside a Git repository (some worktrees may not be git repos)
     args.push("--skip-git-repo-check".to_string());
@@ -996,7 +998,6 @@ pub fn tail_codex_output(
                     msg.push_str(&tail);
                 }
                 failure_error = Some(msg);
-                cancelled = true;
                 break;
             }
         } else {
@@ -1014,7 +1015,6 @@ pub fn tail_codex_output(
                     msg.push_str(&tail);
                 }
                 failure_error = Some(msg);
-                cancelled = true;
                 break;
             }
 
@@ -1042,7 +1042,6 @@ pub fn tail_codex_output(
                     msg.push_str(&tail);
                 }
                 failure_error = Some(msg);
-                cancelled = true;
                 break;
             }
 
@@ -1065,6 +1064,9 @@ pub fn tail_codex_output(
             error: error_msg.clone(),
         };
         let _ = app.emit("chat:error", &error_event);
+
+        // Treat failures as errors (crash), not cancellations.
+        return Err(error_msg.clone());
     }
 
     if !cancelled {
