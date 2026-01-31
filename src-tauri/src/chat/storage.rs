@@ -279,7 +279,11 @@ fn load_metadata_internal(
 
         if run.status == crate::chat::types::RunStatus::Running && run.pid.is_none() {
             let age_secs = now.saturating_sub(run.started_at);
-            if age_secs > PID_REPAIR_GRACE_SECS {
+            // If the process is currently registered as running, do not auto-mark it as crashed.
+            // This avoids false crash markers for long-running requests (PID is currently only
+            // persisted after execution returns).
+            let is_live = crate::chat::registry::is_process_running(session_id);
+            if !is_live && age_secs > PID_REPAIR_GRACE_SECS {
                 run.status = crate::chat::types::RunStatus::Crashed;
                 run.ended_at = run.ended_at.or(Some(now));
                 repaired = true;
