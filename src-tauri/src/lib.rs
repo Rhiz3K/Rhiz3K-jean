@@ -81,6 +81,8 @@ pub struct AppPreferences {
     pub thinking_level: String, // Thinking level: off, think, megathink, ultrathink
     #[serde(default = "default_codex_reasoning_effort")]
     pub codex_reasoning_effort: String, // Codex reasoning effort: minimal, low, medium, high, xhigh
+    #[serde(default = "default_codex_build_network_access")]
+    pub codex_build_network_access: bool, // Allow outbound network in Codex build mode sandbox
     #[serde(default = "default_terminal")]
     pub terminal: String, // Terminal app: terminal, warp, ghostty
     #[serde(default = "default_editor")]
@@ -193,6 +195,10 @@ fn default_thinking_level() -> String {
 
 fn default_codex_reasoning_effort() -> String {
     "medium".to_string()
+}
+
+fn default_codex_build_network_access() -> bool {
+    false
 }
 
 fn default_terminal() -> String {
@@ -620,6 +626,7 @@ impl Default for AppPreferences {
             thinking_level: default_thinking_level(),
             codex_selected_model: default_codex_model(),
             codex_reasoning_effort: default_codex_reasoning_effort(),
+            codex_build_network_access: default_codex_build_network_access(),
             terminal: default_terminal(),
             editor: default_editor(),
             auto_branch_naming: default_auto_branch_naming(),

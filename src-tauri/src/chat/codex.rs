@@ -4,9 +4,10 @@ use tauri::Emitter;
 
 use super::codex_exec::{CodexExecEvent, CodexThreadItem};
 use super::events::{
-    CancelledEvent, ChunkEvent, DoneEvent, ErrorEvent, ThinkingEvent, ToolBlockEvent,
-    ToolResultEvent, ToolUseEvent,
+    CancelledEvent, ChunkEvent, DoneEvent, ErrorEvent, StreamWarningEvent, ThinkingEvent,
+    ToolBlockEvent, ToolResultEvent, ToolUseEvent,
 };
+use super::mode_policy::{codex_detached_policy, push_codex_detached_mode_args, ExecutionMode};
 use super::types::{ChatAgent, ContentBlock, ThinkingLevel, ToolCall, UsageData};
 
 /// Response from Codex CLI execution
@@ -40,46 +41,19 @@ fn build_codex_args_detached(
     model: Option<&str>,
     reasoning_effort: Option<&ThinkingLevel>,
     execution_mode: Option<&str>,
+    codex_build_network_access: bool,
     working_dir: &std::path::Path,
     ai_language: Option<&str>,
 ) -> (Vec<String>, Vec<(String, String)>) {
     let mut args = Vec::new();
     let mut env_vars = Vec::new();
 
-    let mode = execution_mode.unwrap_or("plan");
-
-    // Enable live web search (Codex Responses web_search tool)
-    args.push("--search".to_string());
-
-    // Sandbox/network mapping
-    // - plan: read-only sandbox (network disabled)
-    // - build: workspace-write sandbox (network enabled)
-    // - yolo: bypass approvals + sandbox (no sandbox; dangerous)
-    match mode {
-        "build" => {
-            // Detached BUILD runs must never block waiting for approvals.
-            // (Interactive BUILD mode uses PTY + UI approvals instead.)
-            args.push("--ask-for-approval".to_string());
-            args.push("never".to_string());
-
-            args.push("--sandbox".to_string());
-            args.push("workspace-write".to_string());
-            // Allow outbound network inside the workspace-write sandbox so `gh` works.
-            args.push("--config".to_string());
-            args.push("sandbox_workspace_write.network_access=true".to_string());
-        }
-        "yolo" => {
-            args.push("--dangerously-bypass-approvals-and-sandbox".to_string());
-        }
-        _ => {
-            // Detached PLAN runs must never block waiting for approvals.
-            args.push("--ask-for-approval".to_string());
-            args.push("never".to_string());
-
-            args.push("--sandbox".to_string());
-            args.push("read-only".to_string());
-        }
+    let mode = ExecutionMode::from_optional_str(execution_mode);
+    let mut policy = codex_detached_policy(mode);
+    if mode == ExecutionMode::Build {
+        policy.workspace_write_network_access = codex_build_network_access;
     }
+    push_codex_detached_mode_args(&mut args, &policy);
 
     // Command: codex exec ...
     args.push("exec".to_string());
@@ -171,6 +145,7 @@ pub fn execute_codex_detached(
     model: Option<&str>,
     reasoning_effort: Option<&ThinkingLevel>,
     execution_mode: Option<&str>,
+    codex_build_network_access: bool,
     ai_language: Option<&str>,
 ) -> Result<(u32, CodexResponse), String> {
     use super::detached::spawn_detached_codex;
@@ -217,6 +192,7 @@ pub fn execute_codex_detached(
         model,
         reasoning_effort,
         execution_mode,
+        codex_build_network_access,
         working_dir,
         ai_language,
     );
@@ -339,6 +315,106 @@ pub fn tail_codex_output(
     let started_at = Instant::now();
     let mut last_output_time = Instant::now();
     let mut received_codex_output = false;
+    let mut parse_warning_count: usize = 0;
+
+    let process_line = |line: &str,
+                        full_content: &mut String,
+                        codex_session_id: &mut String,
+                        tool_calls: &mut Vec<ToolCall>,
+                        content_blocks: &mut Vec<ContentBlock>,
+                        agent_message_seen: &mut HashMap<String, String>,
+                        reasoning_seen: &mut HashMap<String, String>,
+                        todo_list_seen: &mut HashMap<String, String>,
+                        todo_list_seq: &mut HashMap<String, usize>,
+                        usage: &mut Option<UsageData>,
+                        completed: &mut bool,
+                        failure_error: &mut Option<String>,
+                        received_codex_output: &mut bool,
+                        parse_warning_count: &mut usize| {
+        if line.trim().is_empty() {
+            return;
+        }
+
+        // Skip run metadata header (our own)
+        if line.contains("\"_run_meta\"") {
+            return;
+        }
+
+        if !*received_codex_output {
+            log::trace!("Received first Codex output for session: {session_id}");
+            *received_codex_output = true;
+        }
+
+        let event: CodexExecEvent = match serde_json::from_str(line) {
+            Ok(e) => e,
+            Err(e) => {
+                if *parse_warning_count < 3 {
+                    *parse_warning_count += 1;
+                    let preview = if line.chars().count() > 240 {
+                        let head: String = line.chars().take(240).collect();
+                        Some(format!("{head}..."))
+                    } else {
+                        Some(line.to_string())
+                    };
+                    let warn = StreamWarningEvent {
+                        session_id: session_id.to_string(),
+                        worktree_id: worktree_id.to_string(),
+                        message: format!("Failed to parse Codex JSONL line: {e}"),
+                        line_preview: preview,
+                    };
+                    let _ = app.emit("chat:stream_warning", &warn);
+                }
+                log::trace!("Failed to parse Codex event line: {e}");
+                return;
+            }
+        };
+
+        match event {
+            CodexExecEvent::ThreadStarted { thread_id } => {
+                if !thread_id.is_empty() {
+                    *codex_session_id = thread_id;
+                }
+            }
+            CodexExecEvent::TurnCompleted { usage: u } => {
+                *usage = Some(UsageData {
+                    input_tokens: u.input_tokens,
+                    output_tokens: u.output_tokens,
+                    cache_read_input_tokens: u.cached_input_tokens,
+                    cache_creation_input_tokens: 0,
+                });
+                *completed = true;
+            }
+            CodexExecEvent::TurnFailed { error } => {
+                let error_msg = format!("Codex turn failed: {}", error.message);
+                log::error!("{error_msg}");
+                *failure_error = Some(error_msg);
+            }
+            CodexExecEvent::StreamError { message } => {
+                let error_msg = format!("Codex stream error: {message}");
+                log::error!("{error_msg}");
+                *failure_error = Some(error_msg);
+            }
+            CodexExecEvent::ItemStarted { item }
+            | CodexExecEvent::ItemUpdated { item }
+            | CodexExecEvent::ItemCompleted { item } => {
+                handle_codex_item_event(
+                    app,
+                    session_id,
+                    worktree_id,
+                    &item,
+                    full_content,
+                    codex_session_id,
+                    tool_calls,
+                    content_blocks,
+                    agent_message_seen,
+                    reasoning_seen,
+                    todo_list_seen,
+                    todo_list_seq,
+                );
+            }
+            CodexExecEvent::TurnStarted => {}
+        }
+    };
 
     loop {
         let lines = tailer.poll()?;
@@ -348,85 +424,26 @@ pub fn tail_codex_output(
         }
 
         for line in lines {
-            if line.trim().is_empty() {
-                continue;
-            }
+            process_line(
+                &line,
+                &mut full_content,
+                &mut codex_session_id,
+                &mut tool_calls,
+                &mut content_blocks,
+                &mut agent_message_seen,
+                &mut reasoning_seen,
+                &mut todo_list_seen,
+                &mut todo_list_seq,
+                &mut usage,
+                &mut completed,
+                &mut failure_error,
+                &mut received_codex_output,
+                &mut parse_warning_count,
+            );
+        }
 
-            // Skip run metadata header (our own)
-            if line.contains("\"_run_meta\"") {
-                continue;
-            }
-
-            if !received_codex_output {
-                log::trace!("Received first Codex output for session: {session_id}");
-                received_codex_output = true;
-            }
-
-            let event: CodexExecEvent = match serde_json::from_str(&line) {
-                Ok(e) => e,
-                Err(e) => {
-                    log::trace!("Failed to parse Codex event line: {e}");
-                    continue;
-                }
-            };
-
-            match event {
-                CodexExecEvent::ThreadStarted { thread_id } => {
-                    if !thread_id.is_empty() {
-                        codex_session_id = thread_id;
-                    }
-                }
-                CodexExecEvent::TurnCompleted { usage: u } => {
-                    usage = Some(UsageData {
-                        input_tokens: u.input_tokens,
-                        output_tokens: u.output_tokens,
-                        cache_read_input_tokens: u.cached_input_tokens,
-                        cache_creation_input_tokens: 0,
-                    });
-                    completed = true;
-                }
-                CodexExecEvent::TurnFailed { error } => {
-                    let error_msg = format!("Codex turn failed: {}", error.message);
-                    log::error!("{error_msg}");
-                    let error_event = ErrorEvent {
-                        session_id: session_id.to_string(),
-                        worktree_id: worktree_id.to_string(),
-                        error: error_msg.clone(),
-                    };
-                    let _ = app.emit("chat:error", &error_event);
-                    return Err(error_msg);
-                }
-                CodexExecEvent::StreamError { message } => {
-                    let error_msg = format!("Codex stream error: {message}");
-                    log::error!("{error_msg}");
-                    let error_event = ErrorEvent {
-                        session_id: session_id.to_string(),
-                        worktree_id: worktree_id.to_string(),
-                        error: error_msg.clone(),
-                    };
-                    let _ = app.emit("chat:error", &error_event);
-                    return Err(error_msg);
-                }
-                CodexExecEvent::ItemStarted { item }
-                | CodexExecEvent::ItemUpdated { item }
-                | CodexExecEvent::ItemCompleted { item } => {
-                    handle_codex_item_event(
-                        app,
-                        session_id,
-                        worktree_id,
-                        &item,
-                        &mut full_content,
-                        &mut codex_session_id,
-                        &mut tool_calls,
-                        &mut content_blocks,
-                        &mut agent_message_seen,
-                        &mut reasoning_seen,
-                        &mut todo_list_seen,
-                        &mut todo_list_seq,
-                    );
-                }
-                CodexExecEvent::TurnStarted => {}
-            }
+        if failure_error.is_some() {
+            break;
         }
 
         if completed {
@@ -505,7 +522,7 @@ pub fn tail_codex_output(
             }
 
             let secs = elapsed.as_secs();
-            if secs > 0 && secs % 10 == 0 && elapsed.subsec_millis() < 100 {
+            if secs > 0 && secs.is_multiple_of(10) && elapsed.subsec_millis() < 100 {
                 log::trace!(
                     "Waiting for Codex output... {secs}s elapsed, process_alive: {process_alive}"
                 );
@@ -513,6 +530,25 @@ pub fn tail_codex_output(
         }
 
         std::thread::sleep(POLL_INTERVAL);
+    }
+
+    if let Some(final_line) = tailer.flush_buffer() {
+        process_line(
+            &final_line,
+            &mut full_content,
+            &mut codex_session_id,
+            &mut tool_calls,
+            &mut content_blocks,
+            &mut agent_message_seen,
+            &mut reasoning_seen,
+            &mut todo_list_seen,
+            &mut todo_list_seq,
+            &mut usage,
+            &mut completed,
+            &mut failure_error,
+            &mut received_codex_output,
+            &mut parse_warning_count,
+        );
     }
 
     if let Some(error_msg) = &failure_error {
@@ -548,6 +584,7 @@ pub fn tail_codex_output(
     })
 }
 
+#[allow(clippy::too_many_arguments)]
 fn handle_codex_item_event(
     app: &tauri::AppHandle,
     session_id: &str,
@@ -813,6 +850,7 @@ fn handle_codex_item_event(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn ensure_tool_call(
     tool_calls: &mut Vec<ToolCall>,
     content_blocks: &mut Vec<ContentBlock>,
@@ -861,7 +899,7 @@ fn update_tool_output(
     app: &tauri::AppHandle,
     session_id: &str,
     worktree_id: &str,
-    tool_calls: &mut Vec<ToolCall>,
+    tool_calls: &mut [ToolCall],
     tool_use_id: &str,
     output: String,
 ) {
@@ -905,6 +943,7 @@ mod tests {
             model,
             reasoning_effort.as_ref(),
             execution_mode,
+            true,
             std::path::Path::new("/tmp"),
             None,
         )
@@ -978,6 +1017,25 @@ mod tests {
             Some("workspace-write")
         );
         assert!(args
+            .iter()
+            .any(|a| a == "sandbox_workspace_write.network_access=true"));
+    }
+
+    #[test]
+    fn codex_args_build_can_disable_network_access() {
+        let args = build_codex_args_detached(
+            "s1",
+            "w1",
+            None,
+            Some("gpt-5.2-codex"),
+            None,
+            Some("build"),
+            false,
+            std::path::Path::new("/tmp"),
+            None,
+        )
+        .0;
+        assert!(!args
             .iter()
             .any(|a| a == "sandbox_workspace_write.network_access=true"));
     }

@@ -819,6 +819,7 @@ pub async fn send_chat_message(
     execution_mode: Option<String>,
     thinking_level: Option<ThinkingLevel>,
     disable_thinking_for_mode: Option<bool>,
+    codex_build_network_access: Option<bool>,
     parallel_execution_prompt_enabled: Option<bool>,
     ai_language: Option<String>,
     allowed_tools: Option<Vec<String>>,
@@ -991,6 +992,49 @@ pub async fn send_chat_message(
         ChatAgent::Codex => None,
     };
 
+    let codex_build_network_access = if agent == ChatAgent::Codex
+        && execution_mode.as_deref() == Some("build")
+    {
+        if let Some(v) = codex_build_network_access {
+            v
+        } else {
+            match crate::load_preferences(app.clone()).await {
+                Ok(prefs) => prefs.codex_build_network_access,
+                Err(e) => {
+                    log::warn!(
+                        "Failed to load preferences for codex_build_network_access, defaulting to disabled: {e}"
+                    );
+                    false
+                }
+            }
+        }
+    } else {
+        false
+    };
+
+    let policy = if agent == ChatAgent::Codex {
+        use super::mode_policy::{codex_detached_policy, ExecutionMode};
+        use super::types::RunPolicySnapshot;
+
+        let mode = ExecutionMode::from_optional_str(execution_mode.as_deref());
+        let mut policy = codex_detached_policy(mode);
+        if mode == ExecutionMode::Build {
+            policy.workspace_write_network_access = codex_build_network_access;
+        }
+
+        Some(RunPolicySnapshot {
+            codex_search: Some(policy.enable_search),
+            codex_sandbox: policy
+                .sandbox
+                .map(|s| s.as_cli_value().to_string()),
+            codex_build_network_access: Some(policy.workspace_write_network_access),
+            codex_ask_for_approval: policy.ask_for_approval.map(|s| s.to_string()),
+            codex_bypass_approvals_and_sandbox: Some(policy.bypass_approvals_and_sandbox),
+        })
+    } else {
+        None
+    };
+
     // Start NDJSON run log for crash recovery
     let mut run_log_writer = run_log::start_run(
         &app,
@@ -1003,6 +1047,7 @@ pub async fn send_chat_message(
         model_for_run,
         execution_mode.as_deref(),
         thinking_for_run.as_deref(),
+        policy,
         agent.clone(),
     )?;
 
@@ -1026,6 +1071,7 @@ pub async fn send_chat_message(
                 &run_id,
                 &message,
                 execution_mode.as_deref(),
+                codex_build_network_access,
                 ai_language.as_deref(),
                 parallel_execution_prompt,
             )?;
@@ -1145,6 +1191,7 @@ pub async fn send_chat_message(
                         model.as_deref(),
                         effective_thinking_level_for_codex,
                         execution_mode.as_deref(),
+                        codex_build_network_access,
                         ai_language.as_deref(),
                     ) {
                         Ok((pid, response)) => {
@@ -2605,6 +2652,7 @@ Schema (for reference):
 /// This command loads a session's messages, sends them to Claude for summarization,
 /// and saves the result as a context file. It does NOT show anything in the current chat.
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub async fn generate_context_from_session(
     app: AppHandle,
     worktree_path: String,
@@ -2805,6 +2853,9 @@ pub async fn get_session_debug_info(
                     status: run.status.clone(),
                     user_message_preview: preview,
                     usage: run.usage.clone(),
+                    agent: run.agent.clone(),
+                    execution_mode: run.execution_mode.clone(),
+                    policy: run.policy.clone(),
                 });
             }
         }

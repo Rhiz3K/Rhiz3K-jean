@@ -194,7 +194,7 @@ fn build_claude_args(
 
     // Embedded gh CLI path - tell Claude to use the app's bundled binary
     let gh_binary = crate::gh_cli::config::resolve_gh_binary(app);
-    if gh_binary != std::path::PathBuf::from("gh") {
+    if gh_binary != std::path::Path::new("gh") {
         system_prompt_parts.push(format!(
             "When running GitHub CLI commands, use the full path to the embedded binary: {}\n\
              Do NOT use bare `gh` — always use the full path above.",
@@ -579,10 +579,19 @@ pub fn tail_claude_output(
     let started_at = Instant::now();
     let mut last_output_time = Instant::now();
     let mut received_claude_output = false; // Track if we've received any Claude output (not our metadata)
+    let mut parse_warning_count: usize = 0;
 
     loop {
         // Poll for new lines
-        let lines = tailer.poll()?;
+        let mut lines = tailer.poll()?;
+
+        // If the process is dead, attempt to flush any final buffered data.
+        let process_alive = is_process_alive(pid);
+        if !process_alive {
+            if let Some(final_line) = tailer.flush_buffer() {
+                lines.push(final_line);
+            }
+        }
 
         if !lines.is_empty() {
             last_output_time = Instant::now();
@@ -609,6 +618,22 @@ pub fn tail_claude_output(
             let msg: serde_json::Value = match serde_json::from_str(&line) {
                 Ok(m) => m,
                 Err(e) => {
+                    if parse_warning_count < 3 {
+                        parse_warning_count += 1;
+                        let preview = if line.chars().count() > 240 {
+                            let head: String = line.chars().take(240).collect();
+                            Some(format!("{head}..."))
+                        } else {
+                            Some(line.clone())
+                        };
+                        let warn = StreamWarningEvent {
+                            session_id: session_id.to_string(),
+                            worktree_id: worktree_id.to_string(),
+                            message: format!("Failed to parse Claude JSONL line: {e}"),
+                            line_preview: preview,
+                        };
+                        let _ = app.emit("chat:stream_warning", &warn);
+                    }
                     log::trace!("Failed to parse line: {e}");
                     continue;
                 }
@@ -958,9 +983,6 @@ pub fn tail_claude_output(
             break;
         }
 
-        // Timeout logic depends on whether we've received Claude output yet
-        let process_alive = is_process_alive(pid);
-
         if received_claude_output {
             // After receiving output, use shorter timeout for detecting dead process
             if !process_alive && last_output_time.elapsed() > dead_process_timeout {
@@ -986,7 +1008,7 @@ pub fn tail_claude_output(
             // Log progress every 10 seconds during startup (only log once per 10-second mark)
             // Use subsec_millis to only log in the first 100ms of each 10-second window
             let secs = elapsed.as_secs();
-            if secs > 0 && secs % 10 == 0 && elapsed.subsec_millis() < 100 {
+            if secs > 0 && secs.is_multiple_of(10) && elapsed.subsec_millis() < 100 {
                 log::trace!(
                     "Waiting for Claude output... {secs}s elapsed, process_alive: {process_alive}"
                 );
