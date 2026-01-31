@@ -1029,41 +1029,70 @@ pub async fn send_chat_message(
         ChatAgent::Codex => None,
     };
 
-    let codex_build_network_access = if agent == ChatAgent::Codex
-        && execution_mode.as_deref() == Some("build")
-    {
-        if let Some(v) = codex_build_network_access {
-            v
-        } else {
-            match crate::load_preferences(app.clone()).await {
-                Ok(prefs) => prefs.codex_build_network_access,
-                Err(e) => {
-                    log::warn!(
-                        "Failed to load preferences for codex_build_network_access, defaulting to disabled: {e}"
-                    );
-                    false
-                }
+    let codex_prefs = if agent == ChatAgent::Codex {
+        match crate::load_preferences(app.clone()).await {
+            Ok(p) => Some(p),
+            Err(e) => {
+                log::warn!("Failed to load preferences for Codex, using defaults: {e}");
+                None
             }
         }
     } else {
-        false
+        None
     };
 
+    let codex_mode =
+        super::mode_policy::ExecutionMode::from_optional_str(execution_mode.as_deref());
+
+    let codex_build_network_access =
+        if agent == ChatAgent::Codex && codex_mode == super::mode_policy::ExecutionMode::Build {
+            if let Some(v) = codex_build_network_access {
+                v
+            } else {
+                codex_prefs
+                    .as_ref()
+                    .map(|p| p.codex_build_network_access)
+                    .unwrap_or(false)
+            }
+        } else {
+            false
+        };
+
+    let codex_web_search_pref = codex_prefs
+        .as_ref()
+        .map(|p| p.codex_web_search_mode.as_str())
+        .unwrap_or("cached");
+    let codex_web_search_pref_mode =
+        super::mode_policy::CodexWebSearchMode::from_preference_str(codex_web_search_pref);
+
+    let codex_web_search_mode =
+        if agent == ChatAgent::Codex && codex_mode == super::mode_policy::ExecutionMode::Yolo {
+            // In yolo/full-access runs, Codex defaults to live search. Mirror that
+            // behavior unless the user explicitly disables web search.
+            if codex_web_search_pref_mode == super::mode_policy::CodexWebSearchMode::Disabled {
+                super::mode_policy::CodexWebSearchMode::Disabled
+            } else {
+                super::mode_policy::CodexWebSearchMode::Live
+            }
+        } else {
+            codex_web_search_pref_mode
+        };
+
     let policy = if agent == ChatAgent::Codex {
-        use super::mode_policy::{codex_detached_policy, ExecutionMode};
+        use super::mode_policy::codex_detached_policy;
         use super::types::RunPolicySnapshot;
 
-        let mode = ExecutionMode::from_optional_str(execution_mode.as_deref());
-        let mut policy = codex_detached_policy(mode);
-        if mode == ExecutionMode::Build {
+        let mut policy = codex_detached_policy(codex_mode);
+        if codex_mode == super::mode_policy::ExecutionMode::Build {
             policy.workspace_write_network_access = codex_build_network_access;
         }
+        policy.web_search = codex_web_search_mode;
 
         Some(RunPolicySnapshot {
-            codex_search: Some(policy.enable_search),
-            codex_sandbox: policy
-                .sandbox
-                .map(|s| s.as_cli_value().to_string()),
+            // Back-compat: older runs used a boolean and forced live via `--search`.
+            codex_search: None,
+            codex_web_search: Some(policy.web_search.as_config_value().to_string()),
+            codex_sandbox: policy.sandbox.map(|s| s.as_cli_value().to_string()),
             codex_build_network_access: Some(policy.workspace_write_network_access),
             codex_ask_for_approval: policy.ask_for_approval.map(|s| s.to_string()),
             codex_bypass_approvals_and_sandbox: Some(policy.bypass_approvals_and_sandbox),
@@ -1109,6 +1138,7 @@ pub async fn send_chat_message(
                 &message,
                 execution_mode.as_deref(),
                 codex_build_network_access,
+                codex_web_search_mode,
                 ai_language.as_deref(),
                 parallel_execution_prompt,
             )?;
@@ -1181,12 +1211,19 @@ pub async fn send_chat_message(
                                     claude_session_id_for_call.as_deref().unwrap_or("")
                                 );
 
-                                with_sessions_mut(&app, &worktree_path, &worktree_id, |sessions| {
-                                    if let Some(session) = sessions.find_session_mut(&session_id) {
-                                        session.claude_session_id = None;
-                                    }
-                                    Ok(())
-                                })?;
+                                with_sessions_mut(
+                                    &app,
+                                    &worktree_path,
+                                    &worktree_id,
+                                    |sessions| {
+                                        if let Some(session) =
+                                            sessions.find_session_mut(&session_id)
+                                        {
+                                            session.claude_session_id = None;
+                                        }
+                                        Ok(())
+                                    },
+                                )?;
 
                                 claude_session_id_for_call = None;
                                 continue;
@@ -1198,8 +1235,7 @@ pub async fn send_chat_message(
                             if let Err(err) = run_log_writer.crash() {
                                 log::error!("Failed to mark run as crashed: {err}");
                             }
-                            if let Err(err) =
-                                run_log::delete_input_file(&app, &session_id, &run_id)
+                            if let Err(err) = run_log::delete_input_file(&app, &session_id, &run_id)
                             {
                                 log::trace!(
                                     "Could not delete input file after crash (may not exist): {err}"
@@ -1251,6 +1287,7 @@ pub async fn send_chat_message(
                         effective_thinking_level_for_codex,
                         execution_mode.as_deref(),
                         codex_build_network_access,
+                        codex_web_search_mode,
                         ai_language.as_deref(),
                     ) {
                         Ok((pid, response)) => {
@@ -1269,12 +1306,19 @@ pub async fn send_chat_message(
                                     codex_session_id_for_call.as_deref().unwrap_or("")
                                 );
 
-                                with_sessions_mut(&app, &worktree_path, &worktree_id, |sessions| {
-                                    if let Some(session) = sessions.find_session_mut(&session_id) {
-                                        session.codex_session_id = None;
-                                    }
-                                    Ok(())
-                                })?;
+                                with_sessions_mut(
+                                    &app,
+                                    &worktree_path,
+                                    &worktree_id,
+                                    |sessions| {
+                                        if let Some(session) =
+                                            sessions.find_session_mut(&session_id)
+                                        {
+                                            session.codex_session_id = None;
+                                        }
+                                        Ok(())
+                                    },
+                                )?;
 
                                 codex_session_id_for_call = None;
                                 continue;
@@ -1286,8 +1330,7 @@ pub async fn send_chat_message(
                             if let Err(err) = run_log_writer.crash() {
                                 log::error!("Failed to mark run as crashed: {err}");
                             }
-                            if let Err(err) =
-                                run_log::delete_input_file(&app, &session_id, &run_id)
+                            if let Err(err) = run_log::delete_input_file(&app, &session_id, &run_id)
                             {
                                 log::trace!(
                                     "Could not delete input file after crash (may not exist): {err}"

@@ -21,6 +21,31 @@ pub enum CodexSandbox {
     WorkspaceWrite,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CodexWebSearchMode {
+    Cached,
+    Live,
+    Disabled,
+}
+
+impl CodexWebSearchMode {
+    pub fn as_config_value(&self) -> &'static str {
+        match self {
+            Self::Cached => "cached",
+            Self::Live => "live",
+            Self::Disabled => "disabled",
+        }
+    }
+
+    pub fn from_preference_str(value: &str) -> Self {
+        match value.trim() {
+            "live" => Self::Live,
+            "disabled" => Self::Disabled,
+            _ => Self::Cached,
+        }
+    }
+}
+
 impl CodexSandbox {
     pub fn as_cli_value(&self) -> &'static str {
         match self {
@@ -33,7 +58,7 @@ impl CodexSandbox {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CodexDetachedPolicy {
     pub mode: ExecutionMode,
-    pub enable_search: bool,
+    pub web_search: CodexWebSearchMode,
     pub ask_for_approval: Option<&'static str>,
     pub sandbox: Option<CodexSandbox>,
     pub workspace_write_network_access: bool,
@@ -44,7 +69,7 @@ pub fn codex_detached_policy(mode: ExecutionMode) -> CodexDetachedPolicy {
     match mode {
         ExecutionMode::Build => CodexDetachedPolicy {
             mode,
-            enable_search: true,
+            web_search: CodexWebSearchMode::Cached,
             ask_for_approval: Some("never"),
             sandbox: Some(CodexSandbox::WorkspaceWrite),
             workspace_write_network_access: false,
@@ -52,7 +77,7 @@ pub fn codex_detached_policy(mode: ExecutionMode) -> CodexDetachedPolicy {
         },
         ExecutionMode::Yolo => CodexDetachedPolicy {
             mode,
-            enable_search: true,
+            web_search: CodexWebSearchMode::Live,
             ask_for_approval: None,
             sandbox: None,
             workspace_write_network_access: false,
@@ -60,7 +85,7 @@ pub fn codex_detached_policy(mode: ExecutionMode) -> CodexDetachedPolicy {
         },
         ExecutionMode::Plan => CodexDetachedPolicy {
             mode,
-            enable_search: true,
+            web_search: CodexWebSearchMode::Cached,
             ask_for_approval: Some("never"),
             sandbox: Some(CodexSandbox::ReadOnly),
             workspace_write_network_access: false,
@@ -70,9 +95,13 @@ pub fn codex_detached_policy(mode: ExecutionMode) -> CodexDetachedPolicy {
 }
 
 pub fn push_codex_detached_mode_args(args: &mut Vec<String>, policy: &CodexDetachedPolicy) {
-    if policy.enable_search {
-        args.push("--search".to_string());
-    }
+    // Codex (2026-01-28+) enables web search by default in cached mode.
+    // Control explicitly via config instead of forcing `--search`.
+    args.push("--config".to_string());
+    args.push(format!(
+        "web_search=\"{}\"",
+        policy.web_search.as_config_value()
+    ));
 
     if policy.bypass_approvals_and_sandbox {
         args.push("--dangerously-bypass-approvals-and-sandbox".to_string());
