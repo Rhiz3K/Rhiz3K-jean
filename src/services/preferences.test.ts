@@ -2,7 +2,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { renderHook, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createElement } from 'react'
-import { usePreferences, useSavePreferences, preferencesQueryKeys } from './preferences'
+import {
+  usePreferences,
+  useSavePreferences,
+  preferencesQueryKeys,
+} from './preferences'
 import type { AppPreferences } from '@/types/preferences'
 import {
   FONT_SIZE_DEFAULT,
@@ -99,6 +103,7 @@ describe('preferences service', () => {
         syntax_theme_light: 'github-light',
         disable_thinking_in_non_plan_modes: true,
         codex_disable_reasoning_in_non_plan_modes: true,
+        codex_build_network_access: false,
         session_recap_enabled: false,
         session_recap_model: 'haiku',
         parallel_execution_prompt_enabled: false,
@@ -183,6 +188,7 @@ describe('preferences service', () => {
         syntax_theme_light: 'github-light',
         disable_thinking_in_non_plan_modes: true,
         codex_disable_reasoning_in_non_plan_modes: true,
+        codex_build_network_access: false,
         session_recap_enabled: false,
         session_recap_model: 'haiku',
         parallel_execution_prompt_enabled: false,
@@ -207,7 +213,9 @@ describe('preferences service', () => {
       await waitFor(() => expect(result.current.isSuccess).toBe(true))
 
       // Should migrate to new default
-      expect(result.current.data?.keybindings?.toggle_left_sidebar).toBe('mod+b')
+      expect(result.current.data?.keybindings?.toggle_left_sidebar).toBe(
+        'mod+b'
+      )
     })
   })
 
@@ -242,6 +250,7 @@ describe('preferences service', () => {
         syntax_theme_light: 'github-light',
         disable_thinking_in_non_plan_modes: false,
         codex_disable_reasoning_in_non_plan_modes: false,
+        codex_build_network_access: false,
         session_recap_enabled: false,
         session_recap_model: 'haiku',
         parallel_execution_prompt_enabled: false,
@@ -266,7 +275,9 @@ describe('preferences service', () => {
 
       await waitFor(() => expect(result.current.isSuccess).toBe(true))
 
-      expect(invoke).toHaveBeenCalledWith('save_preferences', { preferences: newPrefs })
+      expect(invoke).toHaveBeenCalledWith('save_preferences', {
+        preferences: newPrefs,
+      })
       expect(toast.success).toHaveBeenCalledWith('Preferences saved')
     })
 
@@ -299,6 +310,7 @@ describe('preferences service', () => {
         syntax_theme_light: 'github-light',
         disable_thinking_in_non_plan_modes: true,
         codex_disable_reasoning_in_non_plan_modes: true,
+        codex_build_network_access: false,
         session_recap_enabled: false,
         session_recap_model: 'haiku',
         parallel_execution_prompt_enabled: false,
@@ -323,7 +335,9 @@ describe('preferences service', () => {
 
       await waitFor(() => expect(result.current.isSuccess).toBe(true))
 
-      const cached = queryClient.getQueryData(preferencesQueryKeys.preferences())
+      const cached = queryClient.getQueryData(
+        preferencesQueryKeys.preferences()
+      )
       expect(cached).toEqual(newPrefs)
     })
 
@@ -356,6 +370,7 @@ describe('preferences service', () => {
         syntax_theme_light: 'github-light',
         disable_thinking_in_non_plan_modes: true,
         codex_disable_reasoning_in_non_plan_modes: true,
+        codex_build_network_access: false,
         session_recap_enabled: false,
         session_recap_model: 'haiku',
         parallel_execution_prompt_enabled: false,
@@ -413,6 +428,7 @@ describe('preferences service', () => {
         syntax_theme_light: 'github-light',
         disable_thinking_in_non_plan_modes: true,
         codex_disable_reasoning_in_non_plan_modes: true,
+        codex_build_network_access: false,
         session_recap_enabled: false,
         session_recap_model: 'haiku',
         parallel_execution_prompt_enabled: false,

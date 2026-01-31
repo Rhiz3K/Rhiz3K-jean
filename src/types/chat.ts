@@ -306,6 +306,16 @@ export interface ErrorEvent {
 }
 
 /**
+ * Event payload for non-fatal streaming warnings from Rust
+ */
+export interface StreamWarningEvent {
+  session_id: string
+  worktree_id: string // Kept for backward compatibility
+  message: string
+  line_preview?: string
+}
+
+/**
  * Event payload for cancellation from Rust (user pressed Escape)
  */
 export interface CancelledEvent {
@@ -701,6 +711,8 @@ export interface QueuedMessage {
   thinkingLevel: ThinkingLevel
   /** Whether thinking should be disabled for this mode (snapshot at queue time) */
   disableThinkingForMode: boolean
+  /** Per-run override for Codex build sandbox outbound network */
+  codexBuildNetworkAccess?: boolean
   /** Timestamp when queued (for display ordering) */
   queuedAt: number
 }
@@ -805,6 +817,24 @@ export interface RunLogFileInfo {
   user_message_preview: string
   /** Token usage for this run (if completed) */
   usage?: UsageData
+
+  /** Which agent/provider produced the output for this run */
+  agent: ChatAgent
+
+  /** Execution mode (plan, build, yolo) */
+  execution_mode?: string
+
+  /** Snapshot of effective policy/capabilities for this run */
+  policy?: RunPolicySnapshot
+}
+
+/** Snapshot of the effective execution policy for a run (debug/restore). */
+export interface RunPolicySnapshot {
+  codex_search?: boolean
+  codex_sandbox?: string
+  codex_build_network_access?: boolean
+  codex_ask_for_approval?: string
+  codex_bypass_approvals_and_sandbox?: boolean
 }
 
 /**

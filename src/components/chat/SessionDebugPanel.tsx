@@ -5,7 +5,12 @@ import { writeText } from '@tauri-apps/plugin-clipboard-manager'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Copy, FileText } from 'lucide-react'
-import type { SessionDebugInfo, RunStatus, UsageData } from '@/types/chat'
+import type {
+  SessionDebugInfo,
+  RunStatus,
+  UsageData,
+  RunLogFileInfo,
+} from '@/types/chat'
 import { cn } from '@/lib/utils'
 
 interface SessionDebugPanelProps {
@@ -30,6 +35,25 @@ function formatTokens(tokens: number): string {
 function formatUsage(usage: UsageData | undefined): string {
   if (!usage) return ''
   return `${formatTokens(usage.input_tokens)} in / ${formatTokens(usage.output_tokens)} out`
+}
+
+function formatRunPolicy(file: RunLogFileInfo): string {
+  const mode = file.execution_mode
+  if (file.agent !== 'codex') {
+    return mode ? `${file.agent} ${mode}` : file.agent
+  }
+
+  const parts: string[] = ['codex']
+  if (mode) parts.push(mode)
+  if (mode === 'build') {
+    const net = file.policy?.codex_build_network_access
+    if (typeof net === 'boolean') {
+      parts.push(`net:${net ? 'on' : 'off'}`)
+    }
+  }
+  const sandbox = file.policy?.codex_sandbox
+  if (sandbox) parts.push(`sb:${sandbox}`)
+  return parts.join(' ')
 }
 
 /** Get status color */
@@ -91,7 +115,8 @@ export function SessionDebugPanel({
       '',
       `Run logs (${debugInfo.run_log_files.length}):`,
       ...debugInfo.run_log_files.map(
-        (f) => `  ${getStatusText(f.status)} ${f.usage ? `(${formatUsage(f.usage)})` : ''} ${f.user_message_preview}`
+        f =>
+          `  ${getStatusText(f.status)} ${formatRunPolicy(f)} ${f.usage ? `(${formatUsage(f.usage)})` : ''} ${f.user_message_preview}`
       ),
     ]
 
@@ -128,7 +153,10 @@ export function SessionDebugPanel({
       <div className="text-muted-foreground">
         session: <span className="text-foreground">{sessionId}</span>
       </div>
-      <div className="text-muted-foreground truncate" title={debugInfo.sessions_file}>
+      <div
+        className="text-muted-foreground truncate"
+        title={debugInfo.sessions_file}
+      >
         sessions file:{' '}
         <span
           className="text-foreground/70 cursor-pointer hover:underline"
@@ -137,10 +165,19 @@ export function SessionDebugPanel({
           ...{debugInfo.sessions_file.slice(-60)}
         </span>
       </div>
-      <div className="text-muted-foreground truncate" title={debugInfo.runs_dir}>
-        runs dir: <span className="text-foreground/70">...{debugInfo.runs_dir.slice(-50)}</span>
+      <div
+        className="text-muted-foreground truncate"
+        title={debugInfo.runs_dir}
+      >
+        runs dir:{' '}
+        <span className="text-foreground/70">
+          ...{debugInfo.runs_dir.slice(-50)}
+        </span>
       </div>
-      <div className="text-muted-foreground truncate" title={debugInfo.manifest_file || undefined}>
+      <div
+        className="text-muted-foreground truncate"
+        title={debugInfo.manifest_file || undefined}
+      >
         manifest:{' '}
         {debugInfo.manifest_file ? (
           <span
@@ -154,7 +191,10 @@ export function SessionDebugPanel({
         )}
       </div>
       {debugInfo.claude_jsonl_file && (
-        <div className="text-muted-foreground truncate" title={debugInfo.claude_jsonl_file}>
+        <div
+          className="text-muted-foreground truncate"
+          title={debugInfo.claude_jsonl_file}
+        >
           claude jsonl:{' '}
           <span
             className="text-foreground/70 cursor-pointer hover:underline"
@@ -166,14 +206,20 @@ export function SessionDebugPanel({
       )}
 
       {/* Total token usage */}
-      {(debugInfo.total_usage.input_tokens > 0 || debugInfo.total_usage.output_tokens > 0) && (
+      {(debugInfo.total_usage.input_tokens > 0 ||
+        debugInfo.total_usage.output_tokens > 0) && (
         <div className="text-muted-foreground">
-          total usage: <span className="text-foreground font-mono">
+          total usage:{' '}
+          <span className="text-foreground font-mono">
             {formatUsage(debugInfo.total_usage)}
           </span>
           {debugInfo.total_usage.cache_read_input_tokens ? (
-            <span className="text-green-500 ml-2" title="Cache hit tokens (cost savings)">
-              ({formatTokens(debugInfo.total_usage.cache_read_input_tokens)} cached)
+            <span
+              className="text-green-500 ml-2"
+              title="Cache hit tokens (cost savings)"
+            >
+              ({formatTokens(debugInfo.total_usage.cache_read_input_tokens)}{' '}
+              cached)
             </span>
           ) : null}
         </div>
@@ -190,15 +236,23 @@ export function SessionDebugPanel({
           </div>
         ) : (
           <div className="space-y-1 ml-2">
-            {debugInfo.run_log_files.map((file) => (
+            {debugInfo.run_log_files.map(file => (
               <div
                 key={file.run_id}
                 className="flex items-center gap-2 cursor-pointer hover:bg-muted/50 rounded px-1 -mx-1"
                 onClick={() => onFileClick?.(file.path)}
               >
                 <FileText className="size-4 text-muted-foreground shrink-0" />
-                <span className={cn('font-medium shrink-0', getStatusColor(file.status))}>
+                <span
+                  className={cn(
+                    'font-medium shrink-0',
+                    getStatusColor(file.status)
+                  )}
+                >
                   {getStatusText(file.status)}
+                </span>
+                <span className="text-muted-foreground font-mono text-xs shrink-0">
+                  {formatRunPolicy(file)}
                 </span>
                 {file.usage && (
                   <span className="text-muted-foreground font-mono text-xs shrink-0">

@@ -25,6 +25,7 @@ import {
   GitCommitHorizontal,
   GitMerge,
   GitPullRequest,
+  Globe,
   Hammer,
   MoreHorizontal,
   Pencil,
@@ -45,6 +46,7 @@ import {
 } from '@/components/ui/select'
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
@@ -66,7 +68,11 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Markdown } from '@/components/ui/markdown'
 import { cn } from '@/lib/utils'
 import type { ChatAgent, ThinkingLevel, ExecutionMode } from '@/types/chat'
-import type { PrDisplayStatus, CheckStatus, MergeableStatus } from '@/types/pr-status'
+import type {
+  PrDisplayStatus,
+  CheckStatus,
+  MergeableStatus,
+} from '@/types/pr-status'
 import type { DiffRequest } from '@/types/git-diff'
 import type {
   LoadedIssueContext,
@@ -184,6 +190,7 @@ interface ChatToolbarProps {
   selectedThinkingLevel: ThinkingLevel
   thinkingOverrideActive: boolean // True when thinking is disabled in build/yolo due to preference
   queuedMessageCount: number
+  codexBuildNetworkAccess: boolean
 
   // Git state
   hasBranchUpdates: boolean
@@ -234,6 +241,7 @@ interface ChatToolbarProps {
   onModelChange: (model: string) => void
   onThinkingLevelChange: (level: ThinkingLevel) => void
   onSetExecutionMode: (mode: ExecutionMode) => void
+  onCodexBuildNetworkAccessChange: (enabled: boolean) => void
   onCancel: () => void
 }
 
@@ -252,6 +260,7 @@ export const ChatToolbar = memo(function ChatToolbar({
   selectedThinkingLevel,
   thinkingOverrideActive,
   queuedMessageCount,
+  codexBuildNetworkAccess,
   hasBranchUpdates,
   behindCount,
   aheadCount,
@@ -290,6 +299,7 @@ export const ChatToolbar = memo(function ChatToolbar({
   onModelChange,
   onThinkingLevelChange,
   onSetExecutionMode,
+  onCodexBuildNetworkAccessChange,
   onCancel,
 }: ChatToolbarProps) {
   // Memoize callbacks to prevent Select re-renders
@@ -314,8 +324,8 @@ export const ChatToolbar = memo(function ChatToolbar({
     [onThinkingLevelChange]
   )
 
-  const loadingOperation = useChatStore(
-    (state) => (worktreeId ? state.worktreeLoadingOperations[worktreeId] ?? null : null)
+  const loadingOperation = useChatStore(state =>
+    worktreeId ? (state.worktreeLoadingOperations[worktreeId] ?? null) : null
   )
   const isPulling = loadingOperation === 'pull'
   const isPushing = loadingOperation === 'push'
@@ -344,7 +354,13 @@ export const ChatToolbar = memo(function ChatToolbar({
     } finally {
       clearWorktreeLoading(worktreeId)
     }
-  }, [activeWorktreePath, baseBranch, worktreeId, projectId, onResolveConflicts])
+  }, [
+    activeWorktreePath,
+    baseBranch,
+    worktreeId,
+    projectId,
+    onResolveConflicts,
+  ])
 
   const handlePushClick = useCallback(async () => {
     if (!activeWorktreePath || !worktreeId) return
@@ -392,8 +408,17 @@ export const ChatToolbar = memo(function ChatToolbar({
     async (ctx: LoadedIssueContext) => {
       if (!worktreeId || !activeWorktreePath) return
       try {
-        const content = await getIssueContextContent(worktreeId, ctx.number, activeWorktreePath)
-        setViewingContext({ type: 'issue', number: ctx.number, title: ctx.title, content })
+        const content = await getIssueContextContent(
+          worktreeId,
+          ctx.number,
+          activeWorktreePath
+        )
+        setViewingContext({
+          type: 'issue',
+          number: ctx.number,
+          title: ctx.title,
+          content,
+        })
       } catch (error) {
         toast.error(`Failed to load context: ${error}`)
       }
@@ -405,8 +430,17 @@ export const ChatToolbar = memo(function ChatToolbar({
     async (ctx: LoadedPullRequestContext) => {
       if (!worktreeId || !activeWorktreePath) return
       try {
-        const content = await getPRContextContent(worktreeId, ctx.number, activeWorktreePath)
-        setViewingContext({ type: 'pr', number: ctx.number, title: ctx.title, content })
+        const content = await getPRContextContent(
+          worktreeId,
+          ctx.number,
+          activeWorktreePath
+        )
+        setViewingContext({
+          type: 'pr',
+          number: ctx.number,
+          title: ctx.title,
+          content,
+        })
       } catch (error) {
         toast.error(`Failed to load context: ${error}`)
       }
@@ -439,6 +473,9 @@ export const ChatToolbar = memo(function ChatToolbar({
 
   const isDisabled = isSending || hasPendingQuestions
   const canSend = hasInputValue || hasPendingAttachments
+
+  const showCodexBuildNetworkToggle =
+    selectedAgent === 'codex' && executionMode === 'build'
 
   const baseModelOptions =
     selectedAgent === 'codex' ? CODEX_MODEL_OPTIONS : CLAUDE_MODEL_OPTIONS
@@ -483,12 +520,22 @@ export const ChatToolbar = memo(function ChatToolbar({
             <DropdownMenuItem onClick={onSaveContext}>
               <BookmarkPlus className="h-4 w-4" />
               Save Context
-              <span className="ml-auto text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">S</span>
+              <span className="ml-auto text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+                S
+              </span>
             </DropdownMenuItem>
             <DropdownMenuItem onClick={onLoadContext}>
               <FolderOpen className="h-4 w-4" />
               Load Context
-              <span className="ml-auto text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">L</span>
+              {loadedIssueCount + loadedPRCount + loadedContextCount > 0 ? (
+                <span className="ml-auto text-xs text-muted-foreground">
+                  {loadedIssueCount + loadedPRCount + loadedContextCount} loaded
+                </span>
+              ) : (
+                <span className="ml-auto text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+                  L
+                </span>
+              )}
             </DropdownMenuItem>
 
             <DropdownMenuSeparator />
@@ -500,12 +547,16 @@ export const ChatToolbar = memo(function ChatToolbar({
             <DropdownMenuItem onClick={onCommit}>
               <GitCommitHorizontal className="h-4 w-4" />
               Commit
-              <span className="ml-auto text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">C</span>
+              <span className="ml-auto text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+                C
+              </span>
             </DropdownMenuItem>
             <DropdownMenuItem onClick={onCommitAndPush}>
               <GitCommitHorizontal className="h-4 w-4" />
               Commit & Push
-              <span className="ml-auto text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">P</span>
+              <span className="ml-auto text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+                P
+              </span>
             </DropdownMenuItem>
 
             <DropdownMenuSeparator />
@@ -517,12 +568,16 @@ export const ChatToolbar = memo(function ChatToolbar({
             <DropdownMenuItem onClick={handlePullClick}>
               <ArrowDownToLine className="h-4 w-4" />
               Pull
-              <span className="ml-auto text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">D</span>
+              <span className="ml-auto text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+                D
+              </span>
             </DropdownMenuItem>
             <DropdownMenuItem onClick={handlePushClick}>
               <ArrowUpToLine className="h-4 w-4" />
               Push
-              <span className="ml-auto text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">U</span>
+              <span className="ml-auto text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+                U
+              </span>
             </DropdownMenuItem>
 
             <DropdownMenuSeparator />
@@ -534,17 +589,23 @@ export const ChatToolbar = memo(function ChatToolbar({
             <DropdownMenuItem onClick={onOpenPr}>
               <GitPullRequest className="h-4 w-4" />
               {hasOpenPr ? 'Open' : 'Create'}
-              <span className="ml-auto text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">O</span>
+              <span className="ml-auto text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+                O
+              </span>
             </DropdownMenuItem>
             <DropdownMenuItem onClick={onReview}>
               <Eye className="h-4 w-4" />
               Review
-              <span className="ml-auto text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">R</span>
+              <span className="ml-auto text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+                R
+              </span>
             </DropdownMenuItem>
             <DropdownMenuItem onClick={onCheckoutPr}>
               <GitBranch className="h-4 w-4" />
               Checkout
-              <span className="ml-auto text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">K</span>
+              <span className="ml-auto text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+                K
+              </span>
             </DropdownMenuItem>
 
             <DropdownMenuSeparator />
@@ -556,17 +617,23 @@ export const ChatToolbar = memo(function ChatToolbar({
             <DropdownMenuItem onClick={onMerge}>
               <GitMerge className="h-4 w-4" />
               Merge to Base
-              <span className="ml-auto text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">M</span>
+              <span className="ml-auto text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+                M
+              </span>
             </DropdownMenuItem>
             <DropdownMenuItem onClick={onResolveConflicts}>
               <GitMerge className="h-4 w-4" />
               Resolve Conflicts
-              <span className="ml-auto text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">F</span>
+              <span className="ml-auto text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+                F
+              </span>
             </DropdownMenuItem>
             <DropdownMenuItem onClick={onInvestigate}>
               <Search className="h-4 w-4" />
               Investigate Context
-              <span className="ml-auto text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">I</span>
+              <span className="ml-auto text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+                I
+              </span>
             </DropdownMenuItem>
 
             {/* Git stats section - conditional */}
@@ -699,7 +766,9 @@ export const ChatToolbar = memo(function ChatToolbar({
               <DropdownMenuSubContent>
                 <DropdownMenuRadioGroup
                   value={
-                    effectiveThinkingOverrideActive ? 'off' : selectedThinkingLevel
+                    effectiveThinkingOverrideActive
+                      ? 'off'
+                      : selectedThinkingLevel
                   }
                   onValueChange={handleThinkingLevelChange}
                 >
@@ -755,6 +824,25 @@ export const ChatToolbar = memo(function ChatToolbar({
               </DropdownMenuSubContent>
             </DropdownMenuSub>
 
+            {showCodexBuildNetworkToggle && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuCheckboxItem
+                  checked={codexBuildNetworkAccess}
+                  onCheckedChange={checked =>
+                    onCodexBuildNetworkAccessChange(checked === true)
+                  }
+                  disabled={isDisabled}
+                >
+                  <Globe className="h-4 w-4" />
+                  <span>Build network</span>
+                  <span className="ml-auto text-xs text-muted-foreground">
+                    {codexBuildNetworkAccess ? 'On' : 'Off'}
+                  </span>
+                </DropdownMenuCheckboxItem>
+              </>
+            )}
+
             {/* Queue indicator */}
             {queuedMessageCount > 0 && (
               <>
@@ -785,7 +873,9 @@ export const ChatToolbar = memo(function ChatToolbar({
         </button>
 
         {/* Issue/PR/Context dropdown - desktop only */}
-        {(loadedIssueCount > 0 || loadedPRCount > 0 || loadedContextCount > 0) && (
+        {(loadedIssueCount > 0 ||
+          loadedPRCount > 0 ||
+          loadedContextCount > 0) && (
           <>
             <div className="hidden @md:block h-4 w-px bg-border/50" />
             <DropdownMenu>
@@ -798,8 +888,11 @@ export const ChatToolbar = memo(function ChatToolbar({
                   <span>
                     {loadedIssueCount > 0 &&
                       `${loadedIssueCount} Issue${loadedIssueCount > 1 ? 's' : ''}`}
-                    {loadedIssueCount > 0 && (loadedPRCount > 0 || loadedContextCount > 0) && ', '}
-                    {loadedPRCount > 0 && `${loadedPRCount} PR${loadedPRCount > 1 ? 's' : ''}`}
+                    {loadedIssueCount > 0 &&
+                      (loadedPRCount > 0 || loadedContextCount > 0) &&
+                      ', '}
+                    {loadedPRCount > 0 &&
+                      `${loadedPRCount} PR${loadedPRCount > 1 ? 's' : ''}`}
                     {loadedPRCount > 0 && loadedContextCount > 0 && ', '}
                     {loadedContextCount > 0 &&
                       `${loadedContextCount} Context${loadedContextCount > 1 ? 's' : ''}`}
@@ -814,15 +907,18 @@ export const ChatToolbar = memo(function ChatToolbar({
                     <DropdownMenuLabel className="text-xs text-muted-foreground">
                       Issues
                     </DropdownMenuLabel>
-                    {loadedIssueContexts.map((ctx) => (
-                      <DropdownMenuItem key={ctx.number} onClick={() => handleViewIssue(ctx)}>
+                    {loadedIssueContexts.map(ctx => (
+                      <DropdownMenuItem
+                        key={ctx.number}
+                        onClick={() => handleViewIssue(ctx)}
+                      >
                         <CircleDot className="h-4 w-4 text-green-500" />
                         <span className="truncate">
                           #{ctx.number} {ctx.title}
                         </span>
                         <button
                           className="ml-auto shrink-0 rounded p-0.5 hover:bg-accent"
-                          onClick={(e) => {
+                          onClick={e => {
                             e.stopPropagation()
                             openUrl(
                               `https://github.com/${ctx.repoOwner}/${ctx.repoName}/issues/${ctx.number}`
@@ -839,19 +935,24 @@ export const ChatToolbar = memo(function ChatToolbar({
                 {/* PRs section */}
                 {loadedPRContexts.length > 0 && (
                   <>
-                    {loadedIssueContexts.length > 0 && <DropdownMenuSeparator />}
+                    {loadedIssueContexts.length > 0 && (
+                      <DropdownMenuSeparator />
+                    )}
                     <DropdownMenuLabel className="text-xs text-muted-foreground">
                       Pull Requests
                     </DropdownMenuLabel>
-                    {loadedPRContexts.map((ctx) => (
-                      <DropdownMenuItem key={ctx.number} onClick={() => handleViewPR(ctx)}>
+                    {loadedPRContexts.map(ctx => (
+                      <DropdownMenuItem
+                        key={ctx.number}
+                        onClick={() => handleViewPR(ctx)}
+                      >
                         <GitPullRequest className="h-4 w-4 text-green-500" />
                         <span className="truncate">
                           #{ctx.number} {ctx.title}
                         </span>
                         <button
                           className="ml-auto shrink-0 rounded p-0.5 hover:bg-accent"
-                          onClick={(e) => {
+                          onClick={e => {
                             e.stopPropagation()
                             openUrl(
                               `https://github.com/${ctx.repoOwner}/${ctx.repoName}/pull/${ctx.number}`
@@ -868,13 +969,12 @@ export const ChatToolbar = memo(function ChatToolbar({
                 {/* Saved contexts section */}
                 {attachedSavedContexts.length > 0 && (
                   <>
-                    {(loadedIssueContexts.length > 0 || loadedPRContexts.length > 0) && (
-                      <DropdownMenuSeparator />
-                    )}
+                    {(loadedIssueContexts.length > 0 ||
+                      loadedPRContexts.length > 0) && <DropdownMenuSeparator />}
                     <DropdownMenuLabel className="text-xs text-muted-foreground">
                       Contexts
                     </DropdownMenuLabel>
-                    {attachedSavedContexts.map((ctx) => (
+                    {attachedSavedContexts.map(ctx => (
                       <DropdownMenuItem
                         key={ctx.slug}
                         onClick={() => handleViewSavedContext(ctx)}
@@ -1068,46 +1168,46 @@ export const ChatToolbar = memo(function ChatToolbar({
             <button
               type="button"
               disabled={hasPendingQuestions}
-	              className={cn(
-	                'hidden @md:flex h-8 items-center gap-1.5 px-3 text-sm text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground disabled:pointer-events-none disabled:opacity-50',
-	                selectedThinkingLevel !== 'off' &&
-	                !effectiveThinkingOverrideActive &&
-	                'border border-purple-500/50 bg-purple-500/10 text-purple-700 dark:border-purple-400/40 dark:bg-purple-500/10 dark:text-purple-400'
-	              )}
-	              title={
-	                effectiveThinkingOverrideActive
-	                  ? `Thinking disabled in ${executionMode} mode (change in Settings)`
-	                  : `${thinkingLabel}: ${selectedThinkingLabel}`
-	              }
-	            >
-	              <Brain className="h-3.5 w-3.5" />
-	              <span>
-	                {effectiveThinkingOverrideActive
-	                  ? 'Off'
-	                  : selectedThinkingLabel}
-	              </span>
-	              <ChevronDown className="h-3 w-3 opacity-50" />
-	            </button>
-	          </DropdownMenuTrigger>
-	          <DropdownMenuContent align="start">
-	            <DropdownMenuRadioGroup
-	              value={
-	                effectiveThinkingOverrideActive ? 'off' : selectedThinkingLevel
-	              }
-	              onValueChange={handleThinkingLevelChange}
-	            >
-	              {thinkingOptions.map(option => (
-	                <DropdownMenuRadioItem key={option.value} value={option.value}>
-	                  <Brain className="mr-2 h-4 w-4" />
-	                  {option.label}
-	                  <span className="ml-auto pl-4 text-xs text-muted-foreground">
-	                    {option.tokens}
-	                  </span>
-	                </DropdownMenuRadioItem>
-	              ))}
-	            </DropdownMenuRadioGroup>
-	          </DropdownMenuContent>
-	        </DropdownMenu>
+              className={cn(
+                'hidden @md:flex h-8 items-center gap-1.5 px-3 text-sm text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground disabled:pointer-events-none disabled:opacity-50',
+                selectedThinkingLevel !== 'off' &&
+                  !effectiveThinkingOverrideActive &&
+                  'border border-purple-500/50 bg-purple-500/10 text-purple-700 dark:border-purple-400/40 dark:bg-purple-500/10 dark:text-purple-400'
+              )}
+              title={
+                effectiveThinkingOverrideActive
+                  ? `Thinking disabled in ${executionMode} mode (change in Settings)`
+                  : `${thinkingLabel}: ${selectedThinkingLabel}`
+              }
+            >
+              <Brain className="h-3.5 w-3.5" />
+              <span>
+                {effectiveThinkingOverrideActive
+                  ? 'Off'
+                  : selectedThinkingLabel}
+              </span>
+              <ChevronDown className="h-3 w-3 opacity-50" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start">
+            <DropdownMenuRadioGroup
+              value={
+                effectiveThinkingOverrideActive ? 'off' : selectedThinkingLevel
+              }
+              onValueChange={handleThinkingLevelChange}
+            >
+              {thinkingOptions.map(option => (
+                <DropdownMenuRadioItem key={option.value} value={option.value}>
+                  <Brain className="mr-2 h-4 w-4" />
+                  {option.label}
+                  <span className="ml-auto pl-4 text-xs text-muted-foreground">
+                    {option.tokens}
+                  </span>
+                </DropdownMenuRadioItem>
+              ))}
+            </DropdownMenuRadioGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
 
         {/* Divider - desktop only */}
         <div className="hidden @md:block h-4 w-px bg-border/50" />
@@ -1121,9 +1221,9 @@ export const ChatToolbar = memo(function ChatToolbar({
               className={cn(
                 'hidden @md:flex h-8 items-center gap-1.5 px-3 text-sm text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground disabled:pointer-events-none disabled:opacity-50',
                 executionMode === 'plan' &&
-                'border border-yellow-600/50 bg-yellow-500/10 text-yellow-700 dark:border-yellow-500/40 dark:bg-yellow-500/10 dark:text-yellow-400',
+                  'border border-yellow-600/50 bg-yellow-500/10 text-yellow-700 dark:border-yellow-500/40 dark:bg-yellow-500/10 dark:text-yellow-400',
                 executionMode === 'yolo' &&
-                'border border-red-500/50 bg-red-500/10 text-red-600 dark:border-red-400/40 dark:text-red-400'
+                  'border border-red-500/50 bg-red-500/10 text-red-600 dark:border-red-400/40 dark:text-red-400'
               )}
               title={`${executionMode.charAt(0).toUpperCase() + executionMode.slice(1)} mode (Shift+Tab to cycle)`}
             >
@@ -1167,6 +1267,34 @@ export const ChatToolbar = memo(function ChatToolbar({
             </DropdownMenuRadioGroup>
           </DropdownMenuContent>
         </DropdownMenu>
+
+        {/* Codex build network toggle - desktop only */}
+        {showCodexBuildNetworkToggle && (
+          <>
+            <div className="hidden @md:block h-4 w-px bg-border/50" />
+            <button
+              type="button"
+              disabled={hasPendingQuestions}
+              onClick={() =>
+                onCodexBuildNetworkAccessChange(!codexBuildNetworkAccess)
+              }
+              className={cn(
+                'hidden @md:flex h-8 items-center gap-1.5 px-3 text-sm text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground disabled:pointer-events-none disabled:opacity-50',
+                codexBuildNetworkAccess &&
+                  'border border-emerald-600/40 bg-emerald-500/10 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-400'
+              )}
+              title={`Codex build policy: sandbox=workspace-write, network=${
+                codexBuildNetworkAccess ? 'on' : 'off'
+              } (per-run override)`}
+            >
+              <Globe className="h-3.5 w-3.5" />
+              <span>Net</span>
+              <span className="text-xs opacity-70">
+                {codexBuildNetworkAccess ? 'On' : 'Off'}
+              </span>
+            </button>
+          </>
+        )}
 
         {/* Queue indicator - desktop only */}
         {queuedMessageCount > 0 && (
@@ -1242,9 +1370,7 @@ export const ChatToolbar = memo(function ChatToolbar({
               </DialogTitle>
             </DialogHeader>
             <ScrollArea className="flex-1 min-h-0">
-              <Markdown className="p-4">
-                {viewingContext.content}
-              </Markdown>
+              <Markdown className="p-4">{viewingContext.content}</Markdown>
             </ScrollArea>
           </DialogContent>
         </Dialog>

@@ -328,6 +328,7 @@ export interface AppPreferences {
   syntax_theme_light: SyntaxTheme // Syntax highlighting theme for light mode
   disable_thinking_in_non_plan_modes: boolean // Disable thinking in build/yolo modes (only plan uses thinking)
   codex_disable_reasoning_in_non_plan_modes: boolean // Reduce reasoning effort in build/yolo modes (only plan uses higher effort)
+  codex_build_network_access: boolean // Allow outbound network in Codex build mode sandbox
   session_recap_enabled: boolean // Show session recap when returning to unfocused sessions
   session_recap_model: ClaudeModel // Model for generating session recaps
   parallel_execution_prompt_enabled: boolean // Add system prompt to encourage parallel sub-agent execution
@@ -372,16 +373,24 @@ export const thinkingLevelOptions: { value: ThinkingLevel; label: string }[] = [
   { value: 'ultrathink', label: 'Ultrathink (32K)' },
 ]
 
-export const codexReasoningEffortOptions: { value: ThinkingLevel; label: string }[] =
-  [
-    { value: 'minimal', label: 'Minimal' },
-    { value: 'low', label: 'Low' },
-    { value: 'medium', label: 'Medium' },
-    { value: 'high', label: 'High' },
-    { value: 'xhigh', label: 'xhigh' },
-  ]
+export const codexReasoningEffortOptions: {
+  value: ThinkingLevel
+  label: string
+}[] = [
+  { value: 'minimal', label: 'Minimal' },
+  { value: 'low', label: 'Low' },
+  { value: 'medium', label: 'Medium' },
+  { value: 'high', label: 'High' },
+  { value: 'xhigh', label: 'xhigh' },
+]
 
-export type TerminalApp = 'terminal' | 'warp' | 'ghostty' | 'windows-terminal' | 'powershell' | 'cmd'
+export type TerminalApp =
+  | 'terminal'
+  | 'warp'
+  | 'ghostty'
+  | 'windows-terminal'
+  | 'powershell'
+  | 'cmd'
 
 export const terminalOptions: { value: TerminalApp; label: string }[] =
   navigator.platform.startsWith('Win')
@@ -552,6 +561,7 @@ export const defaultPreferences: AppPreferences = {
   syntax_theme_light: 'github-light',
   disable_thinking_in_non_plan_modes: true, // Default: only plan mode uses thinking
   codex_disable_reasoning_in_non_plan_modes: true, // Default: only plan mode uses higher reasoning effort
+  codex_build_network_access: false,
   session_recap_enabled: false, // Default: disabled (experimental)
   session_recap_model: 'haiku', // Default: haiku for fast recaps
   parallel_execution_prompt_enabled: false, // Default: disabled (experimental)

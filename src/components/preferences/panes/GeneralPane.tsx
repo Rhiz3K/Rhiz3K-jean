@@ -8,8 +8,16 @@ import { Separator } from '@/components/ui/separator'
 import { Switch } from '@/components/ui/switch'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { useClaudeCliStatus, useClaudeCliAuth, claudeCliQueryKeys } from '@/services/claude-cli'
-import { useCodexCliStatus, useCodexCliAuth, codexCliQueryKeys } from '@/services/codex-cli'
+import {
+  useClaudeCliStatus,
+  useClaudeCliAuth,
+  claudeCliQueryKeys,
+} from '@/services/claude-cli'
+import {
+  useCodexCliStatus,
+  useCodexCliAuth,
+  codexCliQueryKeys,
+} from '@/services/codex-cli'
 import { useGhCliStatus, useGhCliAuth, ghCliQueryKeys } from '@/services/gh-cli'
 import { useUIStore } from '@/store/ui-store'
 import type { ClaudeAuthStatus } from '@/types/claude-cli'
@@ -88,7 +96,9 @@ const InlineField: React.FC<{
     <div className="w-96 shrink-0 space-y-0.5">
       <Label className="text-sm text-foreground">{label}</Label>
       {description && (
-        <div className="text-xs text-muted-foreground truncate">{description}</div>
+        <div className="text-xs text-muted-foreground truncate">
+          {description}
+        </div>
       )}
     </div>
     {children}
@@ -108,9 +118,11 @@ export const GeneralPane: React.FC = () => {
   const { data: ghStatus, isLoading: isGhLoading } = useGhCliStatus()
 
   // Auth status queries - only enabled when CLI is installed
-  const { data: claudeAuth, isLoading: isClaudeAuthLoading } = useClaudeCliAuth({
-    enabled: !!cliStatus?.installed,
-  })
+  const { data: claudeAuth, isLoading: isClaudeAuthLoading } = useClaudeCliAuth(
+    {
+      enabled: !!cliStatus?.installed,
+    }
+  )
   const { data: codexAuth, isLoading: isCodexAuthLoading } = useCodexCliAuth({
     enabled: !!codexStatus?.installed,
   })
@@ -259,8 +271,12 @@ export const GeneralPane: React.FC = () => {
     setCheckingClaudeAuth(true)
     try {
       // Invalidate cache and refetch to get fresh status
-      await queryClient.invalidateQueries({ queryKey: claudeCliQueryKeys.auth() })
-      const result = await queryClient.fetchQuery<ClaudeAuthStatus>({ queryKey: claudeCliQueryKeys.auth() })
+      await queryClient.invalidateQueries({
+        queryKey: claudeCliQueryKeys.auth(),
+      })
+      const result = await queryClient.fetchQuery<ClaudeAuthStatus>({
+        queryKey: claudeCliQueryKeys.auth(),
+      })
 
       if (result?.authenticated) {
         toast.success('Claude CLI is already authenticated')
@@ -287,7 +303,9 @@ export const GeneralPane: React.FC = () => {
     try {
       // Invalidate cache and refetch to get fresh status
       await queryClient.invalidateQueries({ queryKey: ghCliQueryKeys.auth() })
-      const result = await queryClient.fetchQuery<GhAuthStatus>({ queryKey: ghCliQueryKeys.auth() })
+      const result = await queryClient.fetchQuery<GhAuthStatus>({
+        queryKey: ghCliQueryKeys.auth(),
+      })
 
       if (result?.authenticated) {
         toast.success('GitHub CLI is already authenticated')
@@ -312,7 +330,9 @@ export const GeneralPane: React.FC = () => {
     // First check if already authenticated
     setCheckingCodexAuth(true)
     try {
-      await queryClient.invalidateQueries({ queryKey: codexCliQueryKeys.auth() })
+      await queryClient.invalidateQueries({
+        queryKey: codexCliQueryKeys.auth(),
+      })
       const result = await queryClient.fetchQuery<CodexAuthStatus>({
         queryKey: codexCliQueryKeys.auth(),
       })
@@ -362,11 +382,7 @@ export const GeneralPane: React.FC = () => {
             ) : claudeAuth?.authenticated ? (
               <span className="text-sm text-muted-foreground">Logged in</span>
             ) : (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleClaudeLogin}
-              >
+              <Button variant="outline" size="sm" onClick={handleClaudeLogin}>
                 Login
               </Button>
             )
@@ -427,11 +443,7 @@ export const GeneralPane: React.FC = () => {
             ) : ghAuth?.authenticated ? (
               <span className="text-sm text-muted-foreground">Logged in</span>
             ) : (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleGhLogin}
-              >
+              <Button variant="outline" size="sm" onClick={handleGhLogin}>
                 Login
               </Button>
             )
@@ -469,10 +481,7 @@ export const GeneralPane: React.FC = () => {
                 <ChevronDown className="size-3" />
               </Button>
             ) : (
-              <Button
-                className="w-40"
-                onClick={() => openCliUpdateModal('gh')}
-              >
+              <Button className="w-40" onClick={() => openCliUpdateModal('gh')}>
                 Install
               </Button>
             )}
@@ -492,11 +501,7 @@ export const GeneralPane: React.FC = () => {
             ) : codexAuth?.authenticated ? (
               <span className="text-sm text-muted-foreground">Logged in</span>
             ) : (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleCodexLogin}
-              >
+              <Button variant="outline" size="sm" onClick={handleCodexLogin}>
                 Login
               </Button>
             )
@@ -689,6 +694,23 @@ export const GeneralPane: React.FC = () => {
               }}
             />
           </InlineField>
+
+          <InlineField
+            label="Allow network in build mode"
+            description="Enable outbound network inside Codex workspace-write sandbox (needed for gh and some CLIs)"
+          >
+            <Switch
+              checked={preferences?.codex_build_network_access ?? false}
+              onCheckedChange={checked => {
+                if (preferences) {
+                  savePreferences.mutate({
+                    ...preferences,
+                    codex_build_network_access: checked,
+                  })
+                }
+              }}
+            />
+          </InlineField>
         </div>
       </SettingsSection>
 
@@ -790,7 +812,6 @@ export const GeneralPane: React.FC = () => {
               </SelectContent>
             </Select>
           </InlineField>
-
         </div>
       </SettingsSection>
 
@@ -902,7 +923,10 @@ export const GeneralPane: React.FC = () => {
         </div>
       </SettingsSection>
 
-      <AlertDialog open={showDeleteAllDialog} onOpenChange={setShowDeleteAllDialog}>
+      <AlertDialog
+        open={showDeleteAllDialog}
+        onOpenChange={setShowDeleteAllDialog}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete all archives?</AlertDialogTitle>
