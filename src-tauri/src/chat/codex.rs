@@ -84,13 +84,6 @@ fn build_codex_args_detached(
 
     let mode = execution_mode.unwrap_or("plan");
 
-    // Global flags (must appear before `exec`)
-    //
-    // Jean runs Codex in detached/non-interactive mode, so we must never block
-    // waiting for interactive approvals.
-    args.push("--ask-for-approval".to_string());
-    args.push("never".to_string());
-
     // Enable live web search (Codex Responses web_search tool)
     args.push("--search".to_string());
 
@@ -100,6 +93,11 @@ fn build_codex_args_detached(
     // - yolo: bypass approvals + sandbox (no sandbox; dangerous)
     match mode {
         "build" => {
+            // Detached BUILD runs must never block waiting for approvals.
+            // (Interactive BUILD mode uses PTY + UI approvals instead.)
+            args.push("--ask-for-approval".to_string());
+            args.push("never".to_string());
+
             args.push("--sandbox".to_string());
             args.push("workspace-write".to_string());
             // Allow outbound network inside the workspace-write sandbox so `gh` works.
@@ -110,6 +108,10 @@ fn build_codex_args_detached(
             args.push("--dangerously-bypass-approvals-and-sandbox".to_string());
         }
         _ => {
+            // Detached PLAN runs must never block waiting for approvals.
+            args.push("--ask-for-approval".to_string());
+            args.push("never".to_string());
+
             args.push("--sandbox".to_string());
             args.push("read-only".to_string());
         }
@@ -1456,10 +1458,11 @@ mod tests {
     fn codex_args_global_flags_are_first() {
         let args = args_for(None, Some("plan"), Some("gpt-5.2-codex"), None);
         let exec_idx = args.iter().position(|a| a == "exec").unwrap();
-        assert_eq!(args.get(0).map(String::as_str), Some("--ask-for-approval"));
-        assert_eq!(args.get(1).map(String::as_str), Some("never"));
-        assert_eq!(args.get(2).map(String::as_str), Some("--search"));
-        assert!(exec_idx > 2);
+        assert_eq!(args.get(0).map(String::as_str), Some("--search"));
+        // plan/build detached runs also include `--ask-for-approval never` (before `exec`)
+        assert!(args.iter().any(|a| a == "--ask-for-approval"));
+        assert!(args.iter().any(|a| a == "never"));
+        assert!(exec_idx > 0);
     }
 
     #[test]
