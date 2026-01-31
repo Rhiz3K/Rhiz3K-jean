@@ -749,6 +749,33 @@ pub struct AllSessionsResponse {
 // Run Types (for NDJSON-based persistence)
 // ============================================================================
 
+/// Snapshot of the effective execution policy for a run.
+///
+/// This is persisted for debug/restore so the UI can show what capabilities were
+/// actually enabled (vs what the current preferences are).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RunPolicySnapshot {
+    /// Whether Codex web search was enabled for the run.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub codex_search: Option<bool>,
+
+    /// Codex sandbox mode ("read-only", "workspace-write"), if any.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub codex_sandbox: Option<String>,
+
+    /// Whether outbound network was enabled inside the workspace-write sandbox.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub codex_build_network_access: Option<bool>,
+
+    /// Codex ask-for-approval policy (e.g. "never"), if set.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub codex_ask_for_approval: Option<String>,
+
+    /// Whether Codex ran with bypass approvals + sandbox (YOLO).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub codex_bypass_approvals_and_sandbox: Option<bool>,
+}
+
 /// Status of a Claude CLI run
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
@@ -783,9 +810,9 @@ pub struct RunEntry {
     /// Thinking level (off, think, megathink, ultrathink)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub thinking_level: Option<String>,
-    /// Effort level for Opus 4.6 adaptive thinking (low, medium, high, max)
+    /// Snapshot of the effective policy/capabilities for this run
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub effort_level: Option<String>,
+    pub policy: Option<RunPolicySnapshot>,
     /// Unix timestamp when run started
     pub started_at: u64,
     /// Unix timestamp when run ended (None if still running)
@@ -923,6 +950,18 @@ pub struct RunLogFileInfo {
     /// Token usage for this run (if completed)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub usage: Option<UsageData>,
+
+    /// Which agent/provider produced the output for this run
+    #[serde(default)]
+    pub agent: ChatAgent,
+
+    /// Execution mode (plan, build, yolo)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub execution_mode: Option<String>,
+
+    /// Snapshot of the effective policy/capabilities for this run
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub policy: Option<RunPolicySnapshot>,
 }
 
 /// Debug information about a session's storage
@@ -1390,7 +1429,7 @@ mod tests {
             model: None,
             execution_mode: None,
             thinking_level: None,
-            effort_level: None,
+            policy: None,
             started_at: 1234567890,
             ended_at: None,
             status: RunStatus::Running,
@@ -1428,7 +1467,7 @@ mod tests {
             model: None,
             execution_mode: None,
             thinking_level: None,
-            effort_level: None,
+            policy: None,
             started_at: 1234567890,
             ended_at: None,
             status: RunStatus::Completed,
@@ -1452,7 +1491,7 @@ mod tests {
             model: None,
             execution_mode: None,
             thinking_level: None,
-            effort_level: None,
+            policy: None,
             started_at: 1234567891,
             ended_at: None,
             status: RunStatus::Completed,

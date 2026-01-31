@@ -14,7 +14,8 @@ use super::storage::{
     get_session_dir, list_all_session_ids, load_metadata, save_metadata, with_metadata_mut,
 };
 use super::types::{
-    ChatAgent, ChatMessage, ContentBlock, MessageRole, RunEntry, RunStatus, ToolCall, UsageData,
+    ChatAgent, ChatMessage, ContentBlock, MessageRole, RunEntry, RunPolicySnapshot, RunStatus,
+    ToolCall, UsageData,
 };
 
 // ============================================================================
@@ -269,7 +270,7 @@ pub fn start_run(
     model: Option<&str>,
     execution_mode: Option<&str>,
     thinking_level: Option<&str>,
-    effort_level: Option<&str>,
+    policy: Option<RunPolicySnapshot>,
     agent: ChatAgent,
 ) -> Result<RunLogWriter, String> {
     let run_id = Uuid::new_v4().to_string();
@@ -300,6 +301,7 @@ pub fn start_run(
         "model": model,
         "execution_mode": execution_mode,
         "thinking_level": thinking_level,
+        "policy": policy,
         "started_at": now,
     });
     writeln!(file, "{meta}").map_err(|e| format!("Failed to write run log header: {e}"))?;
@@ -315,7 +317,7 @@ pub fn start_run(
         model: model.map(|s| s.to_string()),
         execution_mode: execution_mode.map(|s| s.to_string()),
         thinking_level: thinking_level.map(|s| s.to_string()),
-        effort_level: effort_level.map(|s| s.to_string()),
+        policy,
         started_at: now,
         ended_at: None,
         status: RunStatus::Running,
@@ -402,12 +404,14 @@ pub fn write_input_file(
 ///
 /// Codex accepts the prompt from stdin when you pass `-` as the PROMPT argument.
 /// We write the prompt content verbatim to the input file.
+#[allow(clippy::too_many_arguments)]
 pub fn write_codex_input_file(
     app: &tauri::AppHandle,
     session_id: &str,
     run_id: &str,
     message: &str,
     execution_mode: Option<&str>,
+    codex_build_network_access: bool,
     ai_language: Option<&str>,
     parallel_execution_prompt_enabled: bool,
 ) -> Result<PathBuf, String> {
@@ -437,15 +441,28 @@ In build/execute mode, try to parallelize work for faster implementation.\n\n",
     // Jean runs Codex with a sandbox in plan/build modes. In some environments this blocks
     // outbound network access, so commands that hit GitHub APIs (e.g. `gh repo list`) will fail.
     // In yolo mode we bypass the sandbox.
-    match execution_mode.unwrap_or("plan") {
-        "plan" => {
+    {
+        use super::mode_policy::{codex_detached_policy, CodexSandbox, ExecutionMode};
+        let mode = ExecutionMode::from_optional_str(execution_mode);
+        let mut policy = codex_detached_policy(mode);
+        if mode == ExecutionMode::Build {
+            policy.workspace_write_network_access = codex_build_network_access;
+        }
+
+        if policy.sandbox == Some(CodexSandbox::ReadOnly) {
             prompt.push_str(
                 "Note: In plan mode, Codex runs in a read-only sandbox that disables outbound network. \
 Avoid using `gh`/GitHub API calls here. If GitHub data is required, ask the user to: \
 (1) switch to Build/YOLO mode, or (2) run the command externally and paste the output.\n\n",
             );
         }
-        _ => {}
+
+        if mode == ExecutionMode::Build && !policy.workspace_write_network_access {
+            prompt.push_str(
+                "Note: In build mode, Codex runs in a workspace-write sandbox with outbound network disabled by default. \
+Commands like `gh` may fail. If needed, enable: Settings > General > Codex > Allow network in build mode.\n\n",
+            );
+        }
     }
 
     prompt.push_str(message);
@@ -745,6 +762,7 @@ fn parse_codex_run_to_message(lines: &[String], run: &RunEntry) -> Result<ChatMe
     })
 }
 
+#[allow(clippy::too_many_arguments)]
 fn apply_codex_item_to_message(
     item: &super::codex_exec::CodexThreadItem,
     content: &mut String,

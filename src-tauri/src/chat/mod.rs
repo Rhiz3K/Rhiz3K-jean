@@ -5,6 +5,7 @@ pub mod detached;
 pub mod events;
 mod codex;
 mod naming;
+mod mode_policy;
 pub mod registry;
 pub mod run_log;
 pub mod storage;

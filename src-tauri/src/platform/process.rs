@@ -8,6 +8,9 @@ use std::process::Command;
 pub fn silent_command<S: AsRef<std::ffi::OsStr>>(program: S) -> Command {
     #[allow(unused_mut)]
     let mut cmd = Command::new(program);
+    #[cfg(not(windows))]
+    let cmd = Command::new(program);
+
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;

@@ -74,6 +74,19 @@ pub struct CancelledEvent {
     pub undo_send: bool, // True if user message should be restored to input (instant cancellation)
 }
 
+/// Payload for non-fatal streaming warnings.
+///
+/// This is emitted when the backend detects an issue while tailing/parsing the
+/// agent stream, but can continue.
+#[derive(serde::Serialize, Clone)]
+pub struct StreamWarningEvent {
+    pub session_id: String,
+    pub worktree_id: String, // Kept for backward compatibility
+    pub message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub line_preview: Option<String>,
+}
+
 /// A single permission denial for the permission approval UI.
 #[derive(serde::Serialize, Clone)]
 pub struct PermissionDenialEvent {
