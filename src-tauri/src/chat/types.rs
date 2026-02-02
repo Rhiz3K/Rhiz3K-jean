@@ -281,6 +281,9 @@ pub struct Session {
     pub name: String,
     /// Order index for tab ordering (0-indexed)
     pub order: u32,
+    /// Fixed agent/provider for this session (cannot be changed mid-session)
+    #[serde(default)]
+    pub agent: ChatAgent,
     /// Unix timestamp when session was created
     pub created_at: u64,
     /// Chat messages for this session
@@ -345,6 +348,7 @@ impl Session {
             id: uuid::Uuid::new_v4().to_string(),
             name,
             order,
+            agent: ChatAgent::Claude,
             created_at: std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap_or_default()
@@ -367,6 +371,13 @@ impl Session {
             waiting_for_input: false,
             approved_plan_message_ids: vec![],
         }
+    }
+
+    /// Create a new session with an explicit agent
+    pub fn new_with_agent(name: String, order: u32, agent: ChatAgent) -> Self {
+        let mut session = Self::new(name, order);
+        session.agent = agent;
+        session
     }
 
     /// Create a default "Session 1" session
@@ -481,6 +492,7 @@ impl SessionMetadata {
             id: self.id.clone(),
             name: self.name.clone(),
             order: self.order,
+            agent: self.agent.clone(),
             created_at: self.created_at,
             messages: vec![], // Loaded separately from JSONL files
             message_count: Some(self.to_index_entry().message_count),
@@ -505,6 +517,7 @@ impl SessionMetadata {
     pub fn update_from_session(&mut self, session: &Session) {
         self.name = session.name.clone();
         self.order = session.order;
+        self.agent = session.agent.clone();
         self.claude_session_id = session.claude_session_id.clone();
         self.codex_session_id = session.codex_session_id.clone();
         self.selected_model = session.selected_model.clone();
@@ -773,6 +786,9 @@ pub struct SessionMetadata {
     pub name: String,
     /// Order index for tab ordering (0-indexed)
     pub order: u32,
+    /// Fixed agent/provider for this session
+    #[serde(default)]
+    pub agent: ChatAgent,
     /// Unix timestamp when session was created
     pub created_at: u64,
     /// Claude CLI session ID for resuming conversations
@@ -898,6 +914,7 @@ impl SessionMetadata {
             worktree_id,
             name: session_name,
             order,
+            agent: ChatAgent::Claude,
             created_at: std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap_or_default()

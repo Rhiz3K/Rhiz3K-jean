@@ -34,6 +34,7 @@ import {
   useArchivedWorktrees,
   useUnarchiveWorktree,
   usePermanentlyDeleteWorktree,
+  useCloseBaseSessionClean,
 } from '@/services/projects'
 import { useProjects } from '@/services/projects'
 import {
@@ -46,6 +47,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useProjectsStore } from '@/store/projects-store'
 import { useChatStore } from '@/store/chat-store'
 import type { Worktree, Project } from '@/types/projects'
+import { isBaseSession } from '@/types/projects'
 import type { ArchivedSessionEntry } from '@/types/chat'
 
 interface ArchivedModalProps {
@@ -118,6 +120,7 @@ export function ArchivedModal({ open, onOpenChange }: ArchivedModalProps) {
   // Worktree mutations
   const unarchiveWorktree = useUnarchiveWorktree()
   const permanentlyDeleteWorktree = usePermanentlyDeleteWorktree()
+  const closeBaseSessionClean = useCloseBaseSessionClean()
 
   // Session mutations
   const unarchiveSession = useUnarchiveSession()
@@ -428,16 +431,35 @@ export function ArchivedModal({ open, onOpenChange }: ArchivedModalProps) {
     }
 
     if (deleteConfirm.type === 'worktree') {
-      permanentlyDeleteWorktree.mutate(deleteConfirm.item.id, {
-        onSuccess: () => {
-          setDeleteConfirm(null)
-          const remainingWorktrees = (archivedWorktrees?.length ?? 0) - 1
-          const remainingSessions = archivedSessions?.length ?? 0
-          if (remainingWorktrees <= 0 && remainingSessions <= 0) {
-            onOpenChange(false)
+      if (isBaseSession(deleteConfirm.item)) {
+        closeBaseSessionClean.mutate(
+          {
+            worktreeId: deleteConfirm.item.id,
+            projectId: deleteConfirm.item.project_id,
+          },
+          {
+            onSuccess: () => {
+              setDeleteConfirm(null)
+              const remainingWorktrees = (archivedWorktrees?.length ?? 0) - 1
+              const remainingSessions = archivedSessions?.length ?? 0
+              if (remainingWorktrees <= 0 && remainingSessions <= 0) {
+                onOpenChange(false)
+              }
+            },
           }
-        },
-      })
+        )
+      } else {
+        permanentlyDeleteWorktree.mutate(deleteConfirm.item.id, {
+          onSuccess: () => {
+            setDeleteConfirm(null)
+            const remainingWorktrees = (archivedWorktrees?.length ?? 0) - 1
+            const remainingSessions = archivedSessions?.length ?? 0
+            if (remainingWorktrees <= 0 && remainingSessions <= 0) {
+              onOpenChange(false)
+            }
+          },
+        })
+      }
     } else {
       const entry = deleteConfirm.item
       deleteArchivedSession.mutate(
@@ -692,7 +714,9 @@ export function ArchivedModal({ open, onOpenChange }: ArchivedModalProps) {
               {deleteConfirm?.type === 'all'
                 ? 'Delete all archives?'
                 : deleteConfirm?.type === 'worktree'
-                  ? 'Permanently delete worktree?'
+                  ? isBaseSession(deleteConfirm.item)
+                    ? 'Delete session?'
+                    : 'Permanently delete worktree?'
                   : 'Permanently delete session?'}
             </AlertDialogTitle>
             <AlertDialogDescription>
@@ -704,9 +728,19 @@ export function ArchivedModal({ open, onOpenChange }: ArchivedModalProps) {
                 </>
               ) : deleteConfirm?.type === 'worktree' ? (
                 <>
-                  This will permanently delete the worktree &quot;
-                  {deleteConfirm.item.name}&quot; and its git branch. This
-                  action cannot be undone.
+                  {isBaseSession(deleteConfirm.item) ? (
+                    <>
+                      This will permanently delete the base session &quot;
+                      {deleteConfirm.item.name}&quot; and its chat history. The
+                      next time you open a base session, it will start fresh.
+                    </>
+                  ) : (
+                    <>
+                      This will permanently delete the worktree &quot;
+                      {deleteConfirm.item.name}&quot; and its git branch. This
+                      action cannot be undone.
+                    </>
+                  )}
                 </>
               ) : deleteConfirm?.type === 'session' ? (
                 <>
@@ -727,6 +761,7 @@ export function ArchivedModal({ open, onOpenChange }: ArchivedModalProps) {
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               {permanentlyDeleteWorktree.isPending ||
+              closeBaseSessionClean.isPending ||
               deleteArchivedSession.isPending ||
               isDeletingAll ? (
                 <Loader2 className="h-4 w-4 animate-spin mr-2" />

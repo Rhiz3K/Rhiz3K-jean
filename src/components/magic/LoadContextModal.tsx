@@ -37,9 +37,10 @@ import { Input } from '@/components/ui/input'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Markdown } from '@/components/ui/markdown'
 import { cn } from '@/lib/utils'
-import { useAllSessions } from '@/services/chat'
+import { chatQueryKeys, useAllSessions } from '@/services/chat'
 import type {
   AllSessionsEntry,
+  ChatAgent,
   SavedContext,
   SavedContextsResponse,
   SaveContextResponse,
@@ -759,8 +760,13 @@ export function LoadContextModal({
 
       setGeneratingSessionId(session.id)
       try {
-        const agent =
-          preferences?.magic_prompt_agents?.context_summary_model ?? 'claude'
+        const pinnedAgent = activeSessionId
+          ? (queryClient.getQueryData<Session>(
+              chatQueryKeys.session(activeSessionId)
+            )?.agent ?? null)
+          : null
+
+        const agent = (pinnedAgent ?? 'claude') as ChatAgent
         const model =
           agent === 'codex'
             ? preferences?.magic_prompt_codex_models?.context_summary_model
@@ -812,11 +818,12 @@ export function LoadContextModal({
       }
     },
     [
+      activeSessionId,
+      queryClient,
       worktreeId,
       refetchContexts,
       refetchAttachedContexts,
       preferences?.magic_prompts?.context_summary,
-      preferences?.magic_prompt_agents?.context_summary_model,
       preferences?.magic_prompt_models?.context_summary_model,
       preferences?.magic_prompt_codex_models?.context_summary_model,
       preferences?.magic_prompt_codex_reasoning_efforts?.context_summary_model,

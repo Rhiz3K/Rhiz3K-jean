@@ -33,6 +33,7 @@ import { isBaseSession, type Worktree } from '@/types/projects'
 import {
   useArchiveWorktree,
   useCloseBaseSession,
+  useCloseBaseSessionClean,
   useDeleteWorktree,
   useOpenWorktreeInFinder,
   useOpenWorktreeInTerminal,
@@ -60,8 +61,10 @@ export function WorktreeContextMenu({
   children,
 }: WorktreeContextMenuProps) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [showDeleteBaseConfirm, setShowDeleteBaseConfirm] = useState(false)
   const archiveWorktree = useArchiveWorktree()
   const closeBaseSession = useCloseBaseSession()
+  const closeBaseSessionClean = useCloseBaseSessionClean()
   const deleteWorktree = useDeleteWorktree()
   const openInFinder = useOpenWorktreeInFinder()
   const openInTerminal = useOpenWorktreeInTerminal()
@@ -109,17 +112,23 @@ export function WorktreeContextMenu({
 
   const handleArchiveOrClose = () => {
     if (isBase) {
-      // Base sessions are closed (removed from list), not archived
+      // Base sessions are closed (removed from list). This preserves session history.
       closeBaseSession.mutate({ worktreeId: worktree.id, projectId })
-    } else {
-      // Regular worktrees are archived (can be restored later)
-      archiveWorktree.mutate({ worktreeId: worktree.id, projectId })
+      return
     }
+
+    // Regular worktrees are archived (can be restored later)
+    archiveWorktree.mutate({ worktreeId: worktree.id, projectId })
   }
 
   const handleDelete = () => {
     deleteWorktree.mutate({ worktreeId: worktree.id, projectId })
     setShowDeleteConfirm(false)
+  }
+
+  const handleDeleteBaseSession = () => {
+    closeBaseSessionClean.mutate({ worktreeId: worktree.id, projectId })
+    setShowDeleteBaseConfirm(false)
   }
 
   const handleOpenJeanConfig = () => {
@@ -215,7 +224,7 @@ export function WorktreeContextMenu({
           {isBase ? (
             <>
               <X className="mr-2 h-4 w-4" />
-              Close Session
+              Archive Session
             </>
           ) : (
             <>
@@ -225,6 +234,13 @@ export function WorktreeContextMenu({
           )}
         </ContextMenuItem>
 
+        {isBase && (
+          <ContextMenuItem onClick={() => setShowDeleteBaseConfirm(true)}>
+            <Trash2 className="mr-2 h-4 w-4 text-destructive" />
+            Delete Session
+          </ContextMenuItem>
+        )}
+
         {!isBase && (
           <ContextMenuItem onClick={() => setShowDeleteConfirm(true)}>
             <Trash2 className="mr-2 h-4 w-4 text-destructive" />
@@ -232,6 +248,31 @@ export function WorktreeContextMenu({
           </ContextMenuItem>
         )}
       </ContextMenuContent>
+
+      <AlertDialog
+        open={showDeleteBaseConfirm}
+        onOpenChange={setShowDeleteBaseConfirm}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Session</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will close the base session and permanently delete its chat
+              history. The next time you open a base session, it will start
+              fresh.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteBaseSession}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
         <AlertDialogContent>

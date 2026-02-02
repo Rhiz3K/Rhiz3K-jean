@@ -8,6 +8,8 @@ import { useChatStore } from '@/store/chat-store'
 import { useCommandContext } from './use-command-context'
 import { defaultPreferences, type AppPreferences } from '@/types/preferences'
 import type { ReviewResponse } from '@/types/projects'
+import type { Session } from '@/types/chat'
+import { chatQueryKeys } from '@/services/chat'
 
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(),
@@ -43,6 +45,7 @@ describe('useCommandContext', () => {
     useChatStore.setState({
       activeWorktreeId: 'w1',
       activeWorktreePath: '/tmp/w1',
+      activeSessionIds: { w1: 's1' },
     })
   })
 
@@ -59,10 +62,6 @@ describe('useCommandContext', () => {
       magic_prompts: {
         ...defaultPreferences.magic_prompts,
         code_review: 'custom review prompt',
-      },
-      magic_prompt_agents: {
-        ...defaultPreferences.magic_prompt_agents,
-        code_review_model: 'codex',
       },
       magic_prompt_codex_models: {
         ...defaultPreferences.magic_prompt_codex_models,
@@ -93,6 +92,11 @@ describe('useCommandContext', () => {
       )
 
     const { result } = renderHook(() => useCommandContext(prefs), { wrapper })
+
+    qc.setQueryData(chatQueryKeys.session('s1'), {
+      id: 's1',
+      agent: 'codex',
+    } as unknown as Session)
 
     await result.current.runAIReview()
 

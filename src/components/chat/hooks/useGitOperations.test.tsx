@@ -60,10 +60,6 @@ describe('useGitOperations', () => {
         ...defaultPreferences.magic_prompts,
         commit_message: 'custom commit prompt',
       },
-      magic_prompt_agents: {
-        ...defaultPreferences.magic_prompt_agents,
-        commit_message_model: 'codex',
-      },
       magic_prompt_codex_models: {
         ...defaultPreferences.magic_prompt_codex_models,
         commit_message_model: 'gpt-5.2',
@@ -87,6 +83,7 @@ describe('useGitOperations', () => {
       useGitOperations({
         activeWorktreeId: 'w1',
         activeWorktreePath: '/tmp/w1',
+        activeSession: { id: 's1', agent: 'codex' } as unknown as Session,
         worktree: null,
         project: null,
         queryClient,
@@ -114,10 +111,6 @@ describe('useGitOperations', () => {
         ...defaultPreferences.magic_prompts,
         commit_message: 'custom commit prompt',
       },
-      magic_prompt_agents: {
-        ...defaultPreferences.magic_prompt_agents,
-        commit_message_model: 'claude',
-      },
       magic_prompt_models: {
         ...defaultPreferences.magic_prompt_models,
         commit_message_model: 'haiku',
@@ -137,6 +130,7 @@ describe('useGitOperations', () => {
       useGitOperations({
         activeWorktreeId: 'w1',
         activeWorktreePath: '/tmp/w1',
+        activeSession: { id: 's1', agent: 'claude' } as unknown as Session,
         worktree: null,
         project: null,
         queryClient,
@@ -163,10 +157,6 @@ describe('useGitOperations', () => {
       magic_prompts: {
         ...defaultPreferences.magic_prompts,
         pr_content: 'custom pr prompt',
-      },
-      magic_prompt_agents: {
-        ...defaultPreferences.magic_prompt_agents,
-        pr_content_model: 'codex',
       },
       magic_prompt_codex_models: {
         ...defaultPreferences.magic_prompt_codex_models,
@@ -200,6 +190,7 @@ describe('useGitOperations', () => {
       useGitOperations({
         activeWorktreeId: 'w1',
         activeWorktreePath: '/tmp/w1',
+        activeSession: { id: 's1', agent: 'codex' } as unknown as Session,
         worktree,
         project: null,
         queryClient,
@@ -226,10 +217,6 @@ describe('useGitOperations', () => {
         ...defaultPreferences.magic_prompts,
         code_review: 'custom review prompt',
       },
-      magic_prompt_agents: {
-        ...defaultPreferences.magic_prompt_agents,
-        code_review_model: 'codex',
-      },
       magic_prompt_codex_models: {
         ...defaultPreferences.magic_prompt_codex_models,
         code_review_model: 'gpt-5.2-codex',
@@ -253,6 +240,7 @@ describe('useGitOperations', () => {
       useGitOperations({
         activeWorktreeId: 'w1',
         activeWorktreePath: '/tmp/w1',
+        activeSession: { id: 's1', agent: 'codex' } as unknown as Session,
         worktree: null,
         project: null,
         queryClient,
@@ -272,7 +260,7 @@ describe('useGitOperations', () => {
     })
   })
 
-  it('resolve conflicts creates a new session and applies per-magic agent/model defaults (Codex)', async () => {
+  it('resolve conflicts creates a new session and applies per-magic model defaults (Codex)', async () => {
     vi.useFakeTimers()
 
     const preferences: AppPreferences = {
@@ -280,10 +268,6 @@ describe('useGitOperations', () => {
       magic_prompts: {
         ...defaultPreferences.magic_prompts,
         resolve_conflicts: 'custom resolve instructions',
-      },
-      magic_prompt_agents: {
-        ...defaultPreferences.magic_prompt_agents,
-        resolve_conflicts_model: 'codex',
       },
       magic_prompt_codex_models: {
         ...defaultPreferences.magic_prompt_codex_models,
@@ -307,6 +291,7 @@ describe('useGitOperations', () => {
       order: 0,
       created_at: 0,
       messages: [],
+      agent: 'codex',
     }
 
     vi.mocked(invoke).mockImplementation(async (cmd: string) => {
@@ -333,6 +318,7 @@ describe('useGitOperations', () => {
       useGitOperations({
         activeWorktreeId: 'w1',
         activeWorktreePath: '/tmp/w1',
+        activeSession: { id: 's1', agent: 'codex' } as unknown as Session,
         worktree,
         project: null,
         queryClient,
@@ -346,7 +332,6 @@ describe('useGitOperations', () => {
 
     const state = useChatStore.getState()
     expect(state.activeSessionIds['w1']).toBe('s-new')
-    expect(state.agents['s-new']).toBe('codex')
     expect(state.selectedModels['s-new']).toBe('gpt-5.2')
     expect(state.thinkingLevels['s-new']).toBe('low')
     expect(state.inputDrafts['s-new']).toContain('custom resolve instructions')
@@ -360,10 +345,6 @@ describe('useGitOperations', () => {
       magic_prompts: {
         ...defaultPreferences.magic_prompts,
         resolve_conflicts: 'custom resolve instructions',
-      },
-      magic_prompt_agents: {
-        ...defaultPreferences.magic_prompt_agents,
-        resolve_conflicts_model: 'claude',
       },
       magic_prompt_models: {
         ...defaultPreferences.magic_prompt_models,
@@ -383,6 +364,7 @@ describe('useGitOperations', () => {
       order: 0,
       created_at: 0,
       messages: [],
+      agent: 'claude',
     }
 
     vi.mocked(invoke).mockImplementation(async (cmd: string) => {
@@ -416,6 +398,7 @@ describe('useGitOperations', () => {
       useGitOperations({
         activeWorktreeId: 'w1',
         activeWorktreePath: '/tmp/w1',
+        activeSession: { id: 's1', agent: 'claude' } as unknown as Session,
         worktree,
         project,
         queryClient,

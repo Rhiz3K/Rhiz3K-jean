@@ -11,7 +11,6 @@ import type { AppPreferences } from '@/types/preferences'
 import {
   FONT_SIZE_DEFAULT,
   DEFAULT_MAGIC_PROMPTS,
-  DEFAULT_MAGIC_PROMPT_AGENTS,
   DEFAULT_MAGIC_PROMPT_MODELS,
   DEFAULT_MAGIC_PROMPT_CODEX_MODELS,
   DEFAULT_MAGIC_PROMPT_CODEX_REASONING_EFFORTS,
@@ -111,7 +110,6 @@ describe('preferences service', () => {
         session_recap_model: 'haiku',
         parallel_execution_prompt_enabled: false,
         magic_prompts: DEFAULT_MAGIC_PROMPTS,
-        magic_prompt_agents: DEFAULT_MAGIC_PROMPT_AGENTS,
         magic_prompt_models: DEFAULT_MAGIC_PROMPT_MODELS,
         magic_prompt_codex_models: DEFAULT_MAGIC_PROMPT_CODEX_MODELS,
         magic_prompt_codex_reasoning_efforts:
@@ -197,7 +195,6 @@ describe('preferences service', () => {
         session_recap_model: 'haiku',
         parallel_execution_prompt_enabled: false,
         magic_prompts: DEFAULT_MAGIC_PROMPTS,
-        magic_prompt_agents: DEFAULT_MAGIC_PROMPT_AGENTS,
         magic_prompt_models: DEFAULT_MAGIC_PROMPT_MODELS,
         magic_prompt_codex_models: DEFAULT_MAGIC_PROMPT_CODEX_MODELS,
         magic_prompt_codex_reasoning_efforts:
@@ -260,7 +257,6 @@ describe('preferences service', () => {
         session_recap_model: 'haiku',
         parallel_execution_prompt_enabled: false,
         magic_prompts: DEFAULT_MAGIC_PROMPTS,
-        magic_prompt_agents: DEFAULT_MAGIC_PROMPT_AGENTS,
         magic_prompt_models: DEFAULT_MAGIC_PROMPT_MODELS,
         magic_prompt_codex_models: DEFAULT_MAGIC_PROMPT_CODEX_MODELS,
         magic_prompt_codex_reasoning_efforts:
@@ -321,7 +317,6 @@ describe('preferences service', () => {
         session_recap_model: 'haiku',
         parallel_execution_prompt_enabled: false,
         magic_prompts: DEFAULT_MAGIC_PROMPTS,
-        magic_prompt_agents: DEFAULT_MAGIC_PROMPT_AGENTS,
         magic_prompt_models: DEFAULT_MAGIC_PROMPT_MODELS,
         magic_prompt_codex_models: DEFAULT_MAGIC_PROMPT_CODEX_MODELS,
         magic_prompt_codex_reasoning_efforts:
@@ -382,7 +377,6 @@ describe('preferences service', () => {
         session_recap_model: 'haiku',
         parallel_execution_prompt_enabled: false,
         magic_prompts: DEFAULT_MAGIC_PROMPTS,
-        magic_prompt_agents: DEFAULT_MAGIC_PROMPT_AGENTS,
         magic_prompt_models: DEFAULT_MAGIC_PROMPT_MODELS,
         magic_prompt_codex_models: DEFAULT_MAGIC_PROMPT_CODEX_MODELS,
         magic_prompt_codex_reasoning_efforts:
@@ -441,7 +435,6 @@ describe('preferences service', () => {
         session_recap_model: 'haiku',
         parallel_execution_prompt_enabled: false,
         magic_prompts: DEFAULT_MAGIC_PROMPTS,
-        magic_prompt_agents: DEFAULT_MAGIC_PROMPT_AGENTS,
         magic_prompt_models: DEFAULT_MAGIC_PROMPT_MODELS,
         magic_prompt_codex_models: DEFAULT_MAGIC_PROMPT_CODEX_MODELS,
         magic_prompt_codex_reasoning_efforts:

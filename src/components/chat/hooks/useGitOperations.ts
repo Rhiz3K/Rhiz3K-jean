@@ -32,6 +32,7 @@ import {
 interface UseGitOperationsParams {
   activeWorktreeId: string | null | undefined
   activeWorktreePath: string | null | undefined
+  activeSession: Session | null | undefined
   worktree: Worktree | null | undefined
   project: Project | null | undefined
   queryClient: QueryClient
@@ -75,6 +76,7 @@ interface UseGitOperationsReturn {
 export function useGitOperations({
   activeWorktreeId,
   activeWorktreePath,
+  activeSession,
   worktree,
   project,
   queryClient,
@@ -86,6 +88,8 @@ export function useGitOperations({
   const [pendingMergeWorktree, setPendingMergeWorktree] =
     useState<Worktree | null>(null)
 
+  const pinnedAgent = (activeSession?.agent ?? 'claude') as ChatAgent
+
   // Handle Commit - creates commit with AI-generated message (no push)
   const handleCommit = useCallback(async () => {
     if (!activeWorktreePath || !activeWorktreeId) return
@@ -95,8 +99,7 @@ export function useGitOperations({
     const toastId = toast.loading('Creating commit...')
 
     try {
-      const agent =
-        preferences?.magic_prompt_agents?.commit_message_model ?? 'claude'
+      const agent = pinnedAgent
       const model =
         agent === 'codex'
           ? preferences?.magic_prompt_codex_models?.commit_message_model
@@ -133,8 +136,8 @@ export function useGitOperations({
   }, [
     activeWorktreeId,
     activeWorktreePath,
+    pinnedAgent,
     preferences?.magic_prompts?.commit_message,
-    preferences?.magic_prompt_agents?.commit_message_model,
     preferences?.magic_prompt_models?.commit_message_model,
     preferences?.magic_prompt_codex_models?.commit_message_model,
     preferences?.magic_prompt_codex_reasoning_efforts?.commit_message_model,
@@ -149,8 +152,7 @@ export function useGitOperations({
     const toastId = toast.loading('Committing and pushing...')
 
     try {
-      const agent =
-        preferences?.magic_prompt_agents?.commit_message_model ?? 'claude'
+      const agent = pinnedAgent
       const model =
         agent === 'codex'
           ? preferences?.magic_prompt_codex_models?.commit_message_model
@@ -187,8 +189,8 @@ export function useGitOperations({
   }, [
     activeWorktreeId,
     activeWorktreePath,
+    pinnedAgent,
     preferences?.magic_prompts?.commit_message,
-    preferences?.magic_prompt_agents?.commit_message_model,
     preferences?.magic_prompt_models?.commit_message_model,
     preferences?.magic_prompt_codex_models?.commit_message_model,
     preferences?.magic_prompt_codex_reasoning_efforts?.commit_message_model,
@@ -246,8 +248,7 @@ export function useGitOperations({
     const toastId = toast.loading('Creating PR...')
 
     try {
-      const agent =
-        preferences?.magic_prompt_agents?.pr_content_model ?? 'claude'
+      const agent = pinnedAgent
       const model =
         agent === 'codex'
           ? preferences?.magic_prompt_codex_models?.pr_content_model
@@ -296,8 +297,8 @@ export function useGitOperations({
     activeWorktreePath,
     worktree,
     queryClient,
+    pinnedAgent,
     preferences?.magic_prompts?.pr_content,
-    preferences?.magic_prompt_agents?.pr_content_model,
     preferences?.magic_prompt_models?.pr_content_model,
     preferences?.magic_prompt_codex_models?.pr_content_model,
     preferences?.magic_prompt_codex_reasoning_efforts?.pr_content_model,
@@ -312,8 +313,7 @@ export function useGitOperations({
     const toastId = toast.loading('Running AI code review...')
 
     try {
-      const agent =
-        preferences?.magic_prompt_agents?.code_review_model ?? 'claude'
+      const agent = pinnedAgent
       const model =
         agent === 'codex'
           ? preferences?.magic_prompt_codex_models?.code_review_model
@@ -357,8 +357,8 @@ export function useGitOperations({
   }, [
     activeWorktreeId,
     activeWorktreePath,
+    pinnedAgent,
     preferences?.magic_prompts?.code_review,
-    preferences?.magic_prompt_agents?.code_review_model,
     preferences?.magic_prompt_models?.code_review_model,
     preferences?.magic_prompt_codex_models?.code_review_model,
     preferences?.magic_prompt_codex_reasoning_efforts?.code_review_model,
@@ -434,14 +434,12 @@ export function useGitOperations({
       // Set the new session as active
       setActiveSession(activeWorktreeId, newSession.id)
 
-      // Apply per-magic agent/model defaults for this new session
-      const agentForPrompt = (preferences?.magic_prompt_agents
-        ?.resolve_conflicts_model ?? 'claude') as ChatAgent
-      const { setAgent, setSelectedModel, setThinkingLevel, setExecutingMode } =
+      // Apply per-magic model defaults for this new session
+      const { setSelectedModel, setThinkingLevel, setExecutingMode } =
         useChatStore.getState()
-      setAgent(newSession.id, agentForPrompt)
       setExecutingMode(newSession.id, 'plan')
-      if (agentForPrompt === 'codex') {
+
+      if (newSession.agent === 'codex') {
         setSelectedModel(
           newSession.id,
           preferences?.magic_prompt_codex_models?.resolve_conflicts_model ??
@@ -535,14 +533,12 @@ ${resolveInstructions}`
       // Set the new session as active
       setActiveSession(activeWorktreeId, newSession.id)
 
-      // Apply per-magic agent/model defaults for this new session
-      const agentForPrompt = (preferences?.magic_prompt_agents
-        ?.resolve_conflicts_model ?? 'claude') as ChatAgent
-      const { setAgent, setSelectedModel, setThinkingLevel, setExecutingMode } =
+      // Apply per-magic model defaults for this new session
+      const { setSelectedModel, setThinkingLevel, setExecutingMode } =
         useChatStore.getState()
-      setAgent(newSession.id, agentForPrompt)
       setExecutingMode(newSession.id, 'plan')
-      if (agentForPrompt === 'codex') {
+
+      if (newSession.agent === 'codex') {
         setSelectedModel(
           newSession.id,
           preferences?.magic_prompt_codex_models?.resolve_conflicts_model ??

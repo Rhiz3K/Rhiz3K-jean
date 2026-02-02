@@ -247,17 +247,6 @@ export interface MagicPromptCodexReasoningEfforts {
   resolve_conflicts_model: ThinkingLevel
 }
 
-export type MagicPromptAgent = 'claude' | 'codex'
-
-export interface MagicPromptAgents {
-  investigate_model: MagicPromptAgent
-  pr_content_model: MagicPromptAgent
-  commit_message_model: MagicPromptAgent
-  code_review_model: MagicPromptAgent
-  context_summary_model: MagicPromptAgent
-  resolve_conflicts_model: MagicPromptAgent
-}
-
 /** Default models for each magic prompt */
 export const DEFAULT_MAGIC_PROMPT_MODELS: MagicPromptModels = {
   investigate_model: 'opus',
@@ -290,15 +279,6 @@ export const DEFAULT_MAGIC_PROMPT_CODEX_REASONING_EFFORTS: MagicPromptCodexReaso
     context_summary_model: 'high', // opus
     resolve_conflicts_model: 'high', // opus
   }
-
-export const DEFAULT_MAGIC_PROMPT_AGENTS: MagicPromptAgents = {
-  investigate_model: 'claude',
-  pr_content_model: 'claude',
-  commit_message_model: 'claude',
-  code_review_model: 'claude',
-  context_summary_model: 'claude',
-  resolve_conflicts_model: 'claude',
-}
 
 // Types that match the Rust AppPreferences struct
 // Only contains settings that should be persisted to disk
@@ -334,7 +314,6 @@ export interface AppPreferences {
   session_recap_model: ClaudeModel // Model for generating session recaps
   parallel_execution_prompt_enabled: boolean // Add system prompt to encourage parallel sub-agent execution
   magic_prompts: MagicPrompts // Customizable prompts for AI-powered features
-  magic_prompt_agents: MagicPromptAgents // Per-prompt agent selection (Claude or Codex)
   magic_prompt_models: MagicPromptModels // Per-prompt model overrides
   magic_prompt_codex_models: MagicPromptCodexModels // Per-prompt model overrides (Codex)
   magic_prompt_codex_reasoning_efforts: MagicPromptCodexReasoningEfforts // Per-prompt reasoning effort overrides (Codex)
@@ -579,7 +558,6 @@ export const defaultPreferences: AppPreferences = {
   session_recap_model: 'haiku', // Default: haiku for fast recaps
   parallel_execution_prompt_enabled: false, // Default: disabled (experimental)
   magic_prompts: DEFAULT_MAGIC_PROMPTS,
-  magic_prompt_agents: DEFAULT_MAGIC_PROMPT_AGENTS,
   magic_prompt_models: DEFAULT_MAGIC_PROMPT_MODELS,
   magic_prompt_codex_models: DEFAULT_MAGIC_PROMPT_CODEX_MODELS,
   magic_prompt_codex_reasoning_efforts:

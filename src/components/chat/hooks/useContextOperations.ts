@@ -2,12 +2,14 @@ import { useCallback, useState } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import type { QueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import type { SaveContextResponse } from '@/types/chat'
+import { logger } from '@/lib/logger'
+import type { ChatAgent, SaveContextResponse } from '@/types/chat'
 import type { Worktree } from '@/types/projects'
 import type { AppPreferences } from '@/types/preferences'
 
 interface UseContextOperationsParams {
   activeSessionId: string | null | undefined
+  sessionAgent: ChatAgent | null | undefined
   activeWorktreeId: string | null | undefined
   activeWorktreePath: string | null | undefined
   worktree: Worktree | null | undefined
@@ -34,6 +36,7 @@ interface UseContextOperationsReturn {
  */
 export function useContextOperations({
   activeSessionId,
+  sessionAgent,
   activeWorktreeId,
   activeWorktreePath,
   worktree,
@@ -52,8 +55,7 @@ export function useContextOperations({
     const toastId = toast.loading('Saving context...')
 
     try {
-      const agent =
-        preferences?.magic_prompt_agents?.context_summary_model ?? 'claude'
+      const agent = (sessionAgent ?? 'claude') as ChatAgent
       const model =
         agent === 'codex'
           ? preferences?.magic_prompt_codex_models?.context_summary_model
@@ -84,11 +86,12 @@ export function useContextOperations({
       // Invalidate saved contexts query so Load Context modal shows the new context
       queryClient.invalidateQueries({ queryKey: ['session-context'] })
     } catch (err) {
-      console.error('Failed to save context:', err)
+      logger.error('Failed to save context', { error: err })
       toast.error(`Failed to save context: ${err}`, { id: toastId })
     }
   }, [
     activeSessionId,
+    sessionAgent,
     activeWorktreeId,
     activeWorktreePath,
     worktree?.name,

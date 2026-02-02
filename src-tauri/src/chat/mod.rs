@@ -13,4 +13,4 @@ pub mod tail;
 pub mod types;
 
 pub use commands::*;
-pub use storage::{preserve_base_sessions, restore_base_sessions, with_sessions_mut};
+pub use storage::with_sessions_mut;

@@ -164,15 +164,26 @@ pub async fn create_session(
     worktree_id: String,
     worktree_path: String,
     name: Option<String>,
+    agent: Option<ChatAgent>,
 ) -> Result<Session, String> {
     log::trace!("Creating new session for worktree: {worktree_id}");
 
     with_sessions_mut(&app, &worktree_path, &worktree_id, |sessions| {
+        // Inherit agent from current active session by default.
+        let inherited_agent = sessions
+            .active_session_id
+            .as_deref()
+            .and_then(|id| sessions.find_session(id))
+            .map(|s| s.agent.clone())
+            .unwrap_or(ChatAgent::Claude);
+
         // Generate name if not provided
         let session_number = sessions.next_session_number();
         let session_name = name.unwrap_or_else(|| format!("Session {session_number}"));
 
-        let session = Session::new(session_name, sessions.sessions.len() as u32);
+        let session_agent = agent.unwrap_or(inherited_agent);
+        let session =
+            Session::new_with_agent(session_name, sessions.sessions.len() as u32, session_agent);
         let session_id = session.id.clone();
 
         sessions.sessions.push(session.clone());
@@ -836,7 +847,7 @@ pub async fn send_chat_message(
         return Err("Worktree path cannot be empty".to_string());
     }
 
-    let agent = agent.unwrap_or(ChatAgent::Claude);
+    let requested_agent = agent.clone();
 
     // Load sessions
     let mut sessions = load_sessions(&app, &worktree_path, &worktree_id)?;
@@ -962,6 +973,16 @@ pub async fn send_chat_message(
             return Err(error_msg);
         }
     };
+
+    // Enforce pinned agent per session (ignore any request-time override).
+    let agent = session.agent.clone();
+    if let Some(requested) = requested_agent {
+        if requested != agent {
+            log::warn!(
+                "Ignoring requested agent {requested:?} for session {session_id}; pinned agent is {agent:?}"
+            );
+        }
+    }
 
     // Generate user message ID early (needed for run log)
     let user_message_id = Uuid::new_v4().to_string();
