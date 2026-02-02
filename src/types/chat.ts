@@ -140,6 +140,8 @@ export interface Session {
   name: string
   /** Order index for tab ordering (0-indexed) */
   order: number
+  /** Fixed agent/provider for this session */
+  agent?: ChatAgent
   /** Unix timestamp when session was created */
   created_at: number
   /** Chat messages for this session */

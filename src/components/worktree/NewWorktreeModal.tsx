@@ -25,6 +25,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Input } from '@/components/ui/input'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -32,6 +39,7 @@ import { cn } from '@/lib/utils'
 import { useUIStore } from '@/store/ui-store'
 import { useProjectsStore } from '@/store/projects-store'
 import { useChatStore } from '@/store/chat-store'
+import { getLastCliAgent, setLastCliAgent } from '@/lib/cli-agent-storage'
 import {
   useGitHubIssues,
   useGitHubPRs,
@@ -48,6 +56,7 @@ import {
   useWorktrees,
   useCreateWorktree,
   useCreateBaseSession,
+  useArchivedWorktrees,
 } from '@/services/projects'
 import { isBaseSession } from '@/types/projects'
 import type {
@@ -56,6 +65,7 @@ import type {
   IssueContext,
   PullRequestContext,
 } from '@/types/github'
+import type { ChatAgent } from '@/types/chat'
 
 type TabId = 'quick' | 'issues' | 'prs'
 
@@ -87,6 +97,7 @@ export function NewWorktreeModal() {
 
   // Get worktrees to check for existing base session
   const { data: worktrees } = useWorktrees(selectedProjectId)
+  const { data: archivedWorktrees = [] } = useArchivedWorktrees()
   const hasBaseSession = useMemo(
     () => worktrees?.some(w => isBaseSession(w)) ?? false,
     [worktrees]
@@ -96,6 +107,15 @@ export function NewWorktreeModal() {
     [worktrees]
   )
 
+  const archivedBaseSession = useMemo(
+    () =>
+      archivedWorktrees.find(
+        w => w.project_id === selectedProjectId && isBaseSession(w)
+      ) ?? null,
+    [archivedWorktrees, selectedProjectId]
+  )
+  const hasArchivedBaseSession = Boolean(archivedBaseSession)
+
   // Local state
   const [activeTab, setActiveTab] = useState<TabId>('quick')
   const [searchQuery, setSearchQuery] = useState('')
@@ -103,6 +123,9 @@ export function NewWorktreeModal() {
   const [selectedItemIndex, setSelectedItemIndex] = useState(0)
   const [creatingFromNumber, setCreatingFromNumber] = useState<number | null>(
     null
+  )
+  const [selectedAgent, setSelectedAgent] = useState<ChatAgent>(() =>
+    getLastCliAgent()
   )
 
   const searchInputRef = useRef<HTMLInputElement>(null)
@@ -201,6 +224,7 @@ export function NewWorktreeModal() {
       setCreatingFromNumber(null)
       setSearchQuery('')
       setSelectedItemIndex(0)
+      setSelectedAgent(getLastCliAgent())
 
       if (open) {
         // Reset other state when modal opens
@@ -212,6 +236,9 @@ export function NewWorktreeModal() {
         )
         setNewWorktreeModalDefaultTab(null)
         setIncludeClosed(false)
+
+        // Ensure archived base session state is fresh
+        queryClient.invalidateQueries({ queryKey: ['archived-worktrees'] })
 
         // Invalidate GitHub caches to fetch fresh data
         const projectPath = selectedProject?.path
@@ -240,9 +267,12 @@ export function NewWorktreeModal() {
       toast.error('No project selected')
       return
     }
-    createWorktree.mutate({ projectId: selectedProjectId })
+    createWorktree.mutate({
+      projectId: selectedProjectId,
+      agent: selectedAgent,
+    })
     handleOpenChange(false)
-  }, [selectedProjectId, createWorktree, handleOpenChange])
+  }, [selectedProjectId, createWorktree, handleOpenChange, selectedAgent])
 
   const handleBaseSession = useCallback(() => {
     if (!selectedProjectId) {
@@ -257,17 +287,25 @@ export function NewWorktreeModal() {
       selectWorktree(baseSession.id)
       setActiveWorktree(baseSession.id, baseSession.path)
       toast.success(`Switched to base session: ${baseSession.name}`)
+    } else if (hasArchivedBaseSession) {
+      // Restore archived base session (agent is pinned to that session)
+      createBaseSession.mutate({ projectId: selectedProjectId })
     } else {
       // Create new base session
-      createBaseSession.mutate(selectedProjectId)
+      createBaseSession.mutate({
+        projectId: selectedProjectId,
+        agent: selectedAgent,
+      })
     }
     handleOpenChange(false)
   }, [
     selectedProjectId,
     hasBaseSession,
     baseSession,
+    hasArchivedBaseSession,
     createBaseSession,
     handleOpenChange,
+    selectedAgent,
   ])
 
   const handleSelectIssue = useCallback(
@@ -314,6 +352,7 @@ export function NewWorktreeModal() {
         createWorktree.mutate({
           projectId: selectedProjectId,
           issueContext,
+          agent: selectedAgent,
         })
 
         handleOpenChange(false)
@@ -322,7 +361,13 @@ export function NewWorktreeModal() {
         setCreatingFromNumber(null)
       }
     },
-    [selectedProjectId, selectedProject, createWorktree, handleOpenChange]
+    [
+      selectedProjectId,
+      selectedProject,
+      createWorktree,
+      handleOpenChange,
+      selectedAgent,
+    ]
   )
 
   // Handle selecting an issue AND triggering auto-investigate after worktree creation
@@ -369,6 +414,7 @@ export function NewWorktreeModal() {
         const pendingWorktree = await createWorktree.mutateAsync({
           projectId: selectedProjectId,
           issueContext,
+          agent: selectedAgent,
         })
 
         // Mark this worktree to trigger investigate-issue when it's ready
@@ -381,7 +427,13 @@ export function NewWorktreeModal() {
         setCreatingFromNumber(null)
       }
     },
-    [selectedProjectId, selectedProject, createWorktree, handleOpenChange]
+    [
+      selectedProjectId,
+      selectedProject,
+      createWorktree,
+      handleOpenChange,
+      selectedAgent,
+    ]
   )
 
   const handleSelectPR = useCallback(
@@ -443,6 +495,7 @@ export function NewWorktreeModal() {
         createWorktree.mutate({
           projectId: selectedProjectId,
           prContext,
+          agent: selectedAgent,
         })
 
         handleOpenChange(false)
@@ -451,7 +504,13 @@ export function NewWorktreeModal() {
         setCreatingFromNumber(null)
       }
     },
-    [selectedProjectId, selectedProject, createWorktree, handleOpenChange]
+    [
+      selectedProjectId,
+      selectedProject,
+      createWorktree,
+      handleOpenChange,
+      selectedAgent,
+    ]
   )
 
   // Handle selecting a PR AND triggering auto-investigate after worktree creation
@@ -514,6 +573,7 @@ export function NewWorktreeModal() {
         const pendingWorktree = await createWorktree.mutateAsync({
           projectId: selectedProjectId,
           prContext,
+          agent: selectedAgent,
         })
 
         // Mark this worktree to trigger investigate-pr when it's ready
@@ -526,7 +586,13 @@ export function NewWorktreeModal() {
         setCreatingFromNumber(null)
       }
     },
-    [selectedProjectId, selectedProject, createWorktree, handleOpenChange]
+    [
+      selectedProjectId,
+      selectedProject,
+      createWorktree,
+      handleOpenChange,
+      selectedAgent,
+    ]
   )
 
   // Keyboard navigation
@@ -642,6 +708,25 @@ export function NewWorktreeModal() {
           <DialogTitle>
             New Session for {selectedProject?.name ?? 'Project'}
           </DialogTitle>
+          <div className="mt-2 flex items-center gap-2">
+            <span className="text-xs text-muted-foreground">CLI agent</span>
+            <Select
+              value={selectedAgent}
+              onValueChange={(v: string) => {
+                const agent = v as ChatAgent
+                setSelectedAgent(agent)
+                setLastCliAgent(agent)
+              }}
+            >
+              <SelectTrigger className="h-8 w-[160px] text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="claude">Claude CLI</SelectItem>
+                <SelectItem value="codex">Codex CLI</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </DialogHeader>
 
         {/* Tabs */}
@@ -674,6 +759,7 @@ export function NewWorktreeModal() {
           {activeTab === 'quick' && (
             <QuickActionsTab
               hasBaseSession={hasBaseSession}
+              hasArchivedBaseSession={hasArchivedBaseSession}
               onCreateWorktree={handleCreateWorktree}
               onBaseSession={handleBaseSession}
               isCreating={
@@ -735,6 +821,7 @@ export function NewWorktreeModal() {
 
 interface QuickActionsTabProps {
   hasBaseSession: boolean
+  hasArchivedBaseSession: boolean
   onCreateWorktree: () => void
   onBaseSession: () => void
   isCreating: boolean
@@ -742,6 +829,7 @@ interface QuickActionsTabProps {
 
 function QuickActionsTab({
   hasBaseSession,
+  hasArchivedBaseSession,
   onCreateWorktree,
   onBaseSession,
   isCreating,
@@ -762,10 +850,18 @@ function QuickActionsTab({
           <GitBranch className="h-10 w-10 text-muted-foreground" />
           <div className="flex flex-col items-center gap-1.5">
             <span className="font-medium text-base">
-              {hasBaseSession ? 'Switch to Base Session' : 'New Base Session'}
+              {hasBaseSession
+                ? 'Switch to Base Session'
+                : hasArchivedBaseSession
+                  ? 'Restore Base Session'
+                  : 'New Base Session'}
             </span>
             <span className="text-xs text-muted-foreground text-center">
-              Work directly on the project folder
+              {hasBaseSession
+                ? 'Agent is pinned for this session'
+                : hasArchivedBaseSession
+                  ? 'Restores your archived base session'
+                  : 'Work directly on the project folder'}
             </span>
           </div>
           <kbd className="hidden sm:block absolute top-3 right-3 text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">

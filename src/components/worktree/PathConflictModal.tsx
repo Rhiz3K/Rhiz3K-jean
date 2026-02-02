@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useCallback, useState } from 'react'
 import { Archive, FolderPlus, Plus } from 'lucide-react'
 import {
   Dialog,
@@ -8,12 +8,21 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { useUIStore } from '@/store/ui-store'
 import {
   useUnarchiveWorktree,
   useImportWorktree,
   useCreateWorktree,
 } from '@/services/projects'
+import { getLastCliAgent, setLastCliAgent } from '@/lib/cli-agent-storage'
+import type { ChatAgent } from '@/types/chat'
 
 export function PathConflictModal() {
   const pathConflictData = useUIStore(state => state.pathConflictData)
@@ -25,12 +34,18 @@ export function PathConflictModal() {
   const importWorktree = useImportWorktree()
   const createWorktree = useCreateWorktree()
 
+  const [selectedAgent, setSelectedAgent] = useState<ChatAgent>(() =>
+    getLastCliAgent()
+  )
+
   const isOpen = pathConflictData !== null
   const hasArchivedWorktree = !!pathConflictData?.archivedWorktreeId
 
   const handleOpenChange = useCallback(
     (open: boolean) => {
-      if (!open) {
+      if (open) {
+        setSelectedAgent(getLastCliAgent())
+      } else {
         closePathConflictModal()
       }
     },
@@ -62,9 +77,11 @@ export function PathConflictModal() {
       projectId: pathConflictData.projectId,
       customName: pathConflictData.suggestedName,
       issueContext: pathConflictData.issueContext,
+      agent: selectedAgent,
     })
+    setLastCliAgent(selectedAgent)
     closePathConflictModal()
-  }, [pathConflictData, createWorktree, closePathConflictModal])
+  }, [pathConflictData, createWorktree, closePathConflictModal, selectedAgent])
 
   return (
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
@@ -91,6 +108,26 @@ export function PathConflictModal() {
 
         <div className="rounded-md bg-muted px-3 py-2.5 text-sm font-mono text-muted-foreground break-all">
           {pathConflictData?.path}
+        </div>
+
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-muted-foreground">CLI agent</span>
+          <Select
+            value={selectedAgent}
+            onValueChange={(v: string) => {
+              const agent = v as ChatAgent
+              setSelectedAgent(agent)
+              setLastCliAgent(agent)
+            }}
+          >
+            <SelectTrigger className="h-8 w-[160px] text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="claude">Claude CLI</SelectItem>
+              <SelectItem value="codex">Codex CLI</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
 
         <div className="flex flex-col gap-2">

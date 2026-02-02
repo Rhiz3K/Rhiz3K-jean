@@ -10,14 +10,18 @@ import { notify } from '@/lib/notifications'
 import { logger } from '@/lib/logger'
 import type { CommandContext } from '@/lib/commands/types'
 import {
-  DEFAULT_MAGIC_PROMPT_AGENTS,
   DEFAULT_MAGIC_PROMPT_CODEX_MODELS,
   DEFAULT_MAGIC_PROMPT_CODEX_REASONING_EFFORTS,
   DEFAULT_MAGIC_PROMPT_MODELS,
   type AppPreferences,
   type ClaudeModel,
 } from '@/types/preferences'
-import type { ThinkingLevel, ExecutionMode } from '@/types/chat'
+import type {
+  ChatAgent,
+  ExecutionMode,
+  Session,
+  ThinkingLevel,
+} from '@/types/chat'
 import type { Project, ReviewResponse } from '@/types/projects'
 import { useQueryClient } from '@tanstack/react-query'
 import { chatQueryKeys } from '@/services/chat'
@@ -548,17 +552,23 @@ export function useCommandContext(
   // AI - Run code review
   // eslint-disable-next-line react-hooks/preserve-manual-memoization
   const runAIReview = useCallback(async () => {
-    const { activeWorktreeId, activeWorktreePath } = useChatStore.getState()
+    const { activeWorktreeId, activeWorktreePath, getActiveSession } =
+      useChatStore.getState()
     if (!activeWorktreeId || !activeWorktreePath) {
       notify('No worktree selected', undefined, { type: 'error' })
       return
     }
 
+    const activeSessionId = getActiveSession(activeWorktreeId)
+    const pinnedAgent = activeSessionId
+      ? (queryClient.getQueryData<Session>(
+          chatQueryKeys.session(activeSessionId)
+        )?.agent ?? null)
+      : null
+
     const toastId = toast.loading('Running AI code review...')
     try {
-      const agent =
-        preferences?.magic_prompt_agents?.code_review_model ??
-        DEFAULT_MAGIC_PROMPT_AGENTS.code_review_model
+      const agent = (pinnedAgent ?? 'claude') as ChatAgent
 
       const model =
         agent === 'codex'
@@ -601,7 +611,7 @@ export function useCommandContext(
     } catch (error) {
       toast.error(`Failed to review: ${error}`, { id: toastId })
     }
-  }, [preferences])
+  }, [preferences, queryClient])
 
   // Terminal - Open terminal panel
   const openTerminalPanel = useCallback(() => {

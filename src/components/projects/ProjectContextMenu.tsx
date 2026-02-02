@@ -16,12 +16,17 @@ import {
   ContextMenuContent,
   ContextMenuItem,
   ContextMenuSeparator,
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger,
   ContextMenuTrigger,
 } from '@/components/ui/context-menu'
 import { isBaseSession, type Project } from '@/types/projects'
 import {
   useCreateBaseSession,
   useCreateWorktree,
+  useArchivedWorktrees,
+  useCloseBaseSessionClean,
   useMoveItem,
   useOpenProjectOnGitHub,
   useOpenProjectWorktreesFolder,
@@ -35,6 +40,8 @@ import { usePreferences } from '@/services/preferences'
 import { useProjectsStore } from '@/store/projects-store'
 import { useUIStore } from '@/store/ui-store'
 import { getEditorLabel, getTerminalLabel } from '@/types/preferences'
+import type { ChatAgent } from '@/types/chat'
+import { setLastCliAgent } from '@/lib/cli-agent-storage'
 
 interface ProjectContextMenuProps {
   project: Project
@@ -47,6 +54,7 @@ export function ProjectContextMenu({
 }: ProjectContextMenuProps) {
   const createWorktree = useCreateWorktree()
   const createBaseSession = useCreateBaseSession()
+  const closeBaseSessionClean = useCloseBaseSessionClean()
   const moveItem = useMoveItem()
   const removeProject = useRemoveProject()
   const openOnGitHub = useOpenProjectOnGitHub()
@@ -55,12 +63,16 @@ export function ProjectContextMenu({
   const openInTerminal = useOpenWorktreeInTerminal()
   const openInEditor = useOpenWorktreeInEditor()
   const { data: worktrees = [] } = useWorktrees(project.id)
+  const { data: archivedWorktrees = [] } = useArchivedWorktrees()
   const { data: preferences } = usePreferences()
   const { openProjectSettings } = useProjectsStore()
   const openSessionBoardModal = useUIStore(state => state.openSessionBoardModal)
 
   // Check if base session already exists
   const existingBaseSession = worktrees.find(isBaseSession)
+  const archivedBaseSession = archivedWorktrees.find(
+    w => w.project_id === project.id && isBaseSession(w)
+  )
   const isNested = project.parent_id !== undefined
 
   const handleOpenInFinder = () => {
@@ -85,12 +97,31 @@ export function ProjectContextMenu({
     })
   }
 
-  const handleNewWorktree = () => {
-    createWorktree.mutate({ projectId: project.id })
+  const handleNewWorktree = (agent: ChatAgent) => {
+    setLastCliAgent(agent)
+    createWorktree.mutate({ projectId: project.id, agent })
   }
 
-  const handleNewBaseSession = () => {
-    createBaseSession.mutate(project.id)
+  const handleNewBaseSession = (agent: ChatAgent) => {
+    setLastCliAgent(agent)
+
+    if (archivedBaseSession) {
+      closeBaseSessionClean.mutate(
+        { worktreeId: archivedBaseSession.id, projectId: project.id },
+        {
+          onSuccess: () => {
+            createBaseSession.mutate({ projectId: project.id, agent })
+          },
+        }
+      )
+      return
+    }
+
+    createBaseSession.mutate({ projectId: project.id, agent })
+  }
+
+  const handleOpenBaseSession = () => {
+    createBaseSession.mutate({ projectId: project.id })
   }
 
   const handleRemoveProject = () => {
@@ -136,15 +167,47 @@ export function ProjectContextMenu({
 
         <ContextMenuSeparator />
 
-        <ContextMenuItem onClick={handleNewBaseSession}>
-          <Home className="mr-2 h-4 w-4" />
-          {existingBaseSession ? 'Open Base Session' : 'New Base Session'}
-        </ContextMenuItem>
+        {existingBaseSession ? (
+          <ContextMenuItem onClick={handleOpenBaseSession}>
+            <Home className="mr-2 h-4 w-4" />
+            Open Base Session
+          </ContextMenuItem>
+        ) : archivedBaseSession ? (
+          <ContextMenuItem onClick={handleOpenBaseSession}>
+            <Home className="mr-2 h-4 w-4" />
+            Restore Base Session
+          </ContextMenuItem>
+        ) : (
+          <ContextMenuSub>
+            <ContextMenuSubTrigger>
+              <Home className="mr-2 h-4 w-4" />
+              New Base Session
+            </ContextMenuSubTrigger>
+            <ContextMenuSubContent>
+              <ContextMenuItem onClick={() => handleNewBaseSession('claude')}>
+                Claude CLI
+              </ContextMenuItem>
+              <ContextMenuItem onClick={() => handleNewBaseSession('codex')}>
+                Codex CLI
+              </ContextMenuItem>
+            </ContextMenuSubContent>
+          </ContextMenuSub>
+        )}
 
-        <ContextMenuItem onClick={handleNewWorktree}>
-          <Plus className="mr-2 h-4 w-4" />
-          New Worktree
-        </ContextMenuItem>
+        <ContextMenuSub>
+          <ContextMenuSubTrigger>
+            <Plus className="mr-2 h-4 w-4" />
+            New Worktree
+          </ContextMenuSubTrigger>
+          <ContextMenuSubContent>
+            <ContextMenuItem onClick={() => handleNewWorktree('claude')}>
+              Claude CLI
+            </ContextMenuItem>
+            <ContextMenuItem onClick={() => handleNewWorktree('codex')}>
+              Codex CLI
+            </ContextMenuItem>
+          </ContextMenuSubContent>
+        </ContextMenuSub>
 
         <ContextMenuSeparator />
 

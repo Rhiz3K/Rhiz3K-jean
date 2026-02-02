@@ -22,11 +22,9 @@ import {
   DEFAULT_MAGIC_PROMPT_MODELS,
   DEFAULT_MAGIC_PROMPT_CODEX_MODELS,
   DEFAULT_MAGIC_PROMPT_CODEX_REASONING_EFFORTS,
-  DEFAULT_MAGIC_PROMPT_AGENTS,
   codexModelOptions,
   codexReasoningEffortOptions,
   type MagicPrompts,
-  type MagicPromptAgent,
   type MagicPromptModels,
   type MagicPromptCodexModels,
   type MagicPromptCodexReasoningEfforts,
@@ -163,11 +161,6 @@ const MODEL_OPTIONS: { value: ClaudeModel; label: string }[] = [
   { value: 'haiku', label: 'Haiku' },
 ]
 
-const AGENT_OPTIONS: { value: MagicPromptAgent; label: string }[] = [
-  { value: 'claude', label: 'Claude Code' },
-  { value: 'codex', label: 'Codex' },
-]
-
 export const MagicPromptsPane: React.FC = () => {
   const { data: preferences } = usePreferences()
   const savePreferences = useSavePreferences()
@@ -177,8 +170,6 @@ export const MagicPromptsPane: React.FC = () => {
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   const currentPrompts = preferences?.magic_prompts ?? DEFAULT_MAGIC_PROMPTS
-  const currentAgents =
-    preferences?.magic_prompt_agents ?? DEFAULT_MAGIC_PROMPT_AGENTS
   const currentClaudeModels =
     preferences?.magic_prompt_models ?? DEFAULT_MAGIC_PROMPT_MODELS
   const currentCodexModels =
@@ -193,9 +184,6 @@ export const MagicPromptsPane: React.FC = () => {
   const currentClaudeModel =
     currentClaudeModels[selectedConfig.modelKey] ??
     selectedConfig.defaultClaudeModel
-  const currentAgent =
-    currentAgents[selectedConfig.modelKey] ??
-    DEFAULT_MAGIC_PROMPT_AGENTS[selectedConfig.modelKey]
   const currentCodexModel =
     currentCodexModels[selectedConfig.modelKey] ??
     DEFAULT_MAGIC_PROMPT_CODEX_MODELS[selectedConfig.modelKey]
@@ -304,20 +292,6 @@ export const MagicPromptsPane: React.FC = () => {
     [preferences, savePreferences, currentClaudeModels, selectedConfig.modelKey]
   )
 
-  const handleAgentChange = useCallback(
-    (agent: MagicPromptAgent) => {
-      if (!preferences) return
-      savePreferences.mutate({
-        ...preferences,
-        magic_prompt_agents: {
-          ...currentAgents,
-          [selectedConfig.modelKey]: agent,
-        },
-      })
-    },
-    [preferences, savePreferences, currentAgents, selectedConfig.modelKey]
-  )
-
   const handleCodexModelChange = useCallback(
     (model: string) => {
       if (!preferences) return
@@ -353,24 +327,13 @@ export const MagicPromptsPane: React.FC = () => {
         {PROMPT_CONFIGS.map(config => {
           const promptIsModified =
             currentPrompts[config.key] !== config.defaultValue
-          const promptAgent =
-            currentAgents[config.modelKey] ??
-            DEFAULT_MAGIC_PROMPT_AGENTS[config.modelKey]
           const promptClaudeModel =
             currentClaudeModels[config.modelKey] ?? config.defaultClaudeModel
-          const promptCodexModel =
-            currentCodexModels[config.modelKey] ??
-            DEFAULT_MAGIC_PROMPT_CODEX_MODELS[config.modelKey]
           const promptEffort = (currentCodexEfforts[config.modelKey] ??
             DEFAULT_MAGIC_PROMPT_CODEX_REASONING_EFFORTS[
               config.modelKey
             ]) as ThinkingLevel
-          const effortBadge =
-            promptCodexModel === 'gpt-5.2-codex'
-              ? `c-${promptEffort}`
-              : promptEffort
-          const badgeText =
-            promptAgent === 'codex' ? effortBadge : promptClaudeModel
+          const badgeText = `${promptClaudeModel}/${promptEffort}`
           return (
             <button
               key={config.key}
@@ -413,25 +376,7 @@ export const MagicPromptsPane: React.FC = () => {
             {selectedConfig.description}
           </p>
           <div className="flex flex-wrap items-center gap-2 mt-2">
-            <span className="text-xs text-muted-foreground">Use</span>
-            <Select
-              value={currentAgent}
-              onValueChange={(v: string) =>
-                handleAgentChange(v as MagicPromptAgent)
-              }
-            >
-              <SelectTrigger className="w-[130px] h-8 text-xs">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {AGENT_OPTIONS.map(opt => (
-                  <SelectItem key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <span className="text-xs text-muted-foreground">Claude</span>
+            <span className="text-xs text-muted-foreground">Model</span>
             <Select
               value={currentClaudeModel}
               onValueChange={(v: string) =>
@@ -450,7 +395,7 @@ export const MagicPromptsPane: React.FC = () => {
               </SelectContent>
             </Select>
 
-            <span className="text-xs text-muted-foreground">Codex</span>
+            <span className="text-xs text-muted-foreground">Codex model</span>
             <Select
               value={currentCodexModel}
               onValueChange={handleCodexModelChange}
@@ -466,6 +411,7 @@ export const MagicPromptsPane: React.FC = () => {
                 ))}
               </SelectContent>
             </Select>
+            <span className="text-xs text-muted-foreground">Reasoning</span>
             <Select
               value={currentCodexEffort}
               onValueChange={(v: string) =>

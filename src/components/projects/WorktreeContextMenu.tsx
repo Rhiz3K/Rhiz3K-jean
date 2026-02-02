@@ -118,7 +118,7 @@ export function WorktreeContextMenu({
           {isBase ? (
             <>
               <X className="mr-2 h-4 w-4" />
-              Close Session
+              Archive Session
             </>
           ) : (
             <>
@@ -128,6 +128,13 @@ export function WorktreeContextMenu({
           )}
         </ContextMenuItem>
 
+        {isBase && (
+          <ContextMenuItem onClick={() => setShowDeleteBaseConfirm(true)}>
+            <Trash2 className="mr-2 h-4 w-4 text-destructive" />
+            Delete Session
+          </ContextMenuItem>
+        )}
+
         {!isBase && (
           <ContextMenuItem onClick={() => setShowDeleteConfirm(true)}>
             <Trash2 className="mr-2 h-4 w-4 text-destructive" />
@@ -135,6 +142,31 @@ export function WorktreeContextMenu({
           </ContextMenuItem>
         )}
       </ContextMenuContent>
+
+      <AlertDialog
+        open={showDeleteBaseConfirm}
+        onOpenChange={setShowDeleteBaseConfirm}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Session</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will close the base session and permanently delete its chat
+              history. The next time you open a base session, it will start
+              fresh.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteBaseSession}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
         <AlertDialogContent>

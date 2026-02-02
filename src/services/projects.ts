@@ -20,6 +20,7 @@ import type {
   WorktreePathExistsEvent,
   WorktreeBranchExistsEvent,
 } from '@/types/projects'
+import type { ChatAgent } from '@/types/chat'
 import { useProjectsStore } from '@/store/projects-store'
 import { useChatStore } from '@/store/chat-store'
 import { useUIStore } from '@/store/ui-store'
@@ -466,9 +467,11 @@ export function useCreateWorktree() {
       issueContext,
       prContext,
       customName,
+      agent,
     }: {
       projectId: string
       baseBranch?: string
+      agent?: ChatAgent
       issueContext?: {
         number: number
         title: string
@@ -511,6 +514,7 @@ export function useCreateWorktree() {
         issueNumber: issueContext?.number,
         prNumber: prContext?.number,
         customName,
+        agent,
       })
       const worktree = await invoke<Worktree>('create_worktree', {
         projectId,
@@ -518,6 +522,7 @@ export function useCreateWorktree() {
         issueContext,
         prContext,
         customName,
+        agent,
       })
       // Mark as pending since creation is happening in background
       return { ...worktree, status: 'pending' as const }
@@ -618,9 +623,11 @@ export function useCreateWorktreeFromExistingBranch() {
       branchName,
       issueContext,
       prContext,
+      agent,
     }: {
       projectId: string
       branchName: string
+      agent?: ChatAgent
       issueContext?: {
         number: number
         title: string
@@ -657,6 +664,7 @@ export function useCreateWorktreeFromExistingBranch() {
       logger.debug('Creating worktree from existing branch', {
         projectId,
         branchName,
+        agent,
       })
       const worktree = await invoke<Worktree>(
         'create_worktree_from_existing_branch',
@@ -665,6 +673,7 @@ export function useCreateWorktreeFromExistingBranch() {
           branchName,
           issueContext,
           prContext,
+          agent,
         }
       )
       return { ...worktree, status: 'pending' as const }
@@ -1121,6 +1130,10 @@ export function useWorktreeEvents() {
         if (selectedWorktreeId === id) {
           selectWorktree(null)
         }
+
+        // Ensure Archived modal reflects the new item
+        queryClient.invalidateQueries({ queryKey: ['archived-worktrees'] })
+        queryClient.invalidateQueries({ queryKey: ['all-archived-sessions'] })
       })
     )
 
@@ -1618,19 +1631,26 @@ export function useCreateBaseSession() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: async (projectId: string): Promise<Worktree> => {
+    mutationFn: async ({
+      projectId,
+      agent,
+    }: {
+      projectId: string
+      agent?: ChatAgent
+    }): Promise<Worktree> => {
       if (!isTauri()) {
         throw new Error('Not in Tauri context')
       }
 
-      logger.debug('Creating base session', { projectId })
+      logger.debug('Creating base session', { projectId, agent })
       const session = await invoke<Worktree>('create_base_session', {
         projectId,
+        agent,
       })
       logger.info('Base session created/reopened', { session })
       return session
     },
-    onSuccess: (session, projectId) => {
+    onSuccess: (session, { projectId }) => {
       queryClient.invalidateQueries({
         queryKey: projectsQueryKeys.worktrees(projectId),
       })
@@ -1667,8 +1687,8 @@ export function useCreateBaseSession() {
 }
 
 /**
- * Hook to close a base session (removes record, no git operations)
- * Preserves sessions for later restoration
+ * Hook to archive a base session
+ * Keeps history and shows in Archived modal
  */
 export function useCloseBaseSession() {
   const queryClient = useQueryClient()
@@ -1684,14 +1704,21 @@ export function useCloseBaseSession() {
         throw new Error('Not in Tauri context')
       }
 
-      logger.debug('Closing base session', { worktreeId })
+      logger.debug('Archiving base session', { worktreeId })
       await invoke('close_base_session', { worktreeId })
-      logger.info('Base session closed')
+      logger.info('Base session archived')
     },
     onSuccess: (_, { projectId, worktreeId }) => {
       queryClient.invalidateQueries({
         queryKey: projectsQueryKeys.worktrees(projectId),
       })
+
+      queryClient.invalidateQueries({ queryKey: ['archived-worktrees'] })
+      queryClient.invalidateQueries({ queryKey: ['all-archived-sessions'] })
+
+      // Ensure Archived modal reflects the new item
+      queryClient.invalidateQueries({ queryKey: ['archived-worktrees'] })
+      queryClient.invalidateQueries({ queryKey: ['all-archived-sessions'] })
 
       // Cleanup terminal instances for this worktree
       disposeAllWorktreeTerminals(worktreeId)
@@ -1702,7 +1729,7 @@ export function useCloseBaseSession() {
         clearActiveWorktree()
       }
 
-      toast.success('Session closed')
+      toast.success('Session archived')
     },
     onError: error => {
       const message =
@@ -1711,8 +1738,8 @@ export function useCloseBaseSession() {
           : typeof error === 'string'
             ? error
             : 'Unknown error occurred'
-      logger.error('Failed to close session', { error })
-      toast.error('Failed to close session', { description: message })
+      logger.error('Failed to archive session', { error })
+      toast.error('Failed to archive session', { description: message })
     },
   })
 }
@@ -1753,7 +1780,7 @@ export function useCloseBaseSessionClean() {
         clearActiveWorktree()
       }
 
-      toast.success('Session closed')
+      toast.success('Session deleted')
     },
     onError: error => {
       const message =
@@ -1763,7 +1790,7 @@ export function useCloseBaseSessionClean() {
             ? error
             : 'Unknown error occurred'
       logger.error('Failed to close session (clean)', { error })
-      toast.error('Failed to close session', { description: message })
+      toast.error('Failed to delete session', { description: message })
     },
   })
 }

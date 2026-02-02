@@ -9,7 +9,7 @@ use tauri::{AppHandle, Manager};
 use uuid::Uuid;
 
 use super::types::{
-    SavedContextsMetadata, Session, SessionIndexEntry, SessionMetadata, WorktreeIndex,
+    ChatAgent, SavedContextsMetadata, Session, SessionIndexEntry, SessionMetadata, WorktreeIndex,
     WorktreeSessions,
 };
 
@@ -425,6 +425,7 @@ pub fn load_sessions(
                 id: entry.id.clone(),
                 name: entry.name.clone(),
                 order: entry.order,
+                agent: ChatAgent::Claude,
                 created_at: std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
                     .unwrap_or_default()
@@ -542,6 +543,52 @@ where
     Ok(result)
 }
 
+/// Ensure a worktree has an index file and initial session metadata.
+///
+/// This is used when creating a new worktree/base session so the initial session
+/// is pinned to a specific agent (Claude or Codex) before the UI loads it.
+///
+/// Important: This function never overwrites existing metadata.
+pub fn init_worktree_sessions(
+    app: &AppHandle,
+    worktree_id: &str,
+    agent: ChatAgent,
+) -> Result<(), String> {
+    // Ensure index exists (creates + saves if missing)
+    let index = load_index(app, worktree_id)?;
+
+    let target_session_id = index
+        .active_session_id
+        .as_deref()
+        .or_else(|| index.sessions.first().map(|s| s.id.as_str()))
+        .ok_or_else(|| format!("No sessions found for worktree: {worktree_id}"))?
+        .to_string();
+
+    for entry in &index.sessions {
+        let lock = get_metadata_lock(&entry.id);
+        let _guard = lock.lock().unwrap();
+
+        if load_metadata_internal(app, &entry.id)?.is_some() {
+            continue;
+        }
+
+        let mut metadata = SessionMetadata::new(
+            entry.id.clone(),
+            worktree_id.to_string(),
+            entry.name.clone(),
+            entry.order,
+        );
+
+        if entry.id == target_session_id {
+            metadata.agent = agent.clone();
+        }
+
+        save_metadata_internal(app, &metadata)?;
+    }
+
+    Ok(())
+}
+
 /// Get the index file path (for backward compatibility with old get_sessions_path)
 pub fn get_sessions_path(app: &AppHandle, worktree_id: &str) -> Result<PathBuf, String> {
     get_index_path(app, worktree_id)
@@ -556,78 +603,6 @@ pub fn load_sessions_by_id(app: &AppHandle, worktree_id: &str) -> Result<Worktre
 /// (Backward compatible with old get_closed_base_sessions_path)
 pub fn get_closed_base_sessions_path(app: &AppHandle, project_id: &str) -> Result<PathBuf, String> {
     get_base_index_path(app, project_id)
-}
-
-// ============================================================================
-// Base Session Preservation
-// ============================================================================
-
-/// Preserve sessions when closing a base session
-/// Moves index file to base-{project_id}.json
-pub fn preserve_base_sessions(
-    app: &AppHandle,
-    worktree_id: &str,
-    project_id: &str,
-) -> Result<(), String> {
-    let lock = get_index_lock(worktree_id);
-    let _guard = lock.lock().unwrap();
-
-    let current_path = get_index_path(app, worktree_id)?;
-    let preserved_path = get_base_index_path(app, project_id)?;
-
-    if current_path.exists() {
-        fs::rename(&current_path, &preserved_path).map_err(|e| {
-            log::error!("Failed to preserve base sessions: {e}");
-            format!("Failed to preserve base sessions: {e}")
-        })?;
-        log::trace!("Preserved base sessions from {current_path:?} to {preserved_path:?}");
-    }
-
-    Ok(())
-}
-
-/// Restore preserved sessions when reopening a base session
-/// Loads from base-{project_id}.json and updates worktree_id
-pub fn restore_base_sessions(
-    app: &AppHandle,
-    project_id: &str,
-    new_worktree_id: &str,
-) -> Result<Option<WorktreeIndex>, String> {
-    let lock = get_index_lock(new_worktree_id);
-    let _guard = lock.lock().unwrap();
-
-    let preserved_path = get_base_index_path(app, project_id)?;
-
-    if !preserved_path.exists() {
-        log::trace!("No preserved base sessions found for project {project_id}");
-        return Ok(None);
-    }
-
-    // Load the preserved index
-    let contents = fs::read_to_string(&preserved_path)
-        .map_err(|e| format!("Failed to read preserved index: {e}"))?;
-
-    let mut index: WorktreeIndex = serde_json::from_str(&contents)
-        .map_err(|e| format!("Failed to parse preserved index: {e}"))?;
-
-    // Update the worktree_id to the new one
-    index.worktree_id = new_worktree_id.to_string();
-
-    // Save to the new location
-    save_index_internal(app, &index)?;
-
-    // Delete the preserved file
-    fs::remove_file(&preserved_path).map_err(|e| {
-        log::warn!("Failed to delete preserved index file: {e}");
-        format!("Failed to delete preserved index: {e}")
-    })?;
-
-    log::trace!(
-        "Restored {} sessions for base session {new_worktree_id}",
-        index.sessions.len()
-    );
-
-    Ok(Some(index))
 }
 
 // ============================================================================

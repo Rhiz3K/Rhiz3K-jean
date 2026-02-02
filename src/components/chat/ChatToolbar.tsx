@@ -256,7 +256,6 @@ interface ChatToolbarProps {
   onInvestigate: () => void
   hasOpenPr: boolean
   onSetDiffRequest: (request: DiffRequest) => void
-  onAgentChange: (agent: ChatAgent) => void
   onModelChange: (model: string) => void
   onThinkingLevelChange: (level: ThinkingLevel) => void
   onEffortLevelChange: (level: EffortLevel) => void
@@ -366,7 +365,6 @@ export const ChatToolbar = memo(function ChatToolbar({
   onInvestigate,
   hasOpenPr,
   onSetDiffRequest,
-  onAgentChange,
   onModelChange,
   onThinkingLevelChange,
   onEffortLevelChange,
@@ -400,6 +398,9 @@ export const ChatToolbar = memo(function ChatToolbar({
     )
     return enabledMcpServers.filter(name => availableNames.has(name)).length
   }, [availableMcpServers, enabledMcpServers])
+
+  const selectedAgentLabel =
+    AGENT_OPTIONS.find(o => o.value === selectedAgent)?.label ?? selectedAgent
 
   // Memoize callbacks to prevent Select re-renders
   const handleAgentChange = useCallback(
@@ -804,31 +805,13 @@ export const ChatToolbar = memo(function ChatToolbar({
 
             <DropdownMenuSeparator />
 
-            {/* Agent selector as submenu */}
-            <DropdownMenuSub>
-              <DropdownMenuSubTrigger>
-                <CircleDot className="mr-2 h-4 w-4" />
-                <span>Agent</span>
-                <span className="ml-auto text-xs text-muted-foreground">
-                  {AGENT_OPTIONS.find(o => o.value === selectedAgent)?.label}
-                </span>
-              </DropdownMenuSubTrigger>
-              <DropdownMenuSubContent>
-                <DropdownMenuRadioGroup
-                  value={selectedAgent}
-                  onValueChange={handleAgentChange}
-                >
-                  {AGENT_OPTIONS.map(option => (
-                    <DropdownMenuRadioItem
-                      key={option.value}
-                      value={option.value}
-                    >
-                      {option.label}
-                    </DropdownMenuRadioItem>
-                  ))}
-                </DropdownMenuRadioGroup>
-              </DropdownMenuSubContent>
-            </DropdownMenuSub>
+            <DropdownMenuItem disabled>
+              <CircleDot className="h-4 w-4" />
+              <span>Agent</span>
+              <span className="ml-auto text-xs text-muted-foreground">
+                {selectedAgentLabel}
+              </span>
+            </DropdownMenuItem>
 
             {/* Model selector as submenu */}
             <DropdownMenuSub>
@@ -1298,24 +1281,11 @@ export const ChatToolbar = memo(function ChatToolbar({
         {/* Divider - desktop only */}
         <div className="hidden @md:block h-4 w-px bg-border/50" />
 
-        {/* Agent selector - desktop only */}
-        <Select
-          value={selectedAgent}
-          onValueChange={handleAgentChange}
-          disabled={isDisabled}
-        >
-          <SelectTrigger className="hidden @md:flex h-8 w-auto gap-1.5 rounded-none border-0 bg-transparent px-3 text-sm text-muted-foreground shadow-none hover:bg-muted/80 hover:text-foreground dark:bg-transparent dark:hover:bg-muted/80">
-            <CircleDot className="h-3.5 w-3.5" />
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {AGENT_OPTIONS.map(option => (
-              <SelectItem key={option.value} value={option.value}>
-                {option.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        {/* Agent indicator - desktop only */}
+        <div className="hidden @md:flex h-8 items-center gap-1.5 px-3 text-sm text-muted-foreground select-none">
+          <CircleDot className="h-3.5 w-3.5" />
+          <span>{selectedAgentLabel}</span>
+        </div>
 
         {/* Divider - desktop only */}
         <div className="hidden @md:block h-4 w-px bg-border/50" />

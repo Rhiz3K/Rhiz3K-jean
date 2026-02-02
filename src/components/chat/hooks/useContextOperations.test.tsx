@@ -33,10 +33,6 @@ describe('useContextOperations', () => {
         ...defaultPreferences.magic_prompts,
         context_summary: 'custom summary prompt',
       },
-      magic_prompt_agents: {
-        ...defaultPreferences.magic_prompt_agents,
-        context_summary_model: 'codex',
-      },
       magic_prompt_codex_models: {
         ...defaultPreferences.magic_prompt_codex_models,
         context_summary_model: 'gpt-5.2-codex',
@@ -58,6 +54,7 @@ describe('useContextOperations', () => {
     const { result } = renderHook(() =>
       useContextOperations({
         activeSessionId: 's1',
+        sessionAgent: 'codex',
         activeWorktreeId: 'w1',
         activeWorktreePath: '/tmp/w1',
         worktree: {

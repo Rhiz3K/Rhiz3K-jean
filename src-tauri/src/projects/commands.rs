@@ -419,6 +419,7 @@ pub async fn create_worktree(
     issue_context: Option<IssueContext>,
     pr_context: Option<PullRequestContext>,
     custom_name: Option<String>,
+    agent: Option<ChatAgent>,
 ) -> Result<Worktree, String> {
     log::trace!("Creating worktree for project: {project_id}");
 
@@ -525,6 +526,8 @@ pub async fn create_worktree(
         archived_at: None,
     };
 
+    let agent_for_sessions = agent.unwrap_or(ChatAgent::Claude);
+
     // Clone values for the background thread
     let app_clone = app.clone();
     let project_path = project.path.clone();
@@ -535,6 +538,7 @@ pub async fn create_worktree(
     let base_clone = base.clone();
     let issue_context_clone = issue_context.clone();
     let pr_context_clone = pr_context.clone();
+    let agent_for_sessions_clone = agent_for_sessions.clone();
 
     // Spawn background thread for git operations
     thread::spawn(move || {
@@ -927,6 +931,17 @@ pub async fn create_worktree(
                 return;
             }
 
+            // Initialize sessions for this worktree (pins initial session agent)
+            if let Err(e) = crate::chat::storage::init_worktree_sessions(
+                &app_clone,
+                &worktree_id_clone,
+                agent_for_sessions_clone.clone(),
+            ) {
+                log::warn!(
+                    "Background: Failed to initialize sessions for {worktree_id_clone}: {e}"
+                );
+            }
+
             // Emit success event
             log::trace!(
                 "Background: Worktree created successfully: {}",
@@ -966,6 +981,7 @@ pub async fn create_worktree_from_existing_branch(
     branch_name: String,
     issue_context: Option<IssueContext>,
     pr_context: Option<PullRequestContext>,
+    agent: Option<ChatAgent>,
 ) -> Result<Worktree, String> {
     log::trace!("Creating worktree from existing branch {branch_name} for project: {project_id}");
 
@@ -1033,6 +1049,8 @@ pub async fn create_worktree_from_existing_branch(
         archived_at: None,
     };
 
+    let agent_for_sessions = agent.unwrap_or(ChatAgent::Claude);
+
     // Clone values for the background thread
     let app_clone = app.clone();
     let project_path = project.path.clone();
@@ -1043,6 +1061,7 @@ pub async fn create_worktree_from_existing_branch(
     let branch_name_clone = branch_name.clone();
     let issue_context_clone = issue_context.clone();
     let pr_context_clone = pr_context.clone();
+    let agent_for_sessions_clone = agent_for_sessions.clone();
 
     // Spawn background thread for git operations
     thread::spawn(move || {
@@ -1260,6 +1279,17 @@ pub async fn create_worktree_from_existing_branch(
                     log::error!("Failed to emit worktree:error event: {emit_err}");
                 }
                 return;
+            }
+
+            // Initialize sessions for this worktree (pins initial session agent)
+            if let Err(e) = crate::chat::storage::init_worktree_sessions(
+                &app_clone,
+                &worktree_id_clone,
+                agent_for_sessions_clone.clone(),
+            ) {
+                log::warn!(
+                    "Background: Failed to initialize sessions for {worktree_id_clone}: {e}"
+                );
             }
 
             // Emit success event
@@ -1818,13 +1848,23 @@ pub async fn delete_worktree(app: AppHandle, worktree_id: String) -> Result<(), 
 /// Base sessions use the project's base directory directly (no git worktree creation)
 /// If a preserved sessions file exists from a previous close, it will be restored
 #[tauri::command]
-pub async fn create_base_session(app: AppHandle, project_id: String) -> Result<Worktree, String> {
+pub async fn create_base_session(
+    app: AppHandle,
+    project_id: String,
+    agent: Option<ChatAgent>,
+) -> Result<Worktree, String> {
     log::trace!("Creating base session for project: {project_id}");
 
     let mut data = load_projects_data(&app)?;
 
-    // Check if base session already exists - return existing for reopening
+    // Check if base session already exists - return existing for reopening.
+    // If it's archived, unarchive it.
     if let Some(existing) = data.find_base_session(&project_id) {
+        if existing.archived_at.is_some() {
+            log::trace!("Unarchiving existing base session: {}", existing.name);
+            return unarchive_worktree(app, existing.id.clone()).await;
+        }
+
         log::trace!("Returning existing base session: {}", existing.name);
         return Ok(existing.clone());
     }
@@ -1868,19 +1908,19 @@ pub async fn create_base_session(app: AppHandle, project_id: String) -> Result<W
     data.add_worktree(session.clone());
     save_projects_data(&app, &data)?;
 
-    // Try to restore preserved sessions from a previous close
-    // This migrates base-{project_id}.json to {new_worktree_id}.json
-    match crate::chat::restore_base_sessions(&app, &project_id, &session.id) {
-        Ok(Some(_)) => {
-            log::trace!("Restored preserved sessions for base session");
-        }
-        Ok(None) => {
-            log::trace!("No preserved sessions to restore");
-        }
-        Err(e) => {
-            // Log error but don't fail - a fresh session will be created instead
-            log::warn!("Failed to restore preserved sessions: {e}");
-        }
+    // Note: base sessions are archived/unarchived via `archived_at`.
+    // Legacy preserved base session files are migrated above.
+
+    // Ensure sessions exist and pin agent for the initial session (only if metadata is missing).
+    // If we restored preserved sessions, this is a no-op.
+    let agent_for_sessions = agent.unwrap_or(ChatAgent::Claude);
+    if let Err(e) =
+        crate::chat::storage::init_worktree_sessions(&app, &session.id, agent_for_sessions)
+    {
+        log::warn!(
+            "Failed to initialize sessions for base session {}: {e}",
+            session.id
+        );
     }
 
     log::trace!(
@@ -1890,15 +1930,14 @@ pub async fn create_base_session(app: AppHandle, project_id: String) -> Result<W
     Ok(session)
 }
 
-/// Close a base branch session (removes record only, no git operations)
-/// Preserves the sessions file so it can be restored when the base session is reopened
+/// Archive a base session (keeps history, hides from sidebar)
 #[tauri::command]
 pub async fn close_base_session(app: AppHandle, worktree_id: String) -> Result<(), String> {
     close_base_session_internal(&app, &worktree_id, true).await
 }
 
-/// Close a base branch session without preserving sessions (clean close)
-/// Deletes the sessions file entirely so the base session starts fresh on reopen
+/// Delete a base session's chat history (clean close)
+/// The next time you open a base session, it will start fresh
 #[tauri::command]
 pub async fn close_base_session_clean(app: AppHandle, worktree_id: String) -> Result<(), String> {
     close_base_session_internal(&app, &worktree_id, false).await
@@ -1925,20 +1964,36 @@ async fn close_base_session_internal(
     }
 
     if preserve_sessions {
-        // Preserve the sessions file before removing the worktree
-        // This renames {worktree_id}.json to base-{project_id}.json
-        crate::chat::preserve_base_sessions(app, worktree_id, &worktree.project_id)?;
-    } else {
-        // Delete the sessions file entirely for a clean close
-        if let Ok(sessions_file) = crate::chat::storage::get_sessions_path(app, worktree_id) {
-            if sessions_file.exists() {
-                if let Err(e) = std::fs::remove_file(&sessions_file) {
-                    log::warn!("Failed to delete sessions file for {worktree_id}: {e}");
-                } else {
-                    log::trace!(
-                        "Deleted sessions file for clean base session close: {worktree_id}"
-                    );
-                }
+        // Archive the base session (keeps history, shows in Archived modal)
+        return archive_worktree(app.clone(), worktree_id.to_string()).await;
+    }
+
+    // Delete the sessions file entirely for a clean close
+    if let Ok(sessions_file) = crate::chat::storage::get_sessions_path(app, worktree_id) {
+        if sessions_file.exists() {
+            if let Err(e) = std::fs::remove_file(&sessions_file) {
+                log::warn!("Failed to delete sessions file for {worktree_id}: {e}");
+            } else {
+                log::trace!("Deleted sessions file for clean base session close: {worktree_id}");
+            }
+        }
+    }
+
+    // Delete any legacy preserved base sessions file for this project.
+    if let Ok(preserved_path) =
+        crate::chat::storage::get_closed_base_sessions_path(app, &worktree.project_id)
+    {
+        if preserved_path.exists() {
+            if let Err(e) = std::fs::remove_file(&preserved_path) {
+                log::warn!(
+                    "Failed to delete preserved base sessions file for project {}: {e}",
+                    worktree.project_id
+                );
+            } else {
+                log::trace!(
+                    "Deleted preserved base sessions file for project: {}",
+                    worktree.project_id
+                );
             }
         }
     }
@@ -1971,7 +2026,7 @@ async fn close_base_session_internal(
 /// Unlike delete_worktree, this does NOT remove the git worktree or branch.
 /// It only marks the worktree as archived by setting archived_at timestamp.
 ///
-/// Note: Base sessions cannot be archived - use close_base_session instead.
+/// Note: Base sessions can be archived as well.
 #[tauri::command]
 pub async fn archive_worktree(app: AppHandle, worktree_id: String) -> Result<(), String> {
     log::trace!("Archiving worktree: {worktree_id}");
@@ -1984,13 +2039,6 @@ pub async fn archive_worktree(app: AppHandle, worktree_id: String) -> Result<(),
     let worktree = data
         .find_worktree_mut(&worktree_id)
         .ok_or_else(|| format!("Worktree not found: {worktree_id}"))?;
-
-    // Base sessions cannot be archived - they should be closed instead
-    if worktree.session_type == SessionType::Base {
-        return Err(
-            "Base sessions cannot be archived. Use close_base_session instead.".to_string(),
-        );
-    }
 
     // Check if already archived
     if worktree.archived_at.is_some() {
@@ -2072,7 +2120,89 @@ pub async fn unarchive_worktree(app: AppHandle, worktree_id: String) -> Result<W
 pub async fn list_archived_worktrees(app: AppHandle) -> Result<Vec<Worktree>, String> {
     log::trace!("Listing all archived worktrees");
 
-    let data = load_projects_data(&app)?;
+    let mut data = load_projects_data(&app)?;
+
+    // One-time migration: legacy base session preservation used a separate
+    // base-{project_id}.json index file. Convert those into archived base
+    // session worktrees so they appear in the Archived modal.
+    let projects: Vec<Project> = data
+        .projects
+        .iter()
+        .filter(|p| !p.is_folder)
+        .cloned()
+        .collect();
+
+    let mut migrated = false;
+    for project in projects {
+        let preserved_path =
+            match crate::chat::storage::get_closed_base_sessions_path(&app, &project.id) {
+                Ok(p) => p,
+                Err(_) => continue,
+            };
+
+        if !preserved_path.exists() {
+            continue;
+        }
+
+        let contents = std::fs::read_to_string(&preserved_path)
+            .map_err(|e| format!("Failed to read preserved base sessions file: {e}"))?;
+        let index: crate::chat::types::WorktreeIndex = serde_json::from_str(&contents)
+            .map_err(|e| format!("Failed to parse preserved base sessions file: {e}"))?;
+
+        let legacy_worktree_id = index.worktree_id.clone();
+        if data.find_worktree(&legacy_worktree_id).is_some() {
+            // Already migrated or recreated; drop preserved file.
+            let _ = std::fs::remove_file(&preserved_path);
+            continue;
+        }
+
+        // Move index file into the normal sessions index location
+        let target_index_path = crate::chat::storage::get_sessions_path(&app, &legacy_worktree_id)?;
+        if !target_index_path.exists() {
+            std::fs::rename(&preserved_path, &target_index_path).map_err(|e| {
+                format!("Failed to migrate preserved base sessions file to index path: {e}")
+            })?;
+        } else {
+            let _ = std::fs::remove_file(&preserved_path);
+        }
+
+        let migrated_worktree = Worktree {
+            id: legacy_worktree_id,
+            project_id: project.id.clone(),
+            name: project.default_branch.clone(),
+            path: project.path.clone(),
+            branch: project.default_branch.clone(),
+            created_at: now(),
+            setup_output: None,
+            setup_script: None,
+            session_type: SessionType::Base,
+            pr_number: None,
+            pr_url: None,
+            cached_pr_status: None,
+            cached_check_status: None,
+            cached_behind_count: None,
+            cached_ahead_count: None,
+            cached_status_at: None,
+            cached_uncommitted_added: None,
+            cached_uncommitted_removed: None,
+            cached_branch_diff_added: None,
+            cached_branch_diff_removed: None,
+            cached_base_branch_ahead_count: None,
+            cached_base_branch_behind_count: None,
+            cached_worktree_ahead_count: None,
+            cached_unpushed_count: None,
+            order: 0,
+            archived_at: Some(now()),
+        };
+
+        data.add_worktree(migrated_worktree);
+        migrated = true;
+    }
+
+    if migrated {
+        save_projects_data(&app, &data)?;
+    }
+
     let archived = data
         .worktrees
         .iter()

@@ -495,15 +495,10 @@ export function ChatWindow({
   // Run script for this worktree (used by CMD+R keybinding)
   const { data: runScript } = useRunScript(activeWorktreePath ?? null)
 
-  // Per-session agent selection (defaults to Claude)
-  const storedAgent = useChatStore(state =>
-    deferredSessionId ? state.agents[deferredSessionId] : undefined
-  )
-  const selectedAgent: ChatAgent =
-    storedAgent ??
-    (session?.codex_session_id && !session?.claude_session_id
-      ? 'codex'
-      : 'claude')
+  // Agent is pinned per session (cannot be switched mid-session)
+  const selectedAgent: ChatAgent = (session?.agent ??
+    sessionsData?.sessions.find(s => s.id === deferredSessionId)?.agent ??
+    'claude') as ChatAgent
 
   // Per-session model selection
   // - Claude: uses preferences default (sonnet/opus/haiku) unless overridden per-session
@@ -1513,6 +1508,7 @@ export function ChatWindow({
   } = useGitOperations({
     activeWorktreeId,
     activeWorktreePath,
+    activeSession: session,
     worktree,
     project,
     queryClient,
@@ -1550,19 +1546,13 @@ export function ChatWindow({
     setLoadContextModalOpen,
   } = useContextOperations({
     activeSessionId,
+    sessionAgent: session?.agent ?? null,
     activeWorktreeId,
     activeWorktreePath,
     worktree,
     queryClient,
     preferences,
   })
-
-  // PERFORMANCE: Stable callbacks for ChatToolbar to prevent re-renders
-  const handleToolbarAgentChange = useCallback((agent: ChatAgent) => {
-    const sessionId = activeSessionIdRef.current
-    if (!sessionId) return
-    useChatStore.getState().setAgent(sessionId, agent)
-  }, [])
 
   const handleToolbarCodexBuildNetworkAccessChange = useCallback(
     (enabled: boolean) => {
@@ -1841,16 +1831,14 @@ Begin your investigation now.`
     const prompt = promptParts.join('\n\n---\n\n')
 
     // Send message
-    const agent =
-      (preferences?.magic_prompt_agents?.investigate_model as
-        | ChatAgent
-        | undefined) ?? selectedAgentRef.current
+    const agent = ((session?.agent as ChatAgent | undefined) ??
+      'claude') as ChatAgent
 
     const investigateModel =
-      agent === 'claude'
-        ? (preferences?.magic_prompt_models?.investigate_model ??
+      agent === 'codex'
+        ? (preferences?.magic_prompt_codex_models?.investigate_model ??
           selectedModelRef.current)
-        : (preferences?.magic_prompt_codex_models?.investigate_model ??
+        : (preferences?.magic_prompt_models?.investigate_model ??
           selectedModelRef.current)
 
     const mode = executionModeRef.current
@@ -1873,7 +1861,6 @@ Begin your investigation now.`
       setLastSentMessage,
       setError,
       setSelectedModel,
-      setAgent,
       setExecutingMode,
     } = useChatStore.getState()
 
@@ -1881,7 +1868,6 @@ Begin your investigation now.`
     setError(sessionId, null)
     addSendingSession(sessionId)
     setSelectedModel(sessionId, investigateModel)
-    setAgent(sessionId, agent)
     setExecutingMode(sessionId, executionModeRef.current)
 
     sendMessage.mutate(
@@ -1923,7 +1909,6 @@ Begin your investigation now.`
     setLoadContextModalOpen,
     preferences?.magic_prompts?.investigate_issue,
     preferences?.magic_prompts?.investigate_pr,
-    preferences?.magic_prompt_agents?.investigate_model,
     preferences?.magic_prompt_models?.investigate_model,
     preferences?.magic_prompt_codex_models?.investigate_model,
     preferences?.magic_prompt_codex_reasoning_efforts?.investigate_model,
@@ -1932,6 +1917,7 @@ Begin your investigation now.`
     preferences?.parallel_execution_prompt_enabled,
     preferences?.chrome_enabled,
     preferences?.ai_language,
+    session?.agent,
   ])
 
   // Wraps modal open/close to auto-trigger investigation after user loads context
@@ -2865,7 +2851,6 @@ Begin your investigation now.`
                         onInvestigate={handleInvestigate}
                         hasOpenPr={Boolean(worktree?.pr_url)}
                         onSetDiffRequest={setDiffRequest}
-                        onAgentChange={handleToolbarAgentChange}
                         onModelChange={handleToolbarModelChange}
                         onThinkingLevelChange={handleToolbarThinkingLevelChange}
                         onEffortLevelChange={handleToolbarEffortLevelChange}
