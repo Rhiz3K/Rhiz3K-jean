@@ -7,6 +7,7 @@ export type PreferencePane =
   | 'keybindings'
   | 'magic-prompts'
   | 'experimental'
+  | 'web-access'
 
 export type OnboardingStartStep = 'claude' | 'gh' | null
 

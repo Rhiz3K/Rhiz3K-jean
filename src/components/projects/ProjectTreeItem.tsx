@@ -6,7 +6,7 @@ import {
   MoreHorizontal,
   Plus,
 } from 'lucide-react'
-import { convertFileSrc } from '@tauri-apps/api/core'
+import { convertFileSrc } from '@/lib/transport'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import type { Project } from '@/types/projects'

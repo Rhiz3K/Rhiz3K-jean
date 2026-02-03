@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { getCurrentWindow } from '@tauri-apps/api/window'
+import { isNativeApp } from '@/lib/environment'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -37,7 +37,9 @@ export function QuitConfirmationDialog() {
   }, [])
 
   const handleQuit = async () => {
+    if (!isNativeApp()) return
     try {
+      const { getCurrentWindow } = await import('@tauri-apps/api/window')
       await getCurrentWindow().destroy()
     } catch (error) {
       logger.error('Failed to destroy window', { error })

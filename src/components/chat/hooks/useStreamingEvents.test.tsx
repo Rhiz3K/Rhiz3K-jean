@@ -13,15 +13,18 @@ interface ListenerEvent {
 }
 const listeners = new Map<string, (event: ListenerEvent) => void>()
 
-vi.mock('@tauri-apps/api/event', () => ({
+vi.mock('@/lib/transport', () => ({
+  invoke: vi.fn(),
   listen: vi.fn((eventName: string, cb: (event: ListenerEvent) => void) => {
     listeners.set(eventName, cb)
     return Promise.resolve(() => undefined)
   }),
-}))
-
-vi.mock('@tauri-apps/api/core', () => ({
-  invoke: vi.fn(),
+  convertFileSrc: (path: string) => path,
+  preloadInitialData: vi.fn().mockResolvedValue(null),
+  hasPreloadedData: vi.fn(() => false),
+  getPreloadedData: vi.fn(() => null),
+  useWsConnectionStatus: () => true,
+  useWsAuthError: () => null,
 }))
 
 vi.mock('sonner', () => ({

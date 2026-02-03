@@ -1,5 +1,12 @@
 import { useState, useCallback, useEffect } from 'react'
-import { Settings, Palette, Keyboard, Wand2, FlaskConical } from 'lucide-react'
+import {
+  Settings,
+  Palette,
+  Keyboard,
+  Wand2,
+  FlaskConical,
+  Globe,
+} from 'lucide-react'
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -30,6 +37,7 @@ import { AppearancePane } from './panes/AppearancePane'
 import { KeybindingsPane } from './panes/KeybindingsPane'
 import { MagicPromptsPane } from './panes/MagicPromptsPane'
 import { ExperimentalPane } from './panes/ExperimentalPane'
+import { WebAccessPane } from './panes/WebAccessPane'
 
 const navigationItems = [
   {
@@ -57,6 +65,11 @@ const navigationItems = [
     name: 'Experimental',
     icon: FlaskConical,
   },
+  {
+    id: 'web-access' as const,
+    name: 'Web Access',
+    icon: Globe,
+  },
 ]
 
 const getPaneTitle = (pane: PreferencePane): string => {
@@ -71,6 +84,8 @@ const getPaneTitle = (pane: PreferencePane): string => {
       return 'Magic Prompts'
     case 'experimental':
       return 'Experimental'
+    case 'web-access':
+      return 'Web Access'
     default:
       return 'General'
   }
@@ -160,6 +175,7 @@ export function PreferencesDialog() {
               {activePane === 'keybindings' && <KeybindingsPane />}
               {activePane === 'magic-prompts' && <MagicPromptsPane />}
               {activePane === 'experimental' && <ExperimentalPane />}
+              {activePane === 'web-access' && <WebAccessPane />}
             </div>
           </main>
         </SidebarProvider>

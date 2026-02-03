@@ -7,7 +7,7 @@ import {
   useState,
 } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { invoke } from '@tauri-apps/api/core'
+import { invoke } from '@/lib/transport'
 import { toast } from 'sonner'
 import { formatShortcutDisplay, DEFAULT_KEYBINDINGS } from '@/types/keybindings'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -89,6 +89,7 @@ import {
 } from './VirtualizedMessageList'
 import { useUIStore } from '@/store/ui-store'
 import { useGitStatus } from '@/services/git-status'
+import { isNativeApp } from '@/lib/environment'
 import { usePrStatus, usePrStatusEvents } from '@/services/pr-status'
 import type { PrDisplayStatus, CheckStatus } from '@/types/pr-status'
 import type { QueuedMessage, ExecutionMode, ChatAgent } from '@/types/chat'
@@ -166,8 +167,14 @@ export function ChatWindow() {
       : undefined
   )
 
+  // PERF: Direct data subscription for isSending - triggers re-render when sendingSessionIds changes
+  // (Previously used function selector which was a stable ref that never triggered re-renders)
+  const isSendingForSession = useChatStore(state =>
+    activeSessionId
+      ? (state.sendingSessionIds[activeSessionId] ?? false)
+      : false
+  )
   // Function selectors - these return stable function references
-  const checkIsSending = useChatStore(state => state.isSending)
   const isQuestionAnswered = useChatStore(state => state.isQuestionAnswered)
   const getSubmittedAnswers = useChatStore(state => state.getSubmittedAnswers)
   const areQuestionsSkipped = useChatStore(state => state.areQuestionsSkipped)
@@ -476,8 +483,7 @@ export function ChatWindow() {
         ? storedThinkingLevel
         : defaultClaudeThinkingLevel
 
-  // Only show "Thinking..." for this specific session (uses activeSessionId for immediate feedback)
-  const isSending = activeSessionId ? checkIsSending(activeSessionId) : false
+  const isSending = isSendingForSession
 
   // PERFORMANCE: Content selectors use deferredSessionId to prevent sync re-render cascade
   // When switching tabs, these selectors return stable values until React catches up
@@ -819,8 +825,10 @@ export function ChatWindow() {
     return () => window.removeEventListener('open-git-diff', handleOpenGitDiff)
   }, [activeWorktreePath, gitStatus?.base_branch])
 
-  // Listen for global run command from keybinding (CMD+R by default)
+  // Listen for global run command from keybinding (CMD+R by default) - native app only
   useEffect(() => {
+    if (!isNativeApp()) return
+
     const handleToggleWorkspaceRun = () => {
       if (!activeWorktreeId || !runScript) return
       useTerminalStore.getState().startRun(activeWorktreeId, runScript)
@@ -1301,6 +1309,12 @@ export function ChatWindow() {
           worktreePath: activeWorktreePath,
           model,
         })
+        // Broadcast to other clients (fire-and-forget)
+        invoke('broadcast_session_setting', {
+          sessionId: activeSessionId,
+          key: 'model',
+          value: model,
+        }).catch(() => undefined)
       }
     },
     [activeSessionId, activeWorktreeId, activeWorktreePath, setSessionModel]
@@ -1332,6 +1346,12 @@ export function ChatWindow() {
         worktreePath,
         thinkingLevel: level,
       })
+      // Broadcast to other clients (fire-and-forget)
+      invoke('broadcast_session_setting', {
+        sessionId,
+        key: 'thinkingLevel',
+        value: level,
+      }).catch(() => undefined)
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps -- mutate is stable, refs used for IDs
     []
@@ -1341,13 +1361,23 @@ export function ChatWindow() {
     (mode: ExecutionMode) => {
       if (!activeSessionId) return
 
+      const apply = () => {
+        setExecutionMode(activeSessionId, mode)
+        // Broadcast to other clients (fire-and-forget)
+        invoke('broadcast_session_setting', {
+          sessionId: activeSessionId,
+          key: 'executionMode',
+          value: mode,
+        }).catch(() => undefined)
+      }
+
       // Gate entering yolo
       if (mode === 'yolo' && executionModeRef.current !== 'yolo') {
-        requestYoloConfirmation(() => setExecutionMode(activeSessionId, mode))
+        requestYoloConfirmation(apply)
         return
       }
 
-      setExecutionMode(activeSessionId, mode)
+      apply()
     },
     [activeSessionId, setExecutionMode, requestYoloConfirmation]
   )
@@ -1655,7 +1685,7 @@ Begin your investigation now.`
     const handleSaveContextEvent = () => handleSaveContext()
     const handleLoadContextEvent = () => handleLoadContext()
     const handleRunScriptEvent = () => {
-      if (!activeWorktreeId || !runScript) return
+      if (!isNativeApp() || !activeWorktreeId || !runScript) return
       useTerminalStore.getState().startRun(activeWorktreeId, runScript)
     }
 
@@ -2388,8 +2418,8 @@ Begin your investigation now.`
               </div>
             </ResizablePanel>
 
-            {/* Terminal panel - only render when panel is open */}
-            {activeWorktreePath && terminalPanelOpen && (
+            {/* Terminal panel - only render when panel is open (native app only) */}
+            {isNativeApp() && activeWorktreePath && terminalPanelOpen && (
               <>
                 <ResizableHandle withHandle />
                 <ResizablePanel

@@ -7,7 +7,7 @@
  */
 
 import { useCallback, useEffect, useId, useMemo, useRef } from 'react'
-import { invoke } from '@tauri-apps/api/core'
+import { invoke } from '@/lib/transport'
 import { useQueryClient } from '@tanstack/react-query'
 import { ghCliQueryKeys } from '@/services/gh-cli'
 import { githubQueryKeys } from '@/services/github'

@@ -5,7 +5,7 @@ use std::path::Path;
 use std::process::Stdio;
 use std::thread;
 use std::time::{SystemTime, UNIX_EPOCH};
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{AppHandle, Manager};
 use tauri_plugin_dialog::DialogExt;
 use uuid::Uuid;
 
@@ -28,6 +28,7 @@ use crate::chat::types::ChatAgent;
 use crate::claude_cli::get_cli_binary_path;
 use crate::codex_cli::run_codex_prompt;
 use crate::gh_cli::config::resolve_gh_binary;
+use crate::http_server::EmitExt;
 use crate::platform::silent_command;
 
 /// Get current Unix timestamp
@@ -488,7 +489,7 @@ pub async fn create_worktree(
         path: worktree_path_str.clone(),
         branch: name.clone(),
     };
-    if let Err(e) = app.emit("worktree:creating", &creating_event) {
+    if let Err(e) = app.emit_all("worktree:creating", &creating_event) {
         log::error!("Failed to emit worktree:creating event: {e}");
     }
 
@@ -583,7 +584,7 @@ pub async fn create_worktree(
                 archived_worktree_name: archived_info.map(|(_, name)| name),
                 issue_context: issue_context_clone.clone(),
             };
-            if let Err(e) = app_clone.emit("worktree:path_exists", &path_exists_event) {
+            if let Err(e) = app_clone.emit_all("worktree:path_exists", &path_exists_event) {
                 log::error!("Failed to emit worktree:path_exists event: {e}");
             }
 
@@ -593,7 +594,7 @@ pub async fn create_worktree(
                 project_id: project_id_clone,
                 error: format!("Directory already exists: {worktree_path_clone}"),
             };
-            if let Err(e) = app_clone.emit("worktree:error", &error_event) {
+            if let Err(e) = app_clone.emit_all("worktree:error", &error_event) {
                 log::error!("Failed to emit worktree:error event: {e}");
             }
             return;
@@ -651,7 +652,9 @@ pub async fn create_worktree(
                         issue_context: issue_context_clone.clone(),
                         pr_context: pr_context_clone.clone(),
                     };
-                    if let Err(e) = app_clone.emit("worktree:branch_exists", &branch_exists_event) {
+                    if let Err(e) =
+                        app_clone.emit_all("worktree:branch_exists", &branch_exists_event)
+                    {
                         log::error!("Failed to emit worktree:branch_exists event: {e}");
                     }
 
@@ -661,7 +664,7 @@ pub async fn create_worktree(
                         project_id: project_id_clone,
                         error: format!("Branch already exists: {name_clone}"),
                     };
-                    if let Err(e) = app_clone.emit("worktree:error", &error_event) {
+                    if let Err(e) = app_clone.emit_all("worktree:error", &error_event) {
                         log::error!("Failed to emit worktree:error event: {e}");
                     }
                     return;
@@ -682,7 +685,7 @@ pub async fn create_worktree(
                 project_id: project_id_clone,
                 error: e,
             };
-            if let Err(emit_err) = app_clone.emit("worktree:error", &error_event) {
+            if let Err(emit_err) = app_clone.emit_all("worktree:error", &error_event) {
                 log::error!("Failed to emit worktree:error event: {emit_err}");
             }
             return;
@@ -730,7 +733,7 @@ pub async fn create_worktree(
                         project_id: project_id_clone,
                         error: e,
                     };
-                    if let Err(emit_err) = app_clone.emit("worktree:error", &error_event) {
+                    if let Err(emit_err) = app_clone.emit_all("worktree:error", &error_event) {
                         log::error!("Failed to emit worktree:error event: {emit_err}");
                     }
                     return;
@@ -835,39 +838,40 @@ pub async fn create_worktree(
         }
 
         // Check for jean.json and run setup script
-        let (setup_output, setup_script) =
-            if let Some(config) = git::read_jean_config(&project_path) {
-                if let Some(script) = config.scripts.setup {
-                    log::trace!("Background: Found jean.json with setup script, executing...");
-                    match git::run_setup_script(
-                        &worktree_path_clone,
-                        &project_path,
-                        &final_branch,
-                        &script,
-                    ) {
-                        Ok(output) => (Some(output), Some(script)),
-                        Err(e) => {
-                            log::error!("Background: Setup script failed: {e}");
-                            // Clean up: remove the worktree since setup failed
-                            let _ = git::remove_worktree(&project_path, &worktree_path_clone);
-                            let _ = git::delete_branch(&project_path, &final_branch);
-                            let error_event = WorktreeCreateErrorEvent {
-                                id: worktree_id_clone,
-                                project_id: project_id_clone,
-                                error: format!("Setup script failed: {e}"),
-                            };
-                            if let Err(emit_err) = app_clone.emit("worktree:error", &error_event) {
-                                log::error!("Failed to emit worktree:error event: {emit_err}");
-                            }
-                            return;
+        let (setup_output, setup_script) = if let Some(config) =
+            git::read_jean_config(&project_path)
+        {
+            if let Some(script) = config.scripts.setup {
+                log::trace!("Background: Found jean.json with setup script, executing...");
+                match git::run_setup_script(
+                    &worktree_path_clone,
+                    &project_path,
+                    &final_branch,
+                    &script,
+                ) {
+                    Ok(output) => (Some(output), Some(script)),
+                    Err(e) => {
+                        log::error!("Background: Setup script failed: {e}");
+                        // Clean up: remove the worktree since setup failed
+                        let _ = git::remove_worktree(&project_path, &worktree_path_clone);
+                        let _ = git::delete_branch(&project_path, &final_branch);
+                        let error_event = WorktreeCreateErrorEvent {
+                            id: worktree_id_clone,
+                            project_id: project_id_clone,
+                            error: format!("Setup script failed: {e}"),
+                        };
+                        if let Err(emit_err) = app_clone.emit_all("worktree:error", &error_event) {
+                            log::error!("Failed to emit worktree:error event: {emit_err}");
                         }
+                        return;
                     }
-                } else {
-                    (None, None)
                 }
             } else {
                 (None, None)
-            };
+            }
+        } else {
+            (None, None)
+        };
 
         // Save to storage
         if let Ok(mut data) = load_projects_data(&app_clone) {
@@ -918,7 +922,7 @@ pub async fn create_worktree(
                     project_id: project_id_clone,
                     error: format!("Failed to save worktree: {e}"),
                 };
-                if let Err(emit_err) = app_clone.emit("worktree:error", &error_event) {
+                if let Err(emit_err) = app_clone.emit_all("worktree:error", &error_event) {
                     log::error!("Failed to emit worktree:error event: {emit_err}");
                 }
                 return;
@@ -941,7 +945,7 @@ pub async fn create_worktree(
                 worktree.name
             );
             let created_event = WorktreeCreatedEvent { worktree };
-            if let Err(e) = app_clone.emit("worktree:created", &created_event) {
+            if let Err(e) = app_clone.emit_all("worktree:created", &created_event) {
                 log::error!("Failed to emit worktree:created event: {e}");
             }
         } else {
@@ -951,7 +955,7 @@ pub async fn create_worktree(
                 project_id: project_id_clone,
                 error: "Failed to load projects data".to_string(),
             };
-            if let Err(emit_err) = app_clone.emit("worktree:error", &error_event) {
+            if let Err(emit_err) = app_clone.emit_all("worktree:error", &error_event) {
                 log::error!("Failed to emit worktree:error event: {emit_err}");
             }
         }
@@ -1008,7 +1012,7 @@ pub async fn create_worktree_from_existing_branch(
         path: worktree_path_str.clone(),
         branch: name.clone(),
     };
-    if let Err(e) = app.emit("worktree:creating", &creating_event) {
+    if let Err(e) = app.emit_all("worktree:creating", &creating_event) {
         log::error!("Failed to emit worktree:creating event: {e}");
     }
 
@@ -1069,7 +1073,7 @@ pub async fn create_worktree_from_existing_branch(
                 project_id: project_id_clone,
                 error: format!("Directory already exists: {worktree_path_clone}"),
             };
-            if let Err(e) = app_clone.emit("worktree:error", &error_event) {
+            if let Err(e) = app_clone.emit_all("worktree:error", &error_event) {
                 log::error!("Failed to emit worktree:error event: {e}");
             }
             return;
@@ -1087,7 +1091,7 @@ pub async fn create_worktree_from_existing_branch(
                 project_id: project_id_clone,
                 error: e,
             };
-            if let Err(emit_err) = app_clone.emit("worktree:error", &error_event) {
+            if let Err(emit_err) = app_clone.emit_all("worktree:error", &error_event) {
                 log::error!("Failed to emit worktree:error event: {emit_err}");
             }
             return;
@@ -1184,39 +1188,40 @@ pub async fn create_worktree_from_existing_branch(
         }
 
         // Check for jean.json and run setup script
-        let (setup_output, setup_script) =
-            if let Some(config) = git::read_jean_config(&project_path) {
-                if let Some(script) = config.scripts.setup {
-                    log::trace!("Background: Found jean.json with setup script, executing...");
-                    match git::run_setup_script(
-                        &worktree_path_clone,
-                        &project_path,
-                        &name_clone,
-                        &script,
-                    ) {
-                        Ok(output) => (Some(output), Some(script)),
-                        Err(e) => {
-                            log::error!("Background: Setup script failed: {e}");
-                            // Clean up: remove the worktree since setup failed
-                            // Note: Don't delete the branch since it's an existing branch
-                            let _ = git::remove_worktree(&project_path, &worktree_path_clone);
-                            let error_event = WorktreeCreateErrorEvent {
-                                id: worktree_id_clone,
-                                project_id: project_id_clone,
-                                error: format!("Setup script failed: {e}"),
-                            };
-                            if let Err(emit_err) = app_clone.emit("worktree:error", &error_event) {
-                                log::error!("Failed to emit worktree:error event: {emit_err}");
-                            }
-                            return;
+        let (setup_output, setup_script) = if let Some(config) =
+            git::read_jean_config(&project_path)
+        {
+            if let Some(script) = config.scripts.setup {
+                log::trace!("Background: Found jean.json with setup script, executing...");
+                match git::run_setup_script(
+                    &worktree_path_clone,
+                    &project_path,
+                    &name_clone,
+                    &script,
+                ) {
+                    Ok(output) => (Some(output), Some(script)),
+                    Err(e) => {
+                        log::error!("Background: Setup script failed: {e}");
+                        // Clean up: remove the worktree since setup failed
+                        // Note: Don't delete the branch since it's an existing branch
+                        let _ = git::remove_worktree(&project_path, &worktree_path_clone);
+                        let error_event = WorktreeCreateErrorEvent {
+                            id: worktree_id_clone,
+                            project_id: project_id_clone,
+                            error: format!("Setup script failed: {e}"),
+                        };
+                        if let Err(emit_err) = app_clone.emit_all("worktree:error", &error_event) {
+                            log::error!("Failed to emit worktree:error event: {emit_err}");
                         }
+                        return;
                     }
-                } else {
-                    (None, None)
                 }
             } else {
                 (None, None)
-            };
+            }
+        } else {
+            (None, None)
+        };
 
         // Save to storage
         if let Ok(mut data) = load_projects_data(&app_clone) {
@@ -1267,7 +1272,7 @@ pub async fn create_worktree_from_existing_branch(
                     project_id: project_id_clone,
                     error: format!("Failed to save worktree: {e}"),
                 };
-                if let Err(emit_err) = app_clone.emit("worktree:error", &error_event) {
+                if let Err(emit_err) = app_clone.emit_all("worktree:error", &error_event) {
                     log::error!("Failed to emit worktree:error event: {emit_err}");
                 }
                 return;
@@ -1290,7 +1295,7 @@ pub async fn create_worktree_from_existing_branch(
                 worktree.name
             );
             let created_event = WorktreeCreatedEvent { worktree };
-            if let Err(e) = app_clone.emit("worktree:created", &created_event) {
+            if let Err(e) = app_clone.emit_all("worktree:created", &created_event) {
                 log::error!("Failed to emit worktree:created event: {e}");
             }
         } else {
@@ -1300,7 +1305,7 @@ pub async fn create_worktree_from_existing_branch(
                 project_id: project_id_clone,
                 error: "Failed to load projects data".to_string(),
             };
-            if let Err(emit_err) = app_clone.emit("worktree:error", &error_event) {
+            if let Err(emit_err) = app_clone.emit_all("worktree:error", &error_event) {
                 log::error!("Failed to emit worktree:error event: {emit_err}");
             }
         }
@@ -1400,7 +1405,7 @@ pub async fn checkout_pr(
         path: worktree_path_str.clone(),
         branch: pr_detail.head_ref_name.clone(), // Use PR's actual branch name
     };
-    if let Err(e) = app.emit("worktree:creating", &creating_event) {
+    if let Err(e) = app.emit_all("worktree:creating", &creating_event) {
         log::error!("Failed to emit worktree:creating event: {e}");
     }
 
@@ -1469,7 +1474,7 @@ pub async fn checkout_pr(
                 project_id: project_id_clone,
                 error: e,
             };
-            if let Err(emit_err) = app_clone.emit("worktree:error", &error_event) {
+            if let Err(emit_err) = app_clone.emit_all("worktree:error", &error_event) {
                 log::error!("Failed to emit worktree:error event: {emit_err}");
             }
             return;
@@ -1511,7 +1516,7 @@ pub async fn checkout_pr(
                     project_id: project_id_clone,
                     error: e,
                 };
-                if let Err(emit_err) = app_clone.emit("worktree:error", &error_event) {
+                if let Err(emit_err) = app_clone.emit_all("worktree:error", &error_event) {
                     log::error!("Failed to emit worktree:error event: {emit_err}");
                 }
                 return;
@@ -1530,39 +1535,40 @@ pub async fn checkout_pr(
         );
 
         // Check for jean.json and run setup script
-        let (setup_output, setup_script) =
-            if let Some(config) = git::read_jean_config(&worktree_path_clone) {
-                if let Some(script) = config.scripts.setup {
-                    log::trace!("Background: Found jean.json with setup script, executing...");
-                    match git::run_setup_script(
-                        &worktree_path_clone,
-                        &project_path,
-                        &actual_branch,
-                        &script,
-                    ) {
-                        Ok(output) => (Some(output), Some(script)),
-                        Err(e) => {
-                            log::error!("Background: Setup script failed: {e}");
-                            // Clean up: remove the worktree since setup failed
-                            let _ = git::remove_worktree(&project_path, &worktree_path_clone);
-                            let _ = git::delete_branch(&project_path, &actual_branch);
-                            let error_event = WorktreeCreateErrorEvent {
-                                id: worktree_id_clone,
-                                project_id: project_id_clone,
-                                error: format!("Setup script failed: {e}"),
-                            };
-                            if let Err(emit_err) = app_clone.emit("worktree:error", &error_event) {
-                                log::error!("Failed to emit worktree:error event: {emit_err}");
-                            }
-                            return;
+        let (setup_output, setup_script) = if let Some(config) =
+            git::read_jean_config(&worktree_path_clone)
+        {
+            if let Some(script) = config.scripts.setup {
+                log::trace!("Background: Found jean.json with setup script, executing...");
+                match git::run_setup_script(
+                    &worktree_path_clone,
+                    &project_path,
+                    &actual_branch,
+                    &script,
+                ) {
+                    Ok(output) => (Some(output), Some(script)),
+                    Err(e) => {
+                        log::error!("Background: Setup script failed: {e}");
+                        // Clean up: remove the worktree since setup failed
+                        let _ = git::remove_worktree(&project_path, &worktree_path_clone);
+                        let _ = git::delete_branch(&project_path, &actual_branch);
+                        let error_event = WorktreeCreateErrorEvent {
+                            id: worktree_id_clone,
+                            project_id: project_id_clone,
+                            error: format!("Setup script failed: {e}"),
+                        };
+                        if let Err(emit_err) = app_clone.emit_all("worktree:error", &error_event) {
+                            log::error!("Failed to emit worktree:error event: {emit_err}");
                         }
+                        return;
                     }
-                } else {
-                    (None, None)
                 }
             } else {
                 (None, None)
-            };
+            }
+        } else {
+            (None, None)
+        };
 
         // Write PR context file to shared git-context directory
         if let Ok(repo_id) = get_repo_identifier(&project_path) {
@@ -1669,7 +1675,7 @@ pub async fn checkout_pr(
                     project_id: project_id_clone,
                     error: format!("Failed to save worktree: {e}"),
                 };
-                if let Err(emit_err) = app_clone.emit("worktree:error", &error_event) {
+                if let Err(emit_err) = app_clone.emit_all("worktree:error", &error_event) {
                     log::error!("Failed to emit worktree:error event: {emit_err}");
                 }
                 return;
@@ -1682,7 +1688,7 @@ pub async fn checkout_pr(
                 worktree.name
             );
             let created_event = WorktreeCreatedEvent { worktree };
-            if let Err(e) = app_clone.emit("worktree:created", &created_event) {
+            if let Err(e) = app_clone.emit_all("worktree:created", &created_event) {
                 log::error!("Failed to emit worktree:created event: {e}");
             }
         } else {
@@ -1692,7 +1698,7 @@ pub async fn checkout_pr(
                 project_id: project_id_clone,
                 error: "Failed to load projects data".to_string(),
             };
-            if let Err(emit_err) = app_clone.emit("worktree:error", &error_event) {
+            if let Err(emit_err) = app_clone.emit_all("worktree:error", &error_event) {
                 log::error!("Failed to emit worktree:error event: {emit_err}");
             }
         }
@@ -1769,7 +1775,7 @@ pub async fn delete_worktree(app: AppHandle, worktree_id: String) -> Result<(), 
         id: worktree_id.clone(),
         project_id: worktree.project_id.clone(),
     };
-    if let Err(e) = app.emit("worktree:deleting", &deleting_event) {
+    if let Err(e) = app.emit_all("worktree:deleting", &deleting_event) {
         log::error!("Failed to emit worktree:deleting event: {e}");
     }
 
@@ -1795,7 +1801,7 @@ pub async fn delete_worktree(app: AppHandle, worktree_id: String) -> Result<(), 
                 project_id: project_id_clone,
                 error: e,
             };
-            if let Err(emit_err) = app_clone.emit("worktree:delete_error", &error_event) {
+            if let Err(emit_err) = app_clone.emit_all("worktree:delete_error", &error_event) {
                 log::error!("Failed to emit worktree:delete_error event: {emit_err}");
             }
             return;
@@ -1811,7 +1817,7 @@ pub async fn delete_worktree(app: AppHandle, worktree_id: String) -> Result<(), 
                 project_id: project_id_clone,
                 error: e,
             };
-            if let Err(emit_err) = app_clone.emit("worktree:delete_error", &error_event) {
+            if let Err(emit_err) = app_clone.emit_all("worktree:delete_error", &error_event) {
                 log::error!("Failed to emit worktree:delete_error event: {emit_err}");
             }
             return;
@@ -1823,7 +1829,7 @@ pub async fn delete_worktree(app: AppHandle, worktree_id: String) -> Result<(), 
             id: worktree_id_clone,
             project_id: project_id_clone,
         };
-        if let Err(e) = app_clone.emit("worktree:deleted", &deleted_event) {
+        if let Err(e) = app_clone.emit_all("worktree:deleted", &deleted_event) {
             log::error!("Failed to emit worktree:deleted event: {e}");
         }
     });
@@ -1989,9 +1995,20 @@ async fn close_base_session_internal(
         }
     }
 
+    let project_id = worktree.project_id.clone();
+
     // Remove from data (NO git operations - we don't delete the project directory!)
     data.remove_worktree(worktree_id);
     save_projects_data(app, &data)?;
+
+    // Emit deleted event so other clients clear their ChatWindow state
+    let deleted_event = WorktreeDeletedEvent {
+        id: worktree_id.to_string(),
+        project_id,
+    };
+    if let Err(e) = app.emit_all("worktree:deleted", &deleted_event) {
+        log::error!("Failed to emit worktree:deleted event for base session close: {e}");
+    }
 
     log::trace!("Successfully closed base session: {}", worktree.name);
     Ok(())
@@ -2038,7 +2055,7 @@ pub async fn archive_worktree(app: AppHandle, worktree_id: String) -> Result<(),
         id: worktree_id.clone(),
         project_id,
     };
-    if let Err(e) = app.emit("worktree:archived", &event) {
+    if let Err(e) = app.emit_all("worktree:archived", &event) {
         log::error!("Failed to emit worktree:archived event: {e}");
     }
 
@@ -2087,7 +2104,7 @@ pub async fn unarchive_worktree(app: AppHandle, worktree_id: String) -> Result<W
     let event = WorktreeUnarchivedEvent {
         worktree: restored_worktree.clone(),
     };
-    if let Err(e) = app.emit("worktree:unarchived", &event) {
+    if let Err(e) = app.emit_all("worktree:unarchived", &event) {
         log::error!("Failed to emit worktree:unarchived event: {e}");
     }
 
@@ -2293,7 +2310,7 @@ pub async fn import_worktree(
     let event = WorktreeCreatedEvent {
         worktree: worktree.clone(),
     };
-    if let Err(e) = app.emit("worktree:created", &event) {
+    if let Err(e) = app.emit_all("worktree:created", &event) {
         log::error!("Failed to emit worktree:created event: {e}");
     }
 
@@ -2404,7 +2421,7 @@ pub async fn permanently_delete_worktree(
             id: worktree_id_clone,
             project_id: project_id_clone,
         };
-        if let Err(e) = app_clone.emit("worktree:permanently_deleted", &event) {
+        if let Err(e) = app_clone.emit_all("worktree:permanently_deleted", &event) {
             log::error!("Failed to emit worktree:permanently_deleted event: {e}");
         }
     });
@@ -2715,6 +2732,43 @@ pub async fn open_worktree_in_editor(
                 return Err(format_open_error(&editor_app, &e));
             }
         }
+    }
+
+    Ok(())
+}
+
+/// Open a branch on GitHub in the browser
+#[tauri::command]
+pub async fn open_branch_on_github(repo_path: String, branch: String) -> Result<(), String> {
+    log::trace!("Opening branch on GitHub: {branch} in {repo_path}");
+
+    let github_url = git::get_github_url(&repo_path)?;
+    let url = format!("{github_url}/tree/{branch}");
+
+    log::trace!("Opening GitHub branch URL: {url}");
+
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg(&url)
+            .spawn()
+            .map_err(|e| format!("Failed to open browser: {e}"))?;
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        std::process::Command::new("xdg-open")
+            .arg(&url)
+            .spawn()
+            .map_err(|e| format!("Failed to open browser: {e}"))?;
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("cmd")
+            .args(["/c", "start", "", &url])
+            .spawn()
+            .map_err(|e| format!("Failed to open browser: {e}"))?;
     }
 
     Ok(())
@@ -4862,7 +4916,7 @@ pub async fn merge_worktree_to_base(
                 id: worktree_id.clone(),
                 project_id: worktree.project_id.clone(),
             };
-            if let Err(e) = app.emit("worktree:deleting", &deleting_event) {
+            if let Err(e) = app.emit_all("worktree:deleting", &deleting_event) {
                 log::error!("Failed to emit worktree:deleting event: {e}");
             }
 
@@ -4888,7 +4942,7 @@ pub async fn merge_worktree_to_base(
                 id: worktree_id.clone(),
                 project_id: worktree.project_id.clone(),
             };
-            if let Err(e) = app.emit("worktree:deleted", &deleted_event) {
+            if let Err(e) = app.emit_all("worktree:deleted", &deleted_event) {
                 log::error!("Failed to emit worktree:deleted event: {e}");
             }
 
@@ -5693,7 +5747,7 @@ pub async fn fetch_worktrees_status(app: AppHandle, project_id: String) -> Resul
                     );
 
                     // Emit status update event
-                    if let Err(e) = app_clone.emit("git:status-update", &status) {
+                    if let Err(e) = app_clone.emit_all("git:status-update", &status) {
                         log::warn!(
                             "Failed to emit git status for worktree {}: {e}",
                             worktree.id

@@ -9,7 +9,7 @@ import {
   warning,
 } from './notifications'
 
-vi.mock('@tauri-apps/api/core', () => ({
+vi.mock('@/lib/transport', () => ({
   invoke: vi.fn(),
 }))
 
@@ -80,7 +80,7 @@ describe('notify', () => {
 
   describe('native notifications', () => {
     it('calls invoke for native notification', async () => {
-      const { invoke } = await import('@tauri-apps/api/core')
+      const { invoke } = await import('@/lib/transport')
 
       await notify('Native Title', 'Native body', { native: true })
 
@@ -92,7 +92,7 @@ describe('notify', () => {
     })
 
     it('falls back to toast on native notification error', async () => {
-      const { invoke } = await import('@tauri-apps/api/core')
+      const { invoke } = await import('@/lib/transport')
       vi.mocked(invoke).mockRejectedValueOnce(new Error('Native failed'))
 
       await notify('Title', 'Body', { native: true })
@@ -101,7 +101,7 @@ describe('notify', () => {
     })
 
     it('falls back to toast with title only on error', async () => {
-      const { invoke } = await import('@tauri-apps/api/core')
+      const { invoke } = await import('@/lib/transport')
       vi.mocked(invoke).mockRejectedValueOnce(new Error('Failed'))
 
       await notify('Just Title', undefined, { native: true })

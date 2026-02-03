@@ -2,12 +2,23 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createElement } from 'react'
-import { invoke } from '@tauri-apps/api/core'
+import { invoke } from '@/lib/transport'
 import { useCreateWorktree, projectsQueryKeys } from './projects'
 import { useProjectsStore } from '@/store/projects-store'
 import { useChatStore } from '@/store/chat-store'
 import { useUIStore } from '@/store/ui-store'
 import type { Worktree } from '@/types/projects'
+
+vi.mock('@/lib/transport', () => ({
+  invoke: vi.fn(),
+  listen: vi.fn().mockResolvedValue(() => undefined),
+  convertFileSrc: (path: string) => path,
+  preloadInitialData: vi.fn().mockResolvedValue(null),
+  hasPreloadedData: vi.fn(() => false),
+  getPreloadedData: vi.fn(() => null),
+  useWsConnectionStatus: () => true,
+  useWsAuthError: () => null,
+}))
 
 vi.mock('sonner', () => ({
   toast: {

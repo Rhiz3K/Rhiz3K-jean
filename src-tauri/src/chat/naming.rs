@@ -9,11 +9,12 @@ use crate::projects::git;
 use crate::projects::storage::{load_projects_data, save_projects_data};
 
 use super::storage::with_sessions_mut;
+use crate::http_server::EmitExt;
 use serde::{Deserialize, Serialize};
 use std::io::Write;
 use std::path::PathBuf;
 use std::process::Stdio;
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{AppHandle, Manager};
 
 /// Request for combined naming (session + branch)
 #[derive(Debug, Clone)]
@@ -661,7 +662,7 @@ fn execute_naming(app: &AppHandle, request: &NamingRequest) {
                 error: e,
                 stage: NamingStage::Generation,
             };
-            let _ = app.emit("naming-failed", &error);
+            let _ = app.emit_all("naming-failed", &error);
             return;
         }
     };
@@ -677,11 +678,11 @@ fn execute_naming(app: &AppHandle, request: &NamingRequest) {
                             result.old_name,
                             result.new_name
                         );
-                        let _ = app.emit("session-renamed", &result);
+                        let _ = app.emit_all("session-renamed", &result);
                     }
                     Err(error) => {
                         log::warn!("Session naming storage failed: {}", error.error);
-                        let _ = app.emit("session-naming-failed", &error);
+                        let _ = app.emit_all("session-naming-failed", &error);
                     }
                 },
                 Err(e) => {
@@ -692,7 +693,7 @@ fn execute_naming(app: &AppHandle, request: &NamingRequest) {
                         error: e,
                         stage: NamingStage::Validation,
                     };
-                    let _ = app.emit("session-naming-failed", &error);
+                    let _ = app.emit_all("session-naming-failed", &error);
                 }
             }
         } else {
@@ -711,11 +712,11 @@ fn execute_naming(app: &AppHandle, request: &NamingRequest) {
                             result.old_branch,
                             result.new_branch
                         );
-                        let _ = app.emit("branch-renamed", &result);
+                        let _ = app.emit_all("branch-renamed", &result);
                     }
                     Err(error) => {
                         log::warn!("Branch naming failed: {}", error.error);
-                        let _ = app.emit("branch-naming-failed", &error);
+                        let _ = app.emit_all("branch-naming-failed", &error);
                     }
                 },
                 Err(e) => {
@@ -726,7 +727,7 @@ fn execute_naming(app: &AppHandle, request: &NamingRequest) {
                         error: e,
                         stage: NamingStage::Validation,
                     };
-                    let _ = app.emit("branch-naming-failed", &error);
+                    let _ = app.emit_all("branch-naming-failed", &error);
                 }
             }
         } else {

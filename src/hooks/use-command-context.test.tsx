@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { renderHook } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createElement } from 'react'
-import { invoke } from '@tauri-apps/api/core'
+import { invoke } from '@/lib/transport'
 import { ThemeProviderContext } from '@/lib/theme-context'
 import { useChatStore } from '@/store/chat-store'
 import { useCommandContext } from './use-command-context'
@@ -11,8 +11,15 @@ import type { ReviewResponse } from '@/types/projects'
 import type { Session } from '@/types/chat'
 import { chatQueryKeys } from '@/services/chat'
 
-vi.mock('@tauri-apps/api/core', () => ({
+vi.mock('@/lib/transport', () => ({
   invoke: vi.fn(),
+  listen: vi.fn().mockResolvedValue(() => undefined),
+  convertFileSrc: (path: string) => path,
+  preloadInitialData: vi.fn().mockResolvedValue(null),
+  hasPreloadedData: vi.fn(() => false),
+  getPreloadedData: vi.fn(() => null),
+  useWsConnectionStatus: () => true,
+  useWsAuthError: () => null,
 }))
 
 vi.mock('sonner', () => ({

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { renderHook } from '@testing-library/react'
 import { QueryClient } from '@tanstack/react-query'
-import { invoke } from '@tauri-apps/api/core'
+import { invoke } from '@/lib/transport'
 import { useGitOperations } from './useGitOperations'
 import { useChatStore } from '@/store/chat-store'
 import { defaultPreferences, type AppPreferences } from '@/types/preferences'
@@ -15,8 +15,15 @@ import type {
 } from '@/types/projects'
 import type { Session } from '@/types/chat'
 
-vi.mock('@tauri-apps/api/core', () => ({
+vi.mock('@/lib/transport', () => ({
   invoke: vi.fn(),
+  listen: vi.fn().mockResolvedValue(() => undefined),
+  convertFileSrc: (path: string) => path,
+  preloadInitialData: vi.fn().mockResolvedValue(null),
+  hasPreloadedData: vi.fn(() => false),
+  getPreloadedData: vi.fn(() => null),
+  useWsConnectionStatus: () => true,
+  useWsAuthError: () => null,
 }))
 
 vi.mock('@tauri-apps/plugin-opener', () => ({
