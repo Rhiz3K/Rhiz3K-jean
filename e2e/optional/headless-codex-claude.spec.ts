@@ -2,6 +2,7 @@ import { expect, test, type Locator, type Page } from '@playwright/test'
 
 const PROJECT_NAME = 'mock-project-1'
 const BASE_SESSION_NAME = 'Base Session'
+const BASE_SESSION_BUTTON_NAME = /^Base Session\b/
 const CODEX_WORKTREE_NAME = 'codex-worktree-1'
 const CLAUDE_WORKTREE_NAME = 'claude-worktree-1'
 
@@ -15,7 +16,9 @@ async function createProject(page: Page): Promise<void> {
   await page.getByRole('button', { name: /Initialize New Project/i }).click()
 
   await expect(page.getByText(PROJECT_NAME, { exact: true })).toBeVisible()
-  await expect(page.getByText(BASE_SESSION_NAME, { exact: true })).toBeVisible()
+  await expect(
+    page.getByRole('button', { name: BASE_SESSION_BUTTON_NAME })
+  ).toBeVisible()
   await expect(
     page.getByText('No messages yet. Start a conversation!')
   ).toBeVisible()
@@ -40,8 +43,7 @@ async function createQuickWorktree(
   await dialog.getByRole('combobox').click()
   await page.getByRole('option', { name: agentLabel }).click()
 
-  await dialog.getByRole('button', { name: /Quick Actions/i }).click()
-  await dialog.getByRole('button', { name: /^New Worktree$/ }).click()
+  await dialog.getByRole('button', { name: /New Worktree/i }).first().click()
   await expect(dialog).toBeHidden()
 
   await expect(
@@ -50,7 +52,17 @@ async function createQuickWorktree(
 }
 
 async function selectWorktree(page: Page, worktreeName: string): Promise<void> {
-  await page.getByText(worktreeName, { exact: true }).first().click()
+  if (worktreeName === BASE_SESSION_NAME) {
+    const baseSessionButton = page.getByRole('button', {
+      name: BASE_SESSION_BUTTON_NAME,
+    })
+    await expect(baseSessionButton).toBeVisible()
+    if ((await baseSessionButton.getAttribute('aria-disabled')) !== 'true') {
+      await baseSessionButton.click()
+    }
+  } else {
+    await page.getByText(worktreeName, { exact: true }).first().click()
+  }
   await expect(page.locator('textarea').first()).toBeVisible()
 }
 
@@ -62,7 +74,7 @@ async function sendMessage(
   const input = page.locator('textarea').first()
   await input.fill(prompt)
   await input.press('Enter')
-  await expect(page.getByText(expectedResponse)).toBeVisible()
+  await expect(page.getByText(expectedResponse).first()).toBeVisible()
 }
 
 async function archiveWorktree(
@@ -140,12 +152,14 @@ test('optional ask-user-question flow supports selectable answers', async ({
   await input.press('Enter')
 
   await expect(
-    page.getByText('Which flow should I validate next?')
+    page.getByText('Which flow should I validate next?').first()
   ).toBeVisible()
   await page.getByText('Archive and restore', { exact: true }).click()
   await page.getByRole('button', { name: /^Answer/ }).click()
 
   await expect(
-    page.getByText('[mock:codex] Answer received and processing continued.')
+    page
+      .getByText('[mock:codex] Answer received and processing continued.')
+      .first()
   ).toBeVisible()
 })
