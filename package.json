@@ -20,6 +20,8 @@
     "test:run": "vitest run",
     "test:ui": "vitest --ui",
     "test:coverage": "vitest run --coverage",
+    "test:e2e": "playwright test",
+    "test:e2e:optional": "playwright test e2e/optional",
     "rust:fmt": "cd src-tauri && cargo fmt",
     "rust:fmt:check": "cd src-tauri && cargo fmt --check",
     "rust:clippy": "cd src-tauri && cargo clippy -- -D warnings",
@@ -115,6 +117,7 @@
     "zustand": "^5.0.6"
   },
   "devDependencies": {
+    "@playwright/test": "^1.55.0",
     "@eslint/js": "^9.32.0",
     "@tauri-apps/cli": "^2",
     "@testing-library/jest-dom": "^6.6.4",
