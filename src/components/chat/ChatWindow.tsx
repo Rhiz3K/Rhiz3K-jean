@@ -157,8 +157,12 @@ const EMPTY_PENDING_SKILLS: PendingSkill[] = []
 const EMPTY_QUEUED_MESSAGES: QueuedMessage[] = []
 
 const CLAUDE_MODEL_VALUES = new Set(['sonnet', 'opus', 'haiku'])
-const CODEX_MODEL_VALUES = new Set(['gpt-5.2-codex', 'gpt-5.2'])
-const DEFAULT_CODEX_MODEL = 'gpt-5.2'
+const CODEX_MODEL_VALUES = new Set([
+  'gpt-5.3-codex',
+  'gpt-5.2-codex',
+  'gpt-5.2',
+])
+const DEFAULT_CODEX_MODEL = 'gpt-5.3-codex'
 
 const CLAUDE_THINKING_LEVEL_VALUES = new Set<ThinkingLevel>([
   'off',

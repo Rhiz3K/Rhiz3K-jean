@@ -102,6 +102,7 @@ const CLAUDE_MODEL_OPTIONS: { value: string; label: string }[] = [
 
 /** Codex model options (OpenAI) */
 const CODEX_MODEL_OPTIONS: { value: string; label: string }[] = [
+  { value: 'gpt-5.3-codex', label: 'gpt-5.3-codex' },
   { value: 'gpt-5.2-codex', label: 'gpt-5.2-codex' },
   { value: 'gpt-5.2', label: 'gpt-5.2' },
 ]

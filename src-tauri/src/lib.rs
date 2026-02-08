@@ -77,7 +77,7 @@ pub struct AppPreferences {
     #[serde(default = "default_model")]
     pub selected_model: String, // Claude model: opus, sonnet, haiku
     #[serde(default = "default_codex_model")]
-    pub codex_selected_model: String, // Codex model: gpt-5.2-codex, gpt-5.2
+    pub codex_selected_model: String, // Codex model: gpt-5.3-codex, gpt-5.2-codex, gpt-5.2
     #[serde(default = "default_thinking_level")]
     pub thinking_level: String, // Thinking level: off, think, megathink, ultrathink
     #[serde(default = "default_effort_level")]
@@ -227,7 +227,7 @@ fn default_model() -> String {
 }
 
 fn default_codex_model() -> String {
-    "gpt-5.2".to_string()
+    "gpt-5.3-codex".to_string()
 }
 
 fn default_thinking_level() -> String {
