@@ -51,12 +51,6 @@ describe('useStreamingEvents', () => {
       configurable: true,
     })
 
-    if (!globalThis.crypto?.randomUUID) {
-      ;(
-        globalThis as unknown as { crypto: { randomUUID: () => string } }
-      ).crypto = { randomUUID: () => 'uuid' }
-    }
-
     useChatStore.setState({
       activeWorktreeId: null,
       activeWorktreePath: null,

@@ -669,7 +669,7 @@ export default function useStreamingEvents({
               messages: [
                 ...old.messages,
                 {
-                  id: crypto.randomUUID(),
+                  id: generateUuid(),
                   session_id,
                   role: 'assistant' as const,
                   content: content ?? '',

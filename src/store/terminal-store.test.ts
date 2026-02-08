@@ -1,12 +1,5 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach } from 'vitest'
 import { useTerminalStore } from './terminal-store'
-
-// Mock crypto.randomUUID
-vi.stubGlobal('crypto', {
-  randomUUID: vi.fn(
-    () => 'mock-uuid-' + Math.random().toString(36).slice(2, 9)
-  ),
-})
 
 describe('TerminalStore', () => {
   beforeEach(() => {
