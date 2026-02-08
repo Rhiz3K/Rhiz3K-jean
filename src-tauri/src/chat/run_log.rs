@@ -706,7 +706,7 @@ fn parse_claude_run_to_message(lines: &[String], run: &RunEntry) -> Result<ChatM
 }
 
 fn parse_codex_run_to_message(lines: &[String], run: &RunEntry) -> Result<ChatMessage, String> {
-    use super::codex_exec::CodexExecEvent;
+    use super::codex_exec::{parse_codex_exec_event_line, CodexExecEvent};
     use std::collections::HashMap;
 
     let mut content = String::new();
@@ -727,7 +727,7 @@ fn parse_codex_run_to_message(lines: &[String], run: &RunEntry) -> Result<ChatMe
             continue;
         }
 
-        let event: CodexExecEvent = match serde_json::from_str(line) {
+        let event: CodexExecEvent = match parse_codex_exec_event_line(line) {
             Ok(e) => e,
             Err(_) => continue,
         };

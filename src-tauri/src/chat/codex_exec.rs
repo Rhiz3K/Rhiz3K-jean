@@ -42,6 +42,23 @@ pub enum CodexExecEvent {
     StreamError { message: String },
 }
 
+/// Parse a single Codex JSONL event line.
+///
+/// Codex occasionally emits objects with duplicate keys (for example duplicate
+/// `id` fields inside an `item`). Direct deserialization into structs rejects
+/// duplicates. We retry through `serde_json::Value` so duplicate keys collapse
+/// (last value wins), then deserialize to typed events.
+pub fn parse_codex_exec_event_line(line: &str) -> Result<CodexExecEvent, serde_json::Error> {
+    match serde_json::from_str::<CodexExecEvent>(line) {
+        Ok(event) => Ok(event),
+        Err(err) if err.to_string().contains("duplicate field") => {
+            let value: serde_json::Value = serde_json::from_str(line)?;
+            serde_json::from_value(value)
+        }
+        Err(err) => Err(err),
+    }
+}
+
 // ============================================================================
 // Thread items
 // ============================================================================
@@ -154,4 +171,39 @@ pub enum CodexThreadItem {
     TodoList(CodexTodoListItem),
     #[serde(rename = "error")]
     Error(CodexErrorItem),
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_event_with_duplicate_item_id_is_tolerated() {
+        let line = r#"{"type":"item.updated","item":{"type":"agent_message","id":"first","text":"Hello","id":"second"}}"#;
+
+        let event = parse_codex_exec_event_line(line).expect("event should parse");
+        let CodexExecEvent::ItemUpdated { item } = event else {
+            panic!("expected item.updated event");
+        };
+        let CodexThreadItem::AgentMessage(message) = item else {
+            panic!("expected agent_message item");
+        };
+
+        assert_eq!(message.id, "second");
+        assert_eq!(message.text, "Hello");
+    }
+
+    #[test]
+    fn parse_event_without_duplicates_still_works() {
+        let line = r#"{"type":"turn.completed","usage":{"input_tokens":1,"cached_input_tokens":2,"output_tokens":3}}"#;
+
+        let event = parse_codex_exec_event_line(line).expect("event should parse");
+        let CodexExecEvent::TurnCompleted { usage } = event else {
+            panic!("expected turn.completed event");
+        };
+
+        assert_eq!(usage.input_tokens, 1);
+        assert_eq!(usage.cached_input_tokens, 2);
+        assert_eq!(usage.output_tokens, 3);
+    }
 }

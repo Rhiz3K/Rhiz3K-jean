@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use tauri::Emitter;
 
-use super::codex_exec::{CodexExecEvent, CodexThreadItem};
+use super::codex_exec::{parse_codex_exec_event_line, CodexExecEvent, CodexThreadItem};
 use super::events::{
     CancelledEvent, ChunkEvent, DoneEvent, ErrorEvent, StreamWarningEvent, ThinkingEvent,
     ToolBlockEvent, ToolResultEvent, ToolUseEvent,
@@ -351,7 +351,7 @@ pub fn tail_codex_output(
             *received_codex_output = true;
         }
 
-        let event: CodexExecEvent = match serde_json::from_str(line) {
+        let event: CodexExecEvent = match parse_codex_exec_event_line(line) {
             Ok(e) => e,
             Err(e) => {
                 if *parse_warning_count < 3 {
