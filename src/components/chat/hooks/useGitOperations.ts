@@ -451,7 +451,7 @@ export function useGitOperations({
           newSession.id,
           preferences?.magic_prompt_codex_models?.resolve_conflicts_model ??
             preferences?.codex_selected_model ??
-            'gpt-5.2'
+            'gpt-5.3-codex'
         )
         setThinkingLevel(
           newSession.id,
@@ -550,7 +550,7 @@ ${resolveInstructions}`
           newSession.id,
           preferences?.magic_prompt_codex_models?.resolve_conflicts_model ??
             preferences?.codex_selected_model ??
-            'gpt-5.2'
+            'gpt-5.3-codex'
         )
         setThinkingLevel(
           newSession.id,

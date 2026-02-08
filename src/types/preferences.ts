@@ -258,12 +258,12 @@ export const DEFAULT_MAGIC_PROMPT_MODELS: MagicPromptModels = {
 }
 
 export const DEFAULT_MAGIC_PROMPT_CODEX_MODELS: MagicPromptCodexModels = {
-  investigate_model: 'gpt-5.2',
-  pr_content_model: 'gpt-5.2',
-  commit_message_model: 'gpt-5.2',
-  code_review_model: 'gpt-5.2',
-  context_summary_model: 'gpt-5.2',
-  resolve_conflicts_model: 'gpt-5.2',
+  investigate_model: 'gpt-5.3-codex',
+  pr_content_model: 'gpt-5.3-codex',
+  commit_message_model: 'gpt-5.3-codex',
+  code_review_model: 'gpt-5.3-codex',
+  context_summary_model: 'gpt-5.3-codex',
+  resolve_conflicts_model: 'gpt-5.3-codex',
 }
 
 // Claude -> Codex reasoning-effort analog:
@@ -286,7 +286,7 @@ export const DEFAULT_MAGIC_PROMPT_CODEX_REASONING_EFFORTS: MagicPromptCodexReaso
 export interface AppPreferences {
   theme: string
   selected_model: ClaudeModel // Claude model: 'opus' | 'sonnet' | 'haiku'
-  codex_selected_model: CodexModel // Codex model: 'gpt-5.2-codex' | 'gpt-5.2'
+  codex_selected_model: CodexModel // Codex model: 'gpt-5.3-codex' | 'gpt-5.2-codex' | 'gpt-5.2'
   thinking_level: ThinkingLevel // Thinking level: 'off' | 'think' | 'megathink' | 'ultrathink'
   codex_reasoning_effort: ThinkingLevel // Reasoning effort: 'minimal' | 'low' | 'medium' | 'high' | 'xhigh'
   terminal: TerminalApp // Terminal app: 'terminal' | 'warp' | 'ghostty'
@@ -344,9 +344,10 @@ export const modelOptions: { value: ClaudeModel; label: string }[] = [
   { value: 'haiku', label: 'Claude Haiku' },
 ]
 
-export type CodexModel = 'gpt-5.2-codex' | 'gpt-5.2'
+export type CodexModel = 'gpt-5.3-codex' | 'gpt-5.2-codex' | 'gpt-5.2'
 
 export const codexModelOptions: { value: CodexModel; label: string }[] = [
+  { value: 'gpt-5.3-codex', label: 'gpt-5.3-codex' },
   { value: 'gpt-5.2-codex', label: 'gpt-5.2-codex' },
   { value: 'gpt-5.2', label: 'gpt-5.2' },
 ]
@@ -535,7 +536,7 @@ export function getEditorLabel(editor: EditorApp | undefined): string {
 export const defaultPreferences: AppPreferences = {
   theme: 'system',
   selected_model: 'opus',
-  codex_selected_model: 'gpt-5.2',
+  codex_selected_model: 'gpt-5.3-codex',
   thinking_level: 'ultrathink',
   codex_reasoning_effort: 'medium',
   terminal: 'terminal',
