@@ -12,6 +12,7 @@ dist
 dist-ssr
 playwright-report
 test-results
+screenshots/playwright-headless
 *.local
 *.local.*
 
