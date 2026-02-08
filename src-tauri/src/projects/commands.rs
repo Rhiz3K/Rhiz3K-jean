@@ -27,7 +27,7 @@ use super::types::{
 };
 use crate::chat::types::ChatAgent;
 use crate::claude_cli::get_cli_binary_path;
-use crate::codex_cli::run_codex_prompt;
+use crate::codex_cli::{get_codex_cli_binary_path, run_codex_prompt};
 use crate::gh_cli::config::resolve_gh_binary;
 use crate::http_server::EmitExt;
 use crate::platform::silent_command;
@@ -38,6 +38,20 @@ fn now() -> u64 {
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_secs()
+}
+
+fn ensure_agent_cli_ready(app: &AppHandle, agent: &ChatAgent) -> Result<(), String> {
+    if *agent == ChatAgent::Codex {
+        let codex_path = get_codex_cli_binary_path(app)?;
+        if !codex_path.exists() {
+            return Err(
+                "Codex CLI not installed. Please complete setup in Settings > Advanced."
+                    .to_string(),
+            );
+        }
+    }
+
+    Ok(())
 }
 
 /// List all projects
@@ -430,6 +444,9 @@ pub async fn create_worktree(
         .ok_or_else(|| format!("Project not found: {project_id}"))?
         .clone();
 
+    let agent_for_sessions = agent.unwrap_or(ChatAgent::Claude);
+    ensure_agent_cli_ready(&app, &agent_for_sessions)?;
+
     // Use provided base branch or project's default branch, with validation
     let preferred_base = base_branch.unwrap_or_else(|| project.default_branch.clone());
     let base = git::get_valid_base_branch(&project.path, &preferred_base)?;
@@ -525,8 +542,6 @@ pub async fn create_worktree(
         order: 0, // Placeholder, actual order is set in background thread
         archived_at: None,
     };
-
-    let agent_for_sessions = agent.unwrap_or(ChatAgent::Claude);
 
     // Clone values for the background thread
     let app_clone = app.clone();
@@ -992,6 +1007,9 @@ pub async fn create_worktree_from_existing_branch(
         .ok_or_else(|| format!("Project not found: {project_id}"))?
         .clone();
 
+    let agent_for_sessions = agent.unwrap_or(ChatAgent::Claude);
+    ensure_agent_cli_ready(&app, &agent_for_sessions)?;
+
     // Use the branch name as the worktree name
     let name = branch_name.clone();
 
@@ -1048,8 +1066,6 @@ pub async fn create_worktree_from_existing_branch(
         order: 0, // Placeholder, actual order is set in background thread
         archived_at: None,
     };
-
-    let agent_for_sessions = agent.unwrap_or(ChatAgent::Claude);
 
     // Clone values for the background thread
     let app_clone = app.clone();
@@ -1874,6 +1890,9 @@ pub async fn create_base_session(
         .ok_or_else(|| format!("Project not found: {project_id}"))?
         .clone();
 
+    let agent_for_sessions = agent.unwrap_or(ChatAgent::Claude);
+    ensure_agent_cli_ready(&app, &agent_for_sessions)?;
+
     // Create base session record (NO git worktree creation)
     // Base sessions always have order 0 (first in list)
     let session = Worktree {
@@ -1913,7 +1932,6 @@ pub async fn create_base_session(
 
     // Ensure sessions exist and pin agent for the initial session (only if metadata is missing).
     // If we restored preserved sessions, this is a no-op.
-    let agent_for_sessions = agent.unwrap_or(ChatAgent::Claude);
     if let Err(e) =
         crate::chat::storage::init_worktree_sessions(&app, &session.id, agent_for_sessions)
     {
