@@ -1,0 +1,30 @@
+services:
+  jean-rdp:
+    build:
+      context: .
+      dockerfile: ${JEAN_RDP_DOCKERFILE:-docker/rdp/Dockerfile}
+    ports:
+      - '${JEAN_RDP_PORT:-3389}:3389'
+    environment:
+      TZ: '${TZ:-Etc/UTC}'
+      RDP_USER: '${RDP_USER:-dev}'
+      RDP_PASSWORD: '${RDP_PASSWORD:-dev}'
+      # Starts Jean dev workflow automatically after RDP login.
+      # Set to 0 to disable and start manually.
+      AUTO_START_JEAN: '${AUTO_START_JEAN:-1}'
+    volumes:
+      - .:/workspace
+      - jean-node-modules:/workspace/node_modules
+      - jean-home:/home/${RDP_USER:-dev}
+      - jean-cargo-registry:/usr/local/cargo/registry
+      - jean-cargo-git:/usr/local/cargo/git
+      - jean-tauri-target:/workspace/src-tauri/target
+    shm_size: '2gb'
+    restart: unless-stopped
+
+volumes:
+  jean-node-modules:
+  jean-home:
+  jean-cargo-registry:
+  jean-cargo-git:
+  jean-tauri-target:
