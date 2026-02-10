@@ -17,7 +17,6 @@ import {
 import { Popover, PopoverContent, PopoverAnchor } from '@/components/ui/popover'
 import { useWorktreeFiles } from '@/services/files'
 import type { WorktreeFile, PendingFile } from '@/types/chat'
-import { generateUuid } from '@/lib/uuid'
 import { cn } from '@/lib/utils'
 import { generateId } from '@/lib/uuid'
 import { getExtensionColor } from '@/lib/file-colors'

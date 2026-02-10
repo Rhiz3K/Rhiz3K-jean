@@ -17,7 +17,6 @@ import {
 import { Popover, PopoverContent, PopoverAnchor } from '@/components/ui/popover'
 import { useClaudeSkills, useClaudeCommands } from '@/services/skills'
 import type { ClaudeSkill, ClaudeCommand, PendingSkill } from '@/types/chat'
-import { generateUuid } from '@/lib/uuid'
 import { cn } from '@/lib/utils'
 import { generateId } from '@/lib/uuid'
 
