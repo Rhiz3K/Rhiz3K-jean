@@ -2148,6 +2148,7 @@ export async function clearWorktreePr(worktreeId: string): Promise<void> {
  */
 export async function updateWorktreeCachedStatus(
   worktreeId: string,
+  branch: string | null,
   prStatus: string | null,
   checkStatus: string | null,
   behindCount: number | null,
@@ -2165,6 +2166,7 @@ export async function updateWorktreeCachedStatus(
 
   await invoke('update_worktree_cached_status', {
     worktreeId,
+    branch,
     prStatus,
     checkStatus,
     behindCount,
@@ -2228,10 +2230,12 @@ export function useUpdateProjectSettings() {
       projectId,
       defaultBranch,
       enabledMcpServers,
+      customSystemPrompt,
     }: {
       projectId: string
       defaultBranch?: string
       enabledMcpServers?: string[]
+      customSystemPrompt?: string
     }): Promise<Project> => {
       if (!isTauri()) {
         throw new Error('Not in Tauri context')
@@ -2242,6 +2246,7 @@ export function useUpdateProjectSettings() {
         projectId,
         defaultBranch,
         enabledMcpServers,
+        customSystemPrompt,
       })
       logger.info('Project settings updated', { project })
       return project

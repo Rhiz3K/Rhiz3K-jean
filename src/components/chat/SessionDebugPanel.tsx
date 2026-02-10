@@ -12,6 +12,11 @@ import type {
   RunLogFileInfo,
 } from '@/types/chat'
 import { cn } from '@/lib/utils'
+import {
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+} from '@/components/ui/tooltip'
 
 interface SessionDebugPanelProps {
   worktreeId: string
@@ -205,12 +210,49 @@ export function SessionDebugPanel({
               if (path) onFileClick?.(path)
             }}
           >
-            ...{debugInfo.manifest_file.slice(-55)}
-          </span>
-        ) : (
-          <span className="text-foreground/70">none</span>
+            sessions file:{' '}
+            <span
+              className="text-foreground/70 cursor-pointer hover:underline"
+              onClick={() => onFileClick?.(debugInfo.sessions_file)}
+            >
+              ...{debugInfo.sessions_file.slice(-60)}
+            </span>
+          </div>
+        </TooltipTrigger>
+        <TooltipContent>{debugInfo.sessions_file}</TooltipContent>
+      </Tooltip>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <div className="text-muted-foreground truncate">
+            runs dir:{' '}
+            <span className="text-foreground/70">
+              ...{debugInfo.runs_dir.slice(-50)}
+            </span>
+          </div>
+        </TooltipTrigger>
+        <TooltipContent>{debugInfo.runs_dir}</TooltipContent>
+      </Tooltip>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <div className="text-muted-foreground truncate">
+            manifest:{' '}
+            {debugInfo.manifest_file ? (
+              <span
+                className="text-foreground/70 cursor-pointer hover:underline"
+                // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+                onClick={() => onFileClick?.(debugInfo.manifest_file!)}
+              >
+                ...{debugInfo.manifest_file.slice(-55)}
+              </span>
+            ) : (
+              <span className="text-foreground/70">none</span>
+            )}
+          </div>
+        </TooltipTrigger>
+        {debugInfo.manifest_file && (
+          <TooltipContent>{debugInfo.manifest_file}</TooltipContent>
         )}
-      </div>
+      </Tooltip>
       {debugInfo.claude_jsonl_file && (
         <div
           className="text-muted-foreground truncate"
@@ -238,13 +280,15 @@ export function SessionDebugPanel({
             {formatUsage(debugInfo.total_usage)}
           </span>
           {debugInfo.total_usage.cache_read_input_tokens ? (
-            <span
-              className="text-green-500 ml-2"
-              title="Cache hit tokens (cost savings)"
-            >
-              ({formatTokens(debugInfo.total_usage.cache_read_input_tokens)}{' '}
-              cached)
-            </span>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="text-green-500 ml-2">
+                  ({formatTokens(debugInfo.total_usage.cache_read_input_tokens)}{' '}
+                  cached)
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>Cache hit tokens (cost savings)</TooltipContent>
+            </Tooltip>
           ) : null}
         </div>
       )}

@@ -36,7 +36,12 @@ import {
   chatQueryKeys,
   markPlanApproved as markPlanApprovedService,
 } from '@/services/chat'
-import { useWorktree, useProjects, useRunScript } from '@/services/projects'
+import {
+  useWorktree,
+  useProjects,
+  useRunScript,
+  projectsQueryKeys,
+} from '@/services/projects'
 import {
   githubQueryKeys,
   useLoadedIssueContexts,
@@ -54,6 +59,13 @@ import {
   type ClaudeModel,
 } from '@/store/chat-store'
 import { usePreferences, useSavePreferences } from '@/services/preferences'
+import {
+  DEFAULT_INVESTIGATE_ISSUE_PROMPT,
+  DEFAULT_INVESTIGATE_PR_PROMPT,
+  DEFAULT_INVESTIGATE_WORKFLOW_RUN_PROMPT,
+  DEFAULT_PARALLEL_EXECUTION_PROMPT,
+} from '@/types/preferences'
+import type { Project, Worktree } from '@/types/projects'
 import type {
   ChatMessage,
   ToolCall,
@@ -147,7 +159,10 @@ import {
   useMessageHandlers,
   GIT_ALLOWED_TOOLS,
 } from './hooks/useMessageHandlers'
-import { useMagicCommands } from './hooks/useMagicCommands'
+import {
+  useMagicCommands,
+  type WorkflowRunDetail,
+} from './hooks/useMagicCommands'
 import { useDragAndDropImages } from './hooks/useDragAndDropImages'
 
 // PERFORMANCE: Stable empty array references to prevent infinite render loops
@@ -690,10 +705,12 @@ export function ChatWindow({
     const images = state.pendingImages[activeSessionId]
     const textFiles = state.pendingTextFiles[activeSessionId]
     const files = state.pendingFiles[activeSessionId]
+    const skills = state.pendingSkills[activeSessionId]
     return (
       (images?.length ?? 0) > 0 ||
       (textFiles?.length ?? 0) > 0 ||
-      (files?.length ?? 0) > 0
+      (files?.length ?? 0) > 0 ||
+      (skills?.length ?? 0) > 0
     )
   })
   // Per-session message queue (uses deferredSessionId for content consistency)
@@ -1394,12 +1411,13 @@ export function ChatWindow({
       const skills = getPendingSkills(activeSessionId ?? '')
       const textFiles = getPendingTextFiles(activeSessionId ?? '')
 
-      // Need either text, images, files, or text files to send
+      // Need either text, images, files, text files, or skills to send
       if (
         !textMessage &&
         images.length === 0 &&
         files.length === 0 &&
-        textFiles.length === 0
+        textFiles.length === 0 &&
+        skills.length === 0
       )
         return
       if (!activeSessionId || !activeWorktreeId || !activeWorktreePath) return
@@ -1639,7 +1657,14 @@ export function ChatWindow({
   const handleToolbarEffortLevelChange = useCallback((level: EffortLevel) => {
     const sessionId = activeSessionIdRef.current
     if (!sessionId) return
-    useChatStore.getState().setEffortLevel(sessionId, level)
+    const store = useChatStore.getState()
+    store.setEffortLevel(sessionId, level)
+
+    // Mark as manually overridden if in build/yolo mode
+    const currentMode = store.getExecutionMode(sessionId)
+    if (currentMode !== 'plan') {
+      store.setManualThinkingOverride(sessionId, true)
+    }
   }, [])
 
   const handleToggleMcpServer = useCallback((serverName: string) => {
@@ -1741,45 +1766,7 @@ export function ChatWindow({
       const issueTemplate =
         customPrompt && customPrompt.trim()
           ? customPrompt
-          : `Investigate the loaded GitHub {issueWord} ({issueRefs}).
-
-## Investigation Steps
-
-1. **Read the issue context file(s)** to understand the full problem description and comments.
-
-2. **Analyze the problem**:
-   - What is the expected vs actual behavior?
-   - Are there error messages, stack traces, or reproduction steps?
-
-3. **Explore the codebase** to find relevant code:
-   - Search for files/functions mentioned in the {issueWord}
-   - Read source files to understand current implementation
-   - Trace the affected code path
-
-4. **Identify root cause**:
-   - Where does the bug originate OR where should the feature be implemented?
-   - What constraints/edge cases need handling?
-   - Any related issues or tech debt?
-
-5. **Check for regression**:
-   - If this is a bug fix, determine if this is a regression (something that worked before)
-   - Look at git history or related code to understand if the feature previously worked
-   - Identify what change may have caused the regression
-
-6. **Propose solution**:
-   - Clear explanation of needed changes
-   - Specific files to modify
-   - Potential risks/trade-offs
-   - Test cases to verify
-
-## Guidelines
-
-- Be thorough but focused - investigate deeply without getting sidetracked
-- Ask clarifying questions if requirements are unclear
-- If multiple solutions exist, explain trade-offs
-- Reference specific file paths and line numbers
-
-Begin your investigation now.`
+          : DEFAULT_INVESTIGATE_ISSUE_PROMPT
 
       promptParts.push(
         issueTemplate
@@ -1795,45 +1782,7 @@ Begin your investigation now.`
       const prTemplate =
         customPrompt && customPrompt.trim()
           ? customPrompt
-          : `Investigate the loaded GitHub {prWord} ({prRefs}).
-
-## Investigation Steps
-
-1. **Read the PR context file(s)** to understand the full description, reviews, and comments.
-
-2. **Understand the changes**:
-   - What is the PR trying to accomplish?
-   - What branches are involved (head → base)?
-   - Are there any review comments or requested changes?
-
-3. **Explore the codebase** to understand the context:
-   - Check out the PR branch if needed
-   - Read the files being modified
-   - Understand the current implementation
-
-4. **Analyze the approach**:
-   - Does the implementation match the PR description?
-   - Are there any concerns raised in reviews?
-   - What feedback has been given?
-
-5. **Identify action items**:
-   - What changes are requested by reviewers?
-   - Are there any failing checks or tests?
-   - What needs to be done to get this PR merged?
-
-6. **Propose next steps**:
-   - Address reviewer feedback
-   - Specific files to modify
-   - Test cases to add or update
-
-## Guidelines
-
-- Be thorough but focused - investigate deeply without getting sidetracked
-- Pay attention to reviewer feedback and requested changes
-- If multiple approaches exist, explain trade-offs
-- Reference specific file paths and line numbers
-
-Begin your investigation now.`
+          : DEFAULT_INVESTIGATE_PR_PROMPT
 
       promptParts.push(
         prTemplate.replace(/\{prRefs\}/g, prRefs).replace(/\{prWord\}/g, prWord)
@@ -1977,6 +1926,248 @@ Begin your investigation now.`
     useUIStore.getState().setCheckoutPRModalOpen(true)
   }, [])
 
+  // Handle investigate workflow run - sends investigation prompt for a failed GitHub Actions run
+  const handleInvestigateWorkflowRun = useCallback(
+    async (detail: WorkflowRunDetail) => {
+      console.warn('[INVESTIGATE-WF] Handler called with detail:', {
+        workflowName: detail.workflowName,
+        branch: detail.branch,
+        projectPath: detail.projectPath,
+        runId: detail.runId,
+      })
+
+      const customPrompt =
+        preferences?.magic_prompts?.investigate_workflow_run
+      const template =
+        customPrompt && customPrompt.trim()
+          ? customPrompt
+          : DEFAULT_INVESTIGATE_WORKFLOW_RUN_PROMPT
+
+      const prompt = template
+        .replace(/\{workflowName\}/g, detail.workflowName)
+        .replace(/\{runUrl\}/g, detail.runUrl)
+        .replace(/\{runId\}/g, detail.runId)
+        .replace(/\{branch\}/g, detail.branch)
+        .replace(/\{displayTitle\}/g, detail.displayTitle)
+
+      const investigateModel =
+        preferences?.magic_prompt_models?.investigate_model ??
+        selectedModelRef.current
+
+      // Find the right worktree for this branch
+      let targetWorktreeId: string | null = null
+      let targetWorktreePath: string | null = null
+
+      if (detail.projectPath) {
+        console.warn('[INVESTIGATE-WF] Fetching projects...')
+        // Use fetchQuery to ensure data is loaded (not just cached)
+        const projects = await queryClient.fetchQuery({
+          queryKey: projectsQueryKeys.list(),
+          queryFn: () => invoke<Project[]>('list_projects'),
+          staleTime: 1000 * 60,
+        })
+        const project = projects?.find(p => p.path === detail.projectPath)
+        console.warn('[INVESTIGATE-WF] Project lookup:', {
+          projectPath: detail.projectPath,
+          found: !!project,
+          projectId: project?.id,
+          projectName: project?.name,
+          allProjectPaths: projects?.map(p => p.path),
+        })
+
+        if (project) {
+          let worktrees: Worktree[] = []
+          try {
+            console.warn('[INVESTIGATE-WF] Fetching worktrees for project:', project.id)
+            worktrees = await queryClient.fetchQuery({
+              queryKey: projectsQueryKeys.worktrees(project.id),
+              queryFn: () =>
+                invoke<Worktree[]>('list_worktrees', {
+                  projectId: project.id,
+                }),
+              staleTime: 1000 * 60,
+            })
+            console.warn('[INVESTIGATE-WF] Worktrees fetched:', worktrees.map(w => ({
+              id: w.id,
+              branch: w.branch,
+              status: w.status,
+              session_type: w.session_type,
+              path: w.path,
+            })))
+          } catch (err) {
+            console.error('[INVESTIGATE-WF] Failed to fetch worktrees:', err)
+          }
+
+          // status is optional — undefined or 'ready' both mean usable
+          const isUsable = (w: Worktree) =>
+            !w.status || w.status === 'ready'
+
+          if (worktrees.length > 0) {
+            // Find worktree matching the run's branch
+            const matching = worktrees.find(
+              w => w.branch === detail.branch && isUsable(w)
+            )
+            console.warn('[INVESTIGATE-WF] Branch match:', {
+              targetBranch: detail.branch,
+              matchingWorktree: matching ? { id: matching.id, branch: matching.branch, status: matching.status } : null,
+            })
+            if (matching) {
+              targetWorktreeId = matching.id
+              targetWorktreePath = matching.path
+            } else {
+              // Fall back to the base worktree (first usable one)
+              const base = worktrees.find(w => isUsable(w))
+              console.warn('[INVESTIGATE-WF] No branch match, fallback to base:', {
+                baseWorktree: base ? { id: base.id, branch: base.branch, status: base.status } : null,
+              })
+              if (base) {
+                targetWorktreeId = base.id
+                targetWorktreePath = base.path
+              }
+            }
+          } else {
+            console.warn('[INVESTIGATE-WF] No worktrees found (empty array)')
+          }
+
+          // No usable worktrees — create the base session first
+          if (!targetWorktreeId) {
+            console.warn('[INVESTIGATE-WF] No usable worktree found, creating base session for project:', project.id)
+            try {
+              const baseSession = await invoke<Worktree>(
+                'create_base_session',
+                { projectId: project.id }
+              )
+              console.warn('[INVESTIGATE-WF] Base session created:', {
+                id: baseSession.id,
+                path: baseSession.path,
+                branch: baseSession.branch,
+                status: baseSession.status,
+              })
+              queryClient.invalidateQueries({
+                queryKey: projectsQueryKeys.worktrees(project.id),
+              })
+              targetWorktreeId = baseSession.id
+              targetWorktreePath = baseSession.path
+            } catch (error) {
+              console.error('[INVESTIGATE-WF] Failed to create base session:', error)
+              toast.error(`Failed to open base session: ${error}`)
+              return
+            }
+          }
+        }
+      } else {
+        console.warn('[INVESTIGATE-WF] No projectPath in detail, skipping project lookup')
+      }
+
+      // Final fallback: use active worktree
+      if (!targetWorktreeId || !targetWorktreePath) {
+        console.warn('[INVESTIGATE-WF] Using active worktree as final fallback:', {
+          activeWorktreeId: activeWorktreeIdRef.current,
+          activeWorktreePath: activeWorktreePathRef.current,
+        })
+        targetWorktreeId = activeWorktreeIdRef.current
+        targetWorktreePath = activeWorktreePathRef.current
+      }
+
+      if (!targetWorktreeId || !targetWorktreePath) {
+        console.error('[INVESTIGATE-WF] No worktree found at all, aborting')
+        toast.error('No worktree found for this branch')
+        return
+      }
+
+      console.warn('[INVESTIGATE-WF] Target worktree resolved:', {
+        worktreeId: targetWorktreeId,
+        worktreePath: targetWorktreePath,
+      })
+
+      // Capture for closure stability
+      const worktreeId = targetWorktreeId
+      const worktreePath = targetWorktreePath
+
+      const sendInvestigateMessage = (targetSessionId: string) => {
+        console.warn('[INVESTIGATE-WF] Sending investigate message to session:', targetSessionId)
+        const {
+          addSendingSession,
+          setLastSentMessage,
+          setError,
+          setSelectedModel,
+          setExecutingMode,
+        } = useChatStore.getState()
+
+        setLastSentMessage(targetSessionId, prompt)
+        setError(targetSessionId, null)
+        addSendingSession(targetSessionId)
+        setSelectedModel(targetSessionId, investigateModel)
+        setExecutingMode(targetSessionId, executionModeRef.current)
+
+        sendMessage.mutate(
+          {
+            sessionId: targetSessionId,
+            worktreeId,
+            worktreePath,
+            message: prompt,
+            model: investigateModel,
+            executionMode: executionModeRef.current,
+            thinkingLevel: selectedThinkingLevelRef.current,
+            effortLevel: useAdaptiveThinkingRef.current
+              ? selectedEffortLevelRef.current
+              : undefined,
+            mcpConfig: buildMcpConfigJson(
+              mcpServersDataRef.current,
+              enabledMcpServersRef.current
+            ),
+            parallelExecutionPrompt: preferences?.parallel_execution_prompt_enabled
+              ? (preferences.magic_prompts?.parallel_execution ?? DEFAULT_PARALLEL_EXECUTION_PROMPT)
+              : undefined,
+            chromeEnabled: preferences?.chrome_enabled ?? false,
+            aiLanguage: preferences?.ai_language,
+          },
+          { onSettled: () => inputRef.current?.focus() }
+        )
+      }
+
+      // Switch to the target worktree, create a new session, then send the prompt
+      const { setActiveWorktree, setActiveSession } = useChatStore.getState()
+      const { selectWorktree, expandProject } = useProjectsStore.getState()
+      console.warn('[INVESTIGATE-WF] Switching to worktree:', worktreeId)
+      setActiveWorktree(worktreeId, worktreePath)
+      selectWorktree(worktreeId)
+
+      // Expand the project in sidebar so user can see the worktree
+      const projects = queryClient.getQueryData<Project[]>(
+        projectsQueryKeys.list()
+      )
+      const project = projects?.find(p => p.path === detail.projectPath)
+      if (project) expandProject(project.id)
+
+      console.warn('[INVESTIGATE-WF] Creating new session in worktree:', worktreeId)
+      createSession.mutate(
+        { worktreeId, worktreePath },
+        {
+          onSuccess: session => {
+            console.warn('[INVESTIGATE-WF] New session created:', session.id)
+            setActiveSession(worktreeId, session.id)
+            sendInvestigateMessage(session.id)
+          },
+          onError: error => {
+            console.error('[INVESTIGATE-WF] Failed to create session:', error)
+            toast.error(`Failed to create session: ${error}`)
+          },
+        }
+      )
+    },
+    [
+      sendMessage,
+      createSession,
+      queryClient,
+      preferences?.magic_prompts?.investigate_workflow_run,
+      preferences?.magic_prompt_models?.investigate_model,
+      preferences?.parallel_execution_prompt_enabled,
+      preferences?.chrome_enabled,
+      preferences?.ai_language,
+    ]
+  )
+
   // Listen for magic-command events from MagicModal
   // Pass isModal and isViewingCanvasTab to prevent duplicate listeners when modal is open over canvas
   useMagicCommands({
@@ -1992,6 +2183,7 @@ Begin your investigation now.`
     handleResolveConflicts,
     handleInvestigate,
     handleCheckoutPR,
+    handleInvestigateWorkflowRun,
     isModal,
     isViewingCanvasTab,
     sessionModalOpen,
@@ -3025,7 +3217,7 @@ Begin your investigation now.`
                   model: selectedModelRef.current,
                   executionMode: 'build',
                   thinkingLevel: selectedThinkingLevelRef.current,
-                  disableThinkingForMode: true,
+                  disableThinkingForMode: !useChatStore.getState().hasManualThinkingOverride(activeSessionId),
                   effortLevel: useAdaptiveThinkingRef.current
                     ? selectedEffortLevelRef.current
                     : undefined,
@@ -3096,7 +3288,7 @@ Begin your investigation now.`
                   model: selectedModelRef.current,
                   executionMode: 'yolo',
                   thinkingLevel: selectedThinkingLevelRef.current,
-                  disableThinkingForMode: true,
+                  disableThinkingForMode: !useChatStore.getState().hasManualThinkingOverride(activeSessionId),
                   effortLevel: useAdaptiveThinkingRef.current
                     ? selectedEffortLevelRef.current
                     : undefined,
@@ -3184,7 +3376,7 @@ Begin your investigation now.`
                   model: selectedModelRef.current,
                   executionMode: 'build',
                   thinkingLevel: selectedThinkingLevelRef.current,
-                  disableThinkingForMode: true,
+                  disableThinkingForMode: !useChatStore.getState().hasManualThinkingOverride(activeSessionId),
                   effortLevel: useAdaptiveThinkingRef.current
                     ? selectedEffortLevelRef.current
                     : undefined,
@@ -3255,7 +3447,7 @@ Begin your investigation now.`
                   model: selectedModelRef.current,
                   executionMode: 'yolo',
                   thinkingLevel: selectedThinkingLevelRef.current,
-                  disableThinkingForMode: true,
+                  disableThinkingForMode: !useChatStore.getState().hasManualThinkingOverride(activeSessionId),
                   effortLevel: useAdaptiveThinkingRef.current
                     ? selectedEffortLevelRef.current
                     : undefined,

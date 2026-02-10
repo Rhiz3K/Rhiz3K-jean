@@ -11,6 +11,7 @@ use crate::http_server::EmitExt;
 use crate::projects::github_issues::{
     get_github_contexts_dir, get_worktree_issue_refs, get_worktree_pr_refs,
 };
+use crate::projects::storage::load_projects_data;
 
 // =============================================================================
 // Claude CLI execution
@@ -68,7 +69,7 @@ fn build_claude_args(
     effort_level: Option<&EffortLevel>,
     allowed_tools: Option<&[String]>,
     disable_thinking_in_non_plan_modes: bool,
-    parallel_execution_prompt_enabled: bool,
+    parallel_execution_prompt: Option<&str>,
     ai_language: Option<&str>,
     mcp_config: Option<&str>,
     chrome_enabled: bool,
@@ -232,12 +233,25 @@ fn build_claude_args(
     }
 
     // Parallel execution prompt - encourages sub-agent parallelization
-    if parallel_execution_prompt_enabled {
-        system_prompt_parts.push(
-            "In plan mode, structure plans so sub-agents can work simultaneously. \
-             In build/execute mode, use sub-agents in parallel for faster implementation."
-                .to_string(),
-        );
+    if let Some(prompt) = parallel_execution_prompt {
+        let prompt = prompt.trim();
+        if !prompt.is_empty() {
+            system_prompt_parts.push(prompt.to_string());
+        }
+    }
+
+    // Per-project custom system prompt
+    if let Ok(data) = load_projects_data(app) {
+        if let Some(worktree) = data.find_worktree(worktree_id) {
+            if let Some(project) = data.find_project(&worktree.project_id) {
+                if let Some(prompt) = &project.custom_system_prompt {
+                    let prompt = prompt.trim();
+                    if !prompt.is_empty() {
+                        system_prompt_parts.push(prompt.to_string());
+                    }
+                }
+            }
+        }
     }
 
     // Embedded gh CLI path - tell Claude to use the app's bundled binary
@@ -432,6 +446,14 @@ fn build_claude_args(
         args.push(claude_sid.to_string());
     }
 
+    // Disable background tasks - forces all Task sub-agents to run in foreground.
+    // Background tasks are killed when --print mode exits the CLI process.
+    // Foreground tasks still run in parallel when called in the same message.
+    env_vars.push((
+        "CLAUDE_CODE_DISABLE_BACKGROUND_TASKS".to_string(),
+        "1".to_string(),
+    ));
+
     // Debug env vars
     env_vars.push(("JEAN_SESSION_ID".to_string(), session_id.to_string()));
     env_vars.push(("JEAN_WORKTREE_ID".to_string(), worktree_id.to_string()));
@@ -470,7 +492,7 @@ pub fn execute_claude_detached(
     effort_level: Option<&EffortLevel>,
     allowed_tools: Option<&[String]>,
     disable_thinking_in_non_plan_modes: bool,
-    parallel_execution_prompt_enabled: bool,
+    parallel_execution_prompt: Option<&str>,
     ai_language: Option<&str>,
     mcp_config: Option<&str>,
     chrome_enabled: bool,
@@ -522,7 +544,7 @@ pub fn execute_claude_detached(
         effort_level,
         allowed_tools,
         disable_thinking_in_non_plan_modes,
-        parallel_execution_prompt_enabled,
+        parallel_execution_prompt,
         ai_language,
         mcp_config,
         chrome_enabled,
@@ -868,14 +890,38 @@ pub fn tail_claude_output(
                                         .get("tool_use_id")
                                         .and_then(|v| v.as_str())
                                         .unwrap_or("");
-                                    let output =
-                                        block.get("content").and_then(|v| v.as_str()).unwrap_or("");
+                                    // Content can be a string OR an array of content blocks
+                                    let output = block
+                                        .get("content")
+                                        .map(|v| {
+                                            if let Some(s) = v.as_str() {
+                                                s.to_string()
+                                            } else if let Some(arr) = v.as_array() {
+                                                arr.iter()
+                                                    .filter_map(|item| {
+                                                        if item.get("type").and_then(|t| t.as_str())
+                                                            == Some("text")
+                                                        {
+                                                            item.get("text")
+                                                                .and_then(|t| t.as_str())
+                                                                .map(|s| s.to_string())
+                                                        } else {
+                                                            None
+                                                        }
+                                                    })
+                                                    .collect::<Vec<_>>()
+                                                    .join("\n")
+                                            } else {
+                                                String::new()
+                                            }
+                                        })
+                                        .unwrap_or_default();
 
                                     // Update matching tool call's output
                                     if let Some(tc) =
                                         tool_calls.iter_mut().find(|t| t.id == tool_id)
                                     {
-                                        tc.output = Some(output.to_string());
+                                        tc.output = Some(output.clone());
                                     }
 
                                     // Emit tool_result event
@@ -883,7 +929,7 @@ pub fn tail_claude_output(
                                         session_id: session_id.to_string(),
                                         worktree_id: worktree_id.to_string(),
                                         tool_use_id: tool_id.to_string(),
-                                        output: output.to_string(),
+                                        output,
                                     };
                                     if let Err(e) = app.emit_all("chat:tool_result", &event) {
                                         log::error!("Failed to emit tool_result: {e}");

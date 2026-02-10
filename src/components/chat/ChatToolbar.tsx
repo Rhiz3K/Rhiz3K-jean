@@ -42,6 +42,11 @@ import {
 import { openExternal } from '@/lib/platform'
 import { Kbd } from '@/components/ui/kbd'
 import {
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+} from '@/components/ui/tooltip'
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -130,7 +135,7 @@ const CLAUDE_THINKING_LEVEL_OPTIONS: {
 ]
 
 /** Effort level options for Opus 4.6 adaptive thinking */
-const EFFORT_LEVEL_OPTIONS: {
+export const EFFORT_LEVEL_OPTIONS: {
   value: EffortLevel
   label: string
   description: string
@@ -186,17 +191,21 @@ function CheckStatusIcon({ status }: { status: CheckStatus | null }) {
     case 'failure':
     case 'error':
       return (
-        <span
-          className="ml-1 h-2 w-2 rounded-full bg-red-500"
-          title="Checks failing"
-        />
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="ml-1 h-2 w-2 rounded-full bg-red-500" />
+          </TooltipTrigger>
+          <TooltipContent>Checks failing</TooltipContent>
+        </Tooltip>
       )
     case 'pending':
       return (
-        <span
-          className="ml-1 h-2 w-2 rounded-full bg-yellow-500 animate-pulse"
-          title="Checks pending"
-        />
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="ml-1 h-2 w-2 rounded-full bg-yellow-500 animate-pulse" />
+          </TooltipTrigger>
+          <TooltipContent>Checks pending</TooltipContent>
+        </Tooltip>
       )
     default:
       return null
@@ -302,21 +311,36 @@ function McpStatusDot({ status }: { status: McpHealthStatus | undefined }) {
   switch (status) {
     case 'connected':
       return (
-        <span title="Connected">
-          <CheckCircle className="size-3 text-green-600 dark:text-green-400" />
-        </span>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span>
+              <CheckCircle className="size-3 text-green-600 dark:text-green-400" />
+            </span>
+          </TooltipTrigger>
+          <TooltipContent>Connected</TooltipContent>
+        </Tooltip>
       )
     case 'needsAuthentication':
       return (
-        <span title="Needs authentication — run 'claude /mcp' to authenticate">
-          <ShieldAlert className="size-3 text-amber-600 dark:text-amber-400" />
-        </span>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span>
+              <ShieldAlert className="size-3 text-amber-600 dark:text-amber-400" />
+            </span>
+          </TooltipTrigger>
+          <TooltipContent>{"Needs authentication — run 'claude /mcp' to authenticate"}</TooltipContent>
+        </Tooltip>
       )
     case 'couldNotConnect':
       return (
-        <span title="Could not connect to server">
-          <XCircle className="size-3 text-red-600 dark:text-red-400" />
-        </span>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span>
+              <XCircle className="size-3 text-red-600 dark:text-red-400" />
+            </span>
+          </TooltipTrigger>
+          <TooltipContent>Could not connect to server</TooltipContent>
+        </Tooltip>
       )
     default:
       return null
@@ -1143,31 +1167,35 @@ export const ChatToolbar = memo(function ChatToolbar({
         {prUrl && prNumber && (
           <>
             <div className="hidden @md:block h-4 w-px bg-border/50" />
-            <a
-              href={prUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className={cn(
-                'hidden @md:flex h-8 items-center gap-1.5 px-3 text-sm transition-colors select-none hover:bg-muted/80 hover:text-foreground',
-                displayStatus
-                  ? getPrStatusDisplay(displayStatus).className
-                  : 'text-muted-foreground'
-              )}
-              title={`Open PR #${prNumber} on GitHub`}
-            >
-              {displayStatus === 'merged' ? (
-                <GitMerge className="h-3.5 w-3.5" />
-              ) : (
-                <GitPullRequest className="h-3.5 w-3.5" />
-              )}
-              <span>
-                {displayStatus
-                  ? getPrStatusDisplay(displayStatus).label
-                  : 'Open'}{' '}
-                #{prNumber}
-              </span>
-              <CheckStatusIcon status={checkStatus ?? null} />
-            </a>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <a
+                  href={prUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={cn(
+                    'hidden @md:flex h-8 items-center gap-1.5 px-3 text-sm transition-colors select-none hover:bg-muted/80 hover:text-foreground',
+                    displayStatus
+                      ? getPrStatusDisplay(displayStatus).className
+                      : 'text-muted-foreground'
+                  )}
+                >
+                  {displayStatus === 'merged' ? (
+                    <GitMerge className="h-3.5 w-3.5" />
+                  ) : (
+                    <GitPullRequest className="h-3.5 w-3.5" />
+                  )}
+                  <span>
+                    {displayStatus
+                      ? getPrStatusDisplay(displayStatus).label
+                      : 'Open'}{' '}
+                    #{prNumber}
+                  </span>
+                  <CheckStatusIcon status={checkStatus ?? null} />
+                </a>
+              </TooltipTrigger>
+              <TooltipContent>{`Open PR #${prNumber} on GitHub`}</TooltipContent>
+            </Tooltip>
           </>
         )}
 
@@ -1175,15 +1203,19 @@ export const ChatToolbar = memo(function ChatToolbar({
         {mergeableStatus === 'conflicting' && (
           <>
             <div className="hidden @md:block h-4 w-px bg-border/50" />
-            <button
-              type="button"
-              className="hidden @md:flex h-8 items-center gap-1.5 px-3 text-sm text-amber-600 dark:text-amber-400 transition-colors cursor-pointer hover:bg-muted/80"
-              title="PR has merge conflicts — click to resolve"
-              onClick={onResolvePrConflicts}
-            >
-              <GitMerge className="h-3 w-3" />
-              <span>Conflicts</span>
-            </button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  className="hidden @md:flex h-8 items-center gap-1.5 px-3 text-sm text-amber-600 dark:text-amber-400 transition-colors cursor-pointer hover:bg-muted/80"
+                  onClick={onResolvePrConflicts}
+                >
+                  <GitMerge className="h-3 w-3" />
+                  <span>Conflicts</span>
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>PR has merge conflicts — click to resolve</TooltipContent>
+            </Tooltip>
           </>
         )}
 
@@ -1222,17 +1254,17 @@ export const ChatToolbar = memo(function ChatToolbar({
               availableMcpServers.map(server => {
                 const status = healthResult?.statuses[server.name]
                 return (
-                  <DropdownMenuCheckboxItem
-                    key={server.name}
-                    checked={
-                      !server.disabled &&
-                      enabledMcpServers.includes(server.name)
-                    }
-                    onCheckedChange={() => onToggleMcpServer(server.name)}
-                    disabled={server.disabled}
-                    className={server.disabled ? 'opacity-50' : undefined}
-                    title={mcpStatusHint(status)}
-                  >
+                  <Tooltip key={server.name}>
+                    <TooltipTrigger asChild>
+                      <DropdownMenuCheckboxItem
+                        checked={
+                          !server.disabled &&
+                          enabledMcpServers.includes(server.name)
+                        }
+                        onCheckedChange={() => onToggleMcpServer(server.name)}
+                        disabled={server.disabled}
+                        className={server.disabled ? 'opacity-50' : undefined}
+                      >
                     <span className="flex items-center gap-1.5">
                       <McpStatusDot status={status} />
                       {server.name}
@@ -1240,7 +1272,10 @@ export const ChatToolbar = memo(function ChatToolbar({
                     <span className="ml-auto pl-4 text-xs text-muted-foreground">
                       {server.disabled ? 'disabled' : server.scope}
                     </span>
-                  </DropdownMenuCheckboxItem>
+                      </DropdownMenuCheckboxItem>
+                    </TooltipTrigger>
+                    <TooltipContent side="left">{mcpStatusHint(status)}</TooltipContent>
+                  </Tooltip>
                 )
               })
             ) : (
@@ -1300,32 +1335,36 @@ export const ChatToolbar = memo(function ChatToolbar({
         {/* Thinking/Effort level dropdown - desktop only */}
         {selectedAgent === 'claude' && useAdaptiveThinking ? (
           <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                type="button"
-                disabled={hasPendingQuestions}
-                className={cn(
-                  'hidden @md:flex h-8 items-center gap-1.5 px-3 text-sm text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground disabled:pointer-events-none disabled:opacity-50',
-                  !thinkingOverrideActive &&
-                    'border border-purple-500/50 bg-purple-500/10 text-purple-700 dark:border-purple-400/40 dark:bg-purple-500/10 dark:text-purple-400'
-                )}
-                title={
-                  thinkingOverrideActive
-                    ? `Effort disabled in ${executionMode} mode (change in Settings)`
-                    : `Effort: ${EFFORT_LEVEL_OPTIONS.find(o => o.value === selectedEffortLevel)?.label}`
-                }
-              >
-                <Brain className="h-3.5 w-3.5" />
-                <span>
-                  {thinkingOverrideActive
-                    ? 'Off'
-                    : EFFORT_LEVEL_OPTIONS.find(
-                        o => o.value === selectedEffortLevel
-                      )?.label}
-                </span>
-                <ChevronDown className="h-3 w-3 opacity-50" />
-              </button>
-            </DropdownMenuTrigger>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    disabled={hasPendingQuestions}
+                    className={cn(
+                      'hidden @md:flex h-8 items-center gap-1.5 px-3 text-sm text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground disabled:pointer-events-none disabled:opacity-50',
+                      !thinkingOverrideActive &&
+                        'border border-purple-500/50 bg-purple-500/10 text-purple-700 dark:border-purple-400/40 dark:bg-purple-500/10 dark:text-purple-400'
+                    )}
+                  >
+                    <Brain className="h-3.5 w-3.5" />
+                    <span>
+                      {thinkingOverrideActive
+                        ? 'Off'
+                        : EFFORT_LEVEL_OPTIONS.find(
+                            o => o.value === selectedEffortLevel
+                          )?.label}
+                    </span>
+                    <ChevronDown className="h-3 w-3 opacity-50" />
+                  </button>
+                </DropdownMenuTrigger>
+              </TooltipTrigger>
+              <TooltipContent>
+                {thinkingOverrideActive
+                  ? `Effort disabled in ${executionMode} mode (change in Settings)`
+                  : `Effort: ${EFFORT_LEVEL_OPTIONS.find(o => o.value === selectedEffortLevel)?.label}`}
+              </TooltipContent>
+            </Tooltip>
             <DropdownMenuContent align="start">
               <DropdownMenuRadioGroup
                 value={thinkingOverrideActive ? '' : selectedEffortLevel}
@@ -1406,28 +1445,32 @@ export const ChatToolbar = memo(function ChatToolbar({
 
         {/* Execution mode dropdown - desktop only */}
         <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button
-              type="button"
-              disabled={hasPendingQuestions}
-              className={cn(
-                'hidden @md:flex h-8 items-center gap-1.5 px-3 text-sm text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground disabled:pointer-events-none disabled:opacity-50',
-                executionMode === 'plan' &&
-                  'border border-yellow-600/50 bg-yellow-500/10 text-yellow-700 dark:border-yellow-500/40 dark:bg-yellow-500/10 dark:text-yellow-400',
-                executionMode === 'yolo' &&
-                  'border border-red-500/50 bg-red-500/10 text-red-600 dark:border-red-400/40 dark:text-red-400'
-              )}
-              title={`${executionMode.charAt(0).toUpperCase() + executionMode.slice(1)} mode (Shift+Tab to cycle)`}
-            >
-              {executionMode === 'plan' && (
-                <ClipboardList className="h-3.5 w-3.5" />
-              )}
-              {executionMode === 'build' && <Hammer className="h-3.5 w-3.5" />}
-              {executionMode === 'yolo' && <Zap className="h-3.5 w-3.5" />}
-              <span className="capitalize">{executionMode}</span>
-              <ChevronDown className="h-3 w-3 opacity-50" />
-            </button>
-          </DropdownMenuTrigger>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  disabled={hasPendingQuestions}
+                  className={cn(
+                    'hidden @md:flex h-8 items-center gap-1.5 px-3 text-sm text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground disabled:pointer-events-none disabled:opacity-50',
+                    executionMode === 'plan' &&
+                      'border border-yellow-600/50 bg-yellow-500/10 text-yellow-700 dark:border-yellow-500/40 dark:bg-yellow-500/10 dark:text-yellow-400',
+                    executionMode === 'yolo' &&
+                      'border border-red-500/50 bg-red-500/10 text-red-600 dark:border-red-400/40 dark:text-red-400'
+                  )}
+                >
+                  {executionMode === 'plan' && (
+                    <ClipboardList className="h-3.5 w-3.5" />
+                  )}
+                  {executionMode === 'build' && <Hammer className="h-3.5 w-3.5" />}
+                  {executionMode === 'yolo' && <Zap className="h-3.5 w-3.5" />}
+                  <span className="capitalize">{executionMode}</span>
+                  <ChevronDown className="h-3 w-3 opacity-50" />
+                </button>
+              </DropdownMenuTrigger>
+            </TooltipTrigger>
+            <TooltipContent>{`${executionMode.charAt(0).toUpperCase() + executionMode.slice(1)} mode (Shift+Tab to cycle)`}</TooltipContent>
+          </Tooltip>
           <DropdownMenuContent align="start">
             <DropdownMenuRadioGroup
               value={executionMode}
@@ -1504,41 +1547,49 @@ export const ChatToolbar = memo(function ChatToolbar({
 
         {/* Send/Cancel button */}
         {isSending ? (
-          <button
-            type="button"
-            onClick={onCancel}
-            className="flex h-8 items-center justify-center gap-1.5 rounded-r-lg px-3 text-sm transition-colors bg-primary text-primary-foreground hover:bg-primary/90"
-            title={`Cancel (${isMacOS ? `${getModifierSymbol()}+Option+Backspace` : 'Ctrl+Alt+Backspace'})`}
-          >
-            <span>Cancel</span>
-            <Kbd className="ml-0.5 h-4 text-[10px] bg-primary-foreground/20 text-primary-foreground">
-              {isMacOS ? `${getModifierSymbol()}⌥⌫` : 'Ctrl+Alt+⌫'}
-            </Kbd>
-          </button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                onClick={onCancel}
+                className="flex h-8 items-center justify-center gap-1.5 rounded-r-lg px-3 text-sm transition-colors bg-primary text-primary-foreground hover:bg-primary/90"
+              >
+                <span>Cancel</span>
+                <Kbd className="ml-0.5 h-4 text-[10px] bg-primary-foreground/20 text-primary-foreground">
+                  {isMacOS ? `${getModifierSymbol()}⌥⌫` : 'Ctrl+Alt+⌫'}
+                </Kbd>
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>{`Cancel (${isMacOS ? `${getModifierSymbol()}+Option+Backspace` : 'Ctrl+Alt+Backspace'})`}</TooltipContent>
+          </Tooltip>
         ) : (
-          <button
-            type="submit"
-            disabled={hasPendingQuestions || !canSend}
-            className={cn(
-              'flex h-8 items-center justify-center gap-1.5 rounded-r-lg px-3 text-sm transition-colors disabled:pointer-events-none disabled:opacity-50',
-              canSend
-                ? 'bg-primary text-primary-foreground hover:bg-primary/90'
-                : 'text-muted-foreground hover:bg-muted/80 hover:text-foreground'
-            )}
-            title="Send message (Enter)"
-          >
-            <Send className="h-3.5 w-3.5" />
-            <Kbd
-              className={cn(
-                'ml-0.5 h-4 text-[10px]',
-                canSend
-                  ? 'bg-primary-foreground/20 text-primary-foreground'
-                  : 'opacity-50'
-              )}
-            >
-              Enter
-            </Kbd>
-          </button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="submit"
+                disabled={hasPendingQuestions || !canSend}
+                className={cn(
+                  'flex h-8 items-center justify-center gap-1.5 rounded-r-lg px-3 text-sm transition-colors disabled:pointer-events-none disabled:opacity-50',
+                  canSend
+                    ? 'bg-primary text-primary-foreground hover:bg-primary/90'
+                    : 'text-muted-foreground hover:bg-muted/80 hover:text-foreground'
+                )}
+              >
+                <Send className="h-3.5 w-3.5" />
+                <Kbd
+                  className={cn(
+                    'ml-0.5 h-4 text-[10px]',
+                    canSend
+                      ? 'bg-primary-foreground/20 text-primary-foreground'
+                      : 'opacity-50'
+                  )}
+                >
+                  Enter
+                </Kbd>
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>Send message (Enter)</TooltipContent>
+          </Tooltip>
         )}
       </div>
 

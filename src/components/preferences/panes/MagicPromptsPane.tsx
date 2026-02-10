@@ -18,6 +18,9 @@ import {
   DEFAULT_CODE_REVIEW_PROMPT,
   DEFAULT_CONTEXT_SUMMARY_PROMPT,
   DEFAULT_RESOLVE_CONFLICTS_PROMPT,
+  DEFAULT_INVESTIGATE_WORKFLOW_RUN_PROMPT,
+  DEFAULT_RELEASE_NOTES_PROMPT,
+  DEFAULT_PARALLEL_EXECUTION_PROMPT,
   DEFAULT_MAGIC_PROMPTS,
   DEFAULT_MAGIC_PROMPT_MODELS,
   DEFAULT_MAGIC_PROMPT_CODEX_MODELS,
@@ -50,69 +53,222 @@ interface PromptConfig {
   defaultClaudeModel: ClaudeModel
 }
 
-const PROMPT_CONFIGS: PromptConfig[] = [
+interface PromptSection {
+  label: string
+  configs: PromptConfig[]
+}
+
+const PROMPT_SECTIONS: PromptSection[] = [
   {
-    key: 'investigate_issue',
-    modelKey: 'investigate_model',
-    label: 'Investigate Issue',
-    description: 'Prompt for analyzing GitHub issues loaded into the context.',
-    variables: [
-      { name: '{issueRefs}', description: 'Issue numbers (e.g., #123, #456)' },
+    label: 'Investigation',
+    configs: [
       {
-        name: '{issueWord}',
-        description: '"issue" or "issues" based on count',
+        key: 'investigate_issue',
+        modelKey: 'investigate_model',
+        label: 'Investigate Issue',
+        description:
+          'Prompt for analyzing GitHub issues loaded into the context.',
+        variables: [
+          {
+            name: '{issueRefs}',
+            description: 'Issue numbers (e.g., #123, #456)',
+          },
+          {
+            name: '{issueWord}',
+            description: '"issue" or "issues" based on count',
+          },
+        ],
+        defaultValue: DEFAULT_INVESTIGATE_ISSUE_PROMPT,
+        defaultModel: 'opus',
+      },
+      {
+        key: 'investigate_pr',
+        modelKey: 'investigate_model',
+        label: 'Investigate PR',
+        description:
+          'Prompt for analyzing GitHub pull requests loaded into the context.',
+        variables: [
+          {
+            name: '{prRefs}',
+            description: 'PR numbers (e.g., #123, #456)',
+          },
+          {
+            name: '{prWord}',
+            description: '"pull request" or "pull requests" based on count',
+          },
+        ],
+        defaultValue: DEFAULT_INVESTIGATE_PR_PROMPT,
+        defaultModel: 'opus',
+      },
+      {
+        key: 'investigate_workflow_run',
+        modelKey: 'investigate_model',
+        label: 'Investigate Workflow Run',
+        description:
+          'Prompt for investigating failed GitHub Actions workflow runs.',
+        variables: [
+          {
+            name: '{workflowName}',
+            description: 'Name of the workflow (e.g., CI, Deploy)',
+          },
+          {
+            name: '{runUrl}',
+            description: 'URL to the workflow run on GitHub',
+          },
+          { name: '{runId}', description: 'Numeric ID of the workflow run' },
+          { name: '{branch}', description: 'Branch the workflow ran on' },
+          {
+            name: '{displayTitle}',
+            description: 'Commit message or PR title that triggered the run',
+          },
+        ],
+        defaultValue: DEFAULT_INVESTIGATE_WORKFLOW_RUN_PROMPT,
+        defaultModel: 'opus',
       },
     ],
     defaultValue: DEFAULT_INVESTIGATE_ISSUE_PROMPT,
     defaultClaudeModel: 'opus',
   },
   {
-    key: 'investigate_pr',
-    modelKey: 'investigate_model',
-    label: 'Investigate PR',
-    description:
-      'Prompt for analyzing GitHub pull requests loaded into the context.',
-    variables: [
-      { name: '{prRefs}', description: 'PR numbers (e.g., #123, #456)' },
+    label: 'Git Operations',
+    configs: [
       {
-        name: '{prWord}',
-        description: '"pull request" or "pull requests" based on count',
+        key: 'code_review',
+        modelKey: 'code_review_model',
+        label: 'Code Review',
+        description: 'Prompt for AI-powered code review of your changes.',
+        variables: [
+          {
+            name: '{branch_info}',
+            description: 'Source and target branch names',
+          },
+          { name: '{commits}', description: 'Commit history' },
+          { name: '{diff}', description: 'Code changes diff' },
+          {
+            name: '{uncommitted_section}',
+            description: 'Unstaged changes if any',
+          },
+        ],
+        defaultValue: DEFAULT_CODE_REVIEW_PROMPT,
+        defaultModel: 'opus',
+      },
+      {
+        key: 'commit_message',
+        modelKey: 'commit_message_model',
+        label: 'Commit Message',
+        description:
+          'Prompt for generating commit messages from staged changes.',
+        variables: [
+          { name: '{status}', description: 'Git status output' },
+          { name: '{diff}', description: 'Staged changes diff' },
+          {
+            name: '{recent_commits}',
+            description: 'Recent commit messages for style',
+          },
+          { name: '{remote_info}', description: 'Remote repository info' },
+        ],
+        defaultValue: DEFAULT_COMMIT_MESSAGE_PROMPT,
+        defaultModel: 'haiku',
+      },
+      {
+        key: 'pr_content',
+        modelKey: 'pr_content_model',
+        label: 'PR Description',
+        description:
+          'Prompt for generating pull request titles and descriptions.',
+        variables: [
+          {
+            name: '{current_branch}',
+            description: 'Name of the feature branch',
+          },
+          {
+            name: '{target_branch}',
+            description: 'Branch to merge into (e.g., main)',
+          },
+          {
+            name: '{commit_count}',
+            description: 'Number of commits in the PR',
+          },
+          { name: '{commits}', description: 'List of commit messages' },
+          { name: '{diff}', description: 'Git diff of all changes' },
+        ],
+        defaultValue: DEFAULT_PR_CONTENT_PROMPT,
+        defaultModel: 'haiku',
+      },
+      {
+        key: 'resolve_conflicts',
+        modelKey: 'resolve_conflicts_model',
+        label: 'Resolve Conflicts',
+        description: 'Instructions appended to conflict resolution prompts.',
+        variables: [],
+        defaultValue: DEFAULT_RESOLVE_CONFLICTS_PROMPT,
+        defaultModel: 'opus',
+      },
+      {
+        key: 'release_notes',
+        modelKey: 'release_notes_model',
+        label: 'Release Notes',
+        description:
+          'Prompt for generating release notes from changes since a prior release.',
+        variables: [
+          {
+            name: '{tag}',
+            description: 'Tag of the selected release',
+          },
+          {
+            name: '{previous_release_name}',
+            description: 'Name of the selected release',
+          },
+          {
+            name: '{commits}',
+            description: 'Commit messages since the selected release',
+          },
+        ],
+        defaultValue: DEFAULT_RELEASE_NOTES_PROMPT,
+        defaultModel: 'haiku',
       },
     ],
     defaultValue: DEFAULT_INVESTIGATE_PR_PROMPT,
     defaultClaudeModel: 'opus',
   },
   {
-    key: 'pr_content',
-    modelKey: 'pr_content_model',
-    label: 'PR Content',
-    description: 'Prompt for generating pull request titles and descriptions.',
-    variables: [
-      { name: '{current_branch}', description: 'Name of the feature branch' },
+    label: 'Session',
+    configs: [
       {
-        name: '{target_branch}',
-        description: 'Branch to merge into (e.g., main)',
+        key: 'context_summary',
+        modelKey: 'context_summary_model',
+        label: 'Context Summary',
+        description:
+          'Prompt for summarizing conversations when saving context.',
+        variables: [
+          {
+            name: '{project_name}',
+            description: 'Name of the current project',
+          },
+          { name: '{date}', description: 'Current timestamp' },
+          {
+            name: '{conversation}',
+            description: 'Full conversation history',
+          },
+        ],
+        defaultValue: DEFAULT_CONTEXT_SUMMARY_PROMPT,
+        defaultModel: 'haiku',
       },
-      { name: '{commit_count}', description: 'Number of commits in the PR' },
-      { name: '{commits}', description: 'List of commit messages' },
-      { name: '{diff}', description: 'Git diff of all changes' },
     ],
     defaultValue: DEFAULT_PR_CONTENT_PROMPT,
     defaultClaudeModel: 'haiku',
   },
   {
-    key: 'commit_message',
-    modelKey: 'commit_message_model',
-    label: 'Commit Message',
-    description: 'Prompt for generating commit messages from staged changes.',
-    variables: [
-      { name: '{status}', description: 'Git status output' },
-      { name: '{diff}', description: 'Staged changes diff' },
+    label: 'System Prompts',
+    configs: [
       {
-        name: '{recent_commits}',
-        description: 'Recent commit messages for style',
+        key: 'parallel_execution',
+        label: 'Parallel Execution',
+        description:
+          'System prompt appended to every chat session when enabled in Experimental settings. Encourages sub-agent parallelization.',
+        variables: [],
+        defaultValue: DEFAULT_PARALLEL_EXECUTION_PROMPT,
       },
-      { name: '{remote_info}', description: 'Remote repository info' },
     ],
     defaultValue: DEFAULT_COMMIT_MESSAGE_PROMPT,
     defaultClaudeModel: 'haiku',
@@ -154,6 +310,9 @@ const PROMPT_CONFIGS: PromptConfig[] = [
     defaultClaudeModel: 'opus',
   },
 ]
+
+// Flat list for lookups
+const PROMPT_CONFIGS = PROMPT_SECTIONS.flatMap(s => s.configs)
 
 const MODEL_OPTIONS: { value: ClaudeModel; label: string }[] = [
   { value: 'opus', label: 'Opus' },
@@ -280,7 +439,7 @@ export const MagicPromptsPane: React.FC = () => {
 
   const handleClaudeModelChange = useCallback(
     (model: ClaudeModel) => {
-      if (!preferences) return
+      if (!preferences || !selectedConfig.modelKey) return
       savePreferences.mutate({
         ...preferences,
         magic_prompt_models: {

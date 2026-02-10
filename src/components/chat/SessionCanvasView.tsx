@@ -14,6 +14,7 @@ import { isBaseSession } from '@/types/projects'
 import { GitStatusBadges } from '@/components/ui/git-status-badges'
 import { NewIssuesBadge } from '@/components/shared/NewIssuesBadge'
 import { OpenPRsBadge } from '@/components/shared/OpenPRsBadge'
+import { FailedRunsBadge } from '@/components/shared/FailedRunsBadge'
 import { GitDiffModal } from './GitDiffModal'
 import type { DiffRequest } from '@/types/git-diff'
 import { toast } from 'sonner'
@@ -25,7 +26,7 @@ import { CanvasGrid } from './CanvasGrid'
 import { KeybindingHints } from '@/components/ui/keybinding-hints'
 import { usePreferences } from '@/services/preferences'
 import { DEFAULT_KEYBINDINGS } from '@/types/keybindings'
-import { Search, Loader2, MoreHorizontal, Settings, Plus } from 'lucide-react'
+import { Search, Loader2, MoreHorizontal, Settings, Plus, GitBranch } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -304,6 +305,15 @@ export function SessionCanvasView({
                   </span>
                 )}
               </h2>
+              {(() => {
+                const displayBranch = gitStatus?.current_branch ?? worktree?.branch
+                return displayBranch && displayBranch !== sessionLabel ? (
+                  <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                    <GitBranch className="h-3 w-3" />
+                    <span className="max-w-[150px] truncate">{displayBranch}</span>
+                  </span>
+                ) : null
+              })()}
               {project && worktree && (
                 <NewIssuesBadge
                   projectPath={project.path}
@@ -314,6 +324,12 @@ export function SessionCanvasView({
                 <OpenPRsBadge
                   projectPath={project.path}
                   projectId={worktree.project_id}
+                />
+              )}
+              {project && worktree && (
+                <FailedRunsBadge
+                  projectPath={project.path}
+                  branch={worktree.branch}
                 />
               )}
               <GitStatusBadges

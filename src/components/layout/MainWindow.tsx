@@ -1,4 +1,4 @@
-import { useMemo, useCallback, useRef, useEffect } from 'react'
+import { useMemo, useCallback, useRef, useEffect, useState } from 'react'
 import { TitleBar } from '@/components/titlebar/TitleBar'
 import { DevModeBanner } from './DevModeBanner'
 import { LeftSideBar } from './LeftSideBar'
@@ -13,8 +13,10 @@ import { FeatureTourDialog } from '@/components/onboarding/FeatureTourDialog'
 import { CliUpdateModal } from '@/components/layout/CliUpdateModal'
 import { CliLoginModal } from '@/components/preferences/CliLoginModal'
 import { OpenInModal } from '@/components/open-in/OpenInModal'
+import { WorkflowRunsModal } from '@/components/shared/WorkflowRunsModal'
 import { MagicModal } from '@/components/magic/MagicModal'
 import { CheckoutPRModal } from '@/components/magic/CheckoutPRModal'
+import { ReleaseNotesDialog } from '@/components/magic/ReleaseNotesDialog'
 import { NewWorktreeModal } from '@/components/worktree/NewWorktreeModal'
 import { PathConflictModal } from '@/components/worktree/PathConflictModal'
 import { BranchConflictModal } from '@/components/worktree/BranchConflictModal'
@@ -22,6 +24,7 @@ import { SessionBoardModal } from '@/components/session-board'
 import { AddProjectDialog } from '@/components/projects/AddProjectDialog'
 import { GitInitModal } from '@/components/projects/GitInitModal'
 import { QuitConfirmationDialog } from './QuitConfirmationDialog'
+import { ArchivedModal } from '@/components/archive/ArchivedModal'
 import { Toaster } from '@/components/ui/sonner'
 import { useUIStore } from '@/store/ui-store'
 import { useProjectsStore } from '@/store/projects-store'
@@ -158,6 +161,14 @@ export function MainWindow() {
   // Handle CMD+SHIFT+T to restore last archived item
   useRestoreLastArchived()
 
+  // Archive modal state (triggered by command palette or sidebar button)
+  const [archivedModalOpen, setArchivedModalOpen] = useState(false)
+  useEffect(() => {
+    const handler = () => setArchivedModalOpen(true)
+    window.addEventListener('command:open-archived-modal', handler)
+    return () => window.removeEventListener('command:open-archived-modal', handler)
+  }, [])
+
   // Auto-cleanup old archived items on startup
   useArchiveCleanup()
 
@@ -269,14 +280,17 @@ export function MainWindow() {
       <CliUpdateModal />
       <CliLoginModal />
       <OpenInModal />
+      <WorkflowRunsModal />
       <MagicModal />
       <CheckoutPRModal />
+      <ReleaseNotesDialog />
       <NewWorktreeModal />
       <PathConflictModal />
       <BranchConflictModal />
       <SessionBoardModal />
       <AddProjectDialog />
       <GitInitModal />
+      <ArchivedModal open={archivedModalOpen} onOpenChange={setArchivedModalOpen} />
       <QuitConfirmationDialog />
       <Toaster
         position="bottom-right"

@@ -19,6 +19,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import {
   Command,
   CommandEmpty,
@@ -35,6 +36,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 import { useProjectsStore } from '@/store/projects-store'
 import {
@@ -68,21 +70,36 @@ function ProjectMcpHealthIndicator({
   switch (status) {
     case 'connected':
       return (
-        <span title="Server is connected and ready">
-          <CheckCircle className="size-3.5 text-green-600 dark:text-green-400" />
-        </span>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span>
+              <CheckCircle className="size-3.5 text-green-600 dark:text-green-400" />
+            </span>
+          </TooltipTrigger>
+          <TooltipContent>Server is connected and ready</TooltipContent>
+        </Tooltip>
       )
     case 'needsAuthentication':
       return (
-        <span title="Run 'claude /mcp' in your terminal to authenticate">
-          <ShieldAlert className="size-3.5 text-amber-600 dark:text-amber-400" />
-        </span>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span>
+              <ShieldAlert className="size-3.5 text-amber-600 dark:text-amber-400" />
+            </span>
+          </TooltipTrigger>
+          <TooltipContent>{"Run 'claude /mcp' in your terminal to authenticate"}</TooltipContent>
+        </Tooltip>
       )
     case 'couldNotConnect':
       return (
-        <span title="Could not connect — check that the server is running">
-          <XCircle className="size-3.5 text-red-600 dark:text-red-400" />
-        </span>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span>
+              <XCircle className="size-3.5 text-red-600 dark:text-red-400" />
+            </span>
+          </TooltipTrigger>
+          <TooltipContent>Could not connect -- check that the server is running</TooltipContent>
+        </Tooltip>
       )
     default:
       return null
@@ -133,6 +150,9 @@ export function ProjectSettingsDialog() {
   // Use project's default_branch as the initial value, allow local overrides
   const [localBranch, setLocalBranch] = useState<string | null>(null)
   const [localMcpServers, setLocalMcpServers] = useState<string[] | null>(null)
+  const [localSystemPrompt, setLocalSystemPrompt] = useState<string | null>(
+    null
+  )
   const [branchPopoverOpen, setBranchPopoverOpen] = useState(false)
 
   // Auto-enable newly discovered (non-disabled) servers for this project
@@ -170,6 +190,8 @@ export function ProjectSettingsDialog() {
   const selectedBranch = localBranch ?? project?.default_branch ?? ''
   const selectedMcpServers =
     localMcpServers ?? project?.enabled_mcp_servers ?? []
+  const selectedSystemPrompt =
+    localSystemPrompt ?? project?.custom_system_prompt ?? ''
 
   const setSelectedBranch = (branch: string) => {
     setLocalBranch(branch)
@@ -190,6 +212,7 @@ export function ProjectSettingsDialog() {
       projectId: projectSettingsProjectId,
       defaultBranch: selectedBranch,
       enabledMcpServers: localMcpServers ?? undefined,
+      customSystemPrompt: localSystemPrompt ?? undefined,
     })
 
     closeProjectSettings()
@@ -199,6 +222,7 @@ export function ProjectSettingsDialog() {
     if (!open) {
       setLocalBranch(null) // Reset local state when closing
       setLocalMcpServers(null)
+      setLocalSystemPrompt(null)
       closeProjectSettings()
     }
   }
@@ -212,12 +236,15 @@ export function ProjectSettingsDialog() {
     localMcpServers !== null &&
     JSON.stringify(localMcpServers.slice().sort()) !==
       JSON.stringify(projectMcpServers.slice().sort())
-  const hasChanges = branchChanged || mcpChanged
+  const systemPromptChanged =
+    localSystemPrompt !== null &&
+    localSystemPrompt !== (project?.custom_system_prompt ?? '')
+  const hasChanges = branchChanged || mcpChanged || systemPromptChanged
   const isPending = updateSettings.isPending
 
   return (
     <Dialog open={projectSettingsDialogOpen} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Project Settings</DialogTitle>
           <DialogDescription>
@@ -423,6 +450,27 @@ export function ProjectSettingsDialog() {
                 ))}
               </div>
             )}
+          </div>
+
+          {/* Custom System Prompt Section */}
+          <div className="space-y-2">
+            <label
+              htmlFor="custom-system-prompt"
+              className="text-sm font-medium leading-none"
+            >
+              Custom System Prompt
+            </label>
+            <p className="text-xs text-muted-foreground">
+              Appended to every session&apos;s system prompt in this project
+            </p>
+            <Textarea
+              id="custom-system-prompt"
+              placeholder="e.g. Always use TypeScript strict mode. Prefer functional components..."
+              value={selectedSystemPrompt}
+              onChange={e => setLocalSystemPrompt(e.target.value)}
+              rows={4}
+              className="resize-y text-sm"
+            />
           </div>
         </div>
 

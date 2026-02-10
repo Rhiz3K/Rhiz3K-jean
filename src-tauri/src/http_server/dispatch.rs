@@ -108,6 +108,7 @@ pub async fn dispatch_command(
                 project_id,
                 default_branch,
                 None,
+                None,
             )
             .await?;
             to_value(result)
@@ -253,6 +254,7 @@ pub async fn dispatch_command(
         }
         "update_worktree_cached_status" => {
             let worktree_id: String = field(&args, "worktreeId", "worktree_id")?;
+            let branch: Option<String> = field_opt(&args, "branch", "branch")?;
             let pr_status: Option<String> = field_opt(&args, "prStatus", "pr_status")?;
             let check_status: Option<String> = field_opt(&args, "checkStatus", "check_status")?;
             let behind_count: Option<u32> = field_opt(&args, "behindCount", "behind_count")?;
@@ -275,6 +277,7 @@ pub async fn dispatch_command(
             crate::projects::update_worktree_cached_status(
                 app.clone(),
                 worktree_id,
+                branch,
                 pr_status,
                 check_status,
                 behind_count,
@@ -558,8 +561,8 @@ pub async fn dispatch_command(
             )?;
             let parallel_execution_prompt_enabled: Option<bool> = field_opt(
                 &args,
-                "parallelExecutionPromptEnabled",
-                "parallel_execution_prompt_enabled",
+                "parallelExecutionPrompt",
+                "parallel_execution_prompt",
             )?;
             let ai_language: Option<String> = field_opt(&args, "aiLanguage", "ai_language")?;
             let allowed_tools: Option<Vec<String>> =
