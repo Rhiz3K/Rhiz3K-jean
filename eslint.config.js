@@ -50,6 +50,19 @@ export default tseslint.config(
         },
       ],
       '@typescript-eslint/no-import-type-side-effects': 'error',
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: '@tauri-apps/api/core',
+              importNames: ['convertFileSrc'],
+              message:
+                'Use convertFileSrc from @/lib/transport for web compatibility.',
+            },
+          ],
+        },
+      ],
     },
     settings: {
       react: {

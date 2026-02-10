@@ -29,6 +29,32 @@ Object.defineProperty(window, 'matchMedia', {
   })),
 })
 
+// Mock ResizeObserver for components using cmdk/popovers
+class ResizeObserverMock {
+  observe() {
+    // no-op in tests
+  }
+
+  unobserve() {
+    // no-op in tests
+  }
+
+  disconnect() {
+    // no-op in tests
+  }
+}
+
+Object.defineProperty(window, 'ResizeObserver', {
+  writable: true,
+  value: ResizeObserverMock,
+})
+
+// Mock scrollIntoView used by cmdk
+Object.defineProperty(window.HTMLElement.prototype, 'scrollIntoView', {
+  writable: true,
+  value: vi.fn(),
+})
+
 // Mock Tauri APIs for tests
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn().mockResolvedValue({ theme: 'system' }),
