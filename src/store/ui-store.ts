@@ -462,7 +462,11 @@ export const useUIStore = create<UIState>()(
         set({ featureTourOpen: open }, undefined, 'setFeatureTourOpen'),
 
       setUIStateInitialized: initialized =>
-        set({ uiStateInitialized: initialized }, undefined, 'setUIStateInitialized'),
+        set(
+          { uiStateInitialized: initialized },
+          undefined,
+          'setUIStateInitialized'
+        ),
     }),
     {
       name: 'ui-store',

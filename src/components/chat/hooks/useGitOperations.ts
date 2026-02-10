@@ -223,7 +223,12 @@ export function useGitOperations({
     } finally {
       clearWorktreeLoading(activeWorktreeId)
     }
-  }, [activeWorktreeId, activeWorktreePath, worktree?.branch, project?.default_branch])
+  }, [
+    activeWorktreeId,
+    activeWorktreePath,
+    worktree?.branch,
+    project?.default_branch,
+  ])
 
   // Handle Push - pushes commits to remote
   const handlePush = useCallback(async () => {
@@ -243,7 +248,12 @@ export function useGitOperations({
     } finally {
       clearWorktreeLoading(activeWorktreeId)
     }
-  }, [activeWorktreeId, activeWorktreePath, worktree?.branch, worktree?.pr_number])
+  }, [
+    activeWorktreeId,
+    activeWorktreePath,
+    worktree?.branch,
+    worktree?.pr_number,
+  ])
 
   // Handle Open PR - creates PR with AI-generated title and description in background
   const handleOpenPr = useCallback(async () => {
@@ -365,6 +375,7 @@ export function useGitOperations({
   }, [
     activeWorktreeId,
     activeWorktreePath,
+    worktree?.branch,
     pinnedAgent,
     preferences?.magic_prompts?.code_review,
     preferences?.magic_prompt_models?.code_review_model,

@@ -16,6 +16,7 @@ import {
   CheckCircle,
   ChevronDown,
   CircleDot,
+  Clock,
   ClipboardList,
   ExternalLink,
   Eye,
@@ -56,7 +57,6 @@ import {
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuSeparator,
-  DropdownMenuCheckboxItem,
   DropdownMenuSub,
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
@@ -71,10 +71,14 @@ import {
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Markdown } from '@/components/ui/markdown'
 import { cn } from '@/lib/utils'
-import type { ClaudeModel } from '@/store/chat-store'
 import { useMcpHealthCheck } from '@/services/mcp'
 import type { McpServerInfo, McpHealthStatus } from '@/types/chat'
-import type { ChatAgent, ThinkingLevel, EffortLevel, ExecutionMode } from '@/types/chat'
+import type {
+  ChatAgent,
+  ThinkingLevel,
+  EffortLevel,
+  ExecutionMode,
+} from '@/types/chat'
 import type {
   PrDisplayStatus,
   CheckStatus,
@@ -214,6 +218,9 @@ interface ChatToolbarProps {
   useAdaptiveThinking: boolean // True when model supports effort (Opus on CLI >= 2.1.32)
   queuedMessageCount: number
   codexBuildNetworkAccess: boolean
+  hasBranchUpdates: boolean
+  behindCount: number
+  aheadCount: number
 
   // Git state
   baseBranch: string
@@ -273,7 +280,9 @@ interface ChatToolbarProps {
 
 /** Compact health status dot for the toolbar MCP dropdown */
 /** Hover hint for MCP server health status in the toolbar dropdown */
-function mcpStatusHint(status: McpHealthStatus | undefined): string | undefined {
+function mcpStatusHint(
+  status: McpHealthStatus | undefined
+): string | undefined {
   switch (status) {
     case 'needsAuthentication':
       return "Needs authentication — run 'claude /mcp' to authenticate"
@@ -332,9 +341,9 @@ export const ChatToolbar = memo(function ChatToolbar({
   useAdaptiveThinking,
   queuedMessageCount,
   codexBuildNetworkAccess,
-  hasBranchUpdates,
-  behindCount,
-  aheadCount,
+  hasBranchUpdates: _hasBranchUpdates,
+  behindCount: _behindCount,
+  aheadCount: _aheadCount,
   baseBranch,
   uncommittedAdded,
   uncommittedRemoved,
@@ -403,14 +412,6 @@ export const ChatToolbar = memo(function ChatToolbar({
   const selectedAgentLabel =
     AGENT_OPTIONS.find(o => o.value === selectedAgent)?.label ?? selectedAgent
 
-  // Memoize callbacks to prevent Select re-renders
-  const handleAgentChange = useCallback(
-    (value: string) => {
-      onAgentChange(value as ChatAgent)
-    },
-    [onAgentChange]
-  )
-
   const handleModelChange = useCallback(
     (value: string) => {
       onModelChange(value)
@@ -430,10 +431,6 @@ export const ChatToolbar = memo(function ChatToolbar({
       onEffortLevelChange(value as EffortLevel)
     },
     [onEffortLevelChange]
-  )
-
-  const loadingOperation = useChatStore(state =>
-    worktreeId ? (state.worktreeLoadingOperations[worktreeId] ?? null) : null
   )
 
   const handlePullClick = useCallback(async () => {
@@ -591,17 +588,6 @@ export const ChatToolbar = memo(function ChatToolbar({
       : baseModelOptions
   const selectedModelLabel =
     modelOptions.find(o => o.value === selectedModel)?.label ?? selectedModel
-
-  const thinkingOptions =
-    selectedAgent === 'codex'
-      ? CODEX_REASONING_EFFORT_OPTIONS
-      : CLAUDE_THINKING_LEVEL_OPTIONS
-  const thinkingLabel = selectedAgent === 'codex' ? 'Reasoning' : 'Thinking'
-  const effectiveThinkingOverrideActive =
-    selectedAgent === 'claude' && thinkingOverrideActive
-  const selectedThinkingLabel =
-    thinkingOptions.find(o => o.value === selectedThinkingLevel)?.label ??
-    selectedThinkingLevel
 
   return (
     <div className="@container px-4 py-2 md:px-6">
@@ -1220,9 +1206,7 @@ export const ChatToolbar = memo(function ChatToolbar({
               }
             >
               <Plug className="h-3.5 w-3.5" />
-              {activeMcpCount > 0 && (
-                <span>{activeMcpCount}</span>
-              )}
+              {activeMcpCount > 0 && <span>{activeMcpCount}</span>}
               <ChevronDown className="h-3 w-3 opacity-50" />
             </button>
           </DropdownMenuTrigger>
@@ -1384,9 +1368,10 @@ export const ChatToolbar = memo(function ChatToolbar({
                 <span>
                   {thinkingOverrideActive
                     ? 'Off'
-                    : (selectedAgent === 'codex' ? CODEX_REASONING_EFFORT_OPTIONS : CLAUDE_THINKING_LEVEL_OPTIONS).find(
-                        o => o.value === selectedThinkingLevel
-                      )?.label}
+                    : (selectedAgent === 'codex'
+                        ? CODEX_REASONING_EFFORT_OPTIONS
+                        : CLAUDE_THINKING_LEVEL_OPTIONS
+                      ).find(o => o.value === selectedThinkingLevel)?.label}
                 </span>
                 <ChevronDown className="h-3 w-3 opacity-50" />
               </button>
@@ -1396,7 +1381,10 @@ export const ChatToolbar = memo(function ChatToolbar({
                 value={thinkingOverrideActive ? 'off' : selectedThinkingLevel}
                 onValueChange={handleThinkingLevelChange}
               >
-                {(selectedAgent === 'codex' ? CODEX_REASONING_EFFORT_OPTIONS : CLAUDE_THINKING_LEVEL_OPTIONS).map(option => (
+                {(selectedAgent === 'codex'
+                  ? CODEX_REASONING_EFFORT_OPTIONS
+                  : CLAUDE_THINKING_LEVEL_OPTIONS
+                ).map(option => (
                   <DropdownMenuRadioItem
                     key={option.value}
                     value={option.value}
@@ -1471,7 +1459,6 @@ export const ChatToolbar = memo(function ChatToolbar({
             </DropdownMenuRadioGroup>
           </DropdownMenuContent>
         </DropdownMenu>
-
 
         {/* Codex build network toggle - desktop only */}
         {showCodexBuildNetworkToggle && (

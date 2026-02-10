@@ -107,7 +107,9 @@ export function SessionChatModal({
   // as activeSessionIds[worktreeId] — that's the "last used session" we want to persist.
   const handleClose = useCallback(() => {
     if (previousSessionRef.current) {
-      useChatStore.getState().setActiveSession(worktreeId, previousSessionRef.current)
+      useChatStore
+        .getState()
+        .setActiveSession(worktreeId, previousSessionRef.current)
     }
     onClose()
   }, [worktreeId, onClose])

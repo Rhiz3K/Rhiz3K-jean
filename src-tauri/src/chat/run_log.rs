@@ -771,6 +771,7 @@ fn parse_codex_run_to_message(lines: &[String], run: &RunEntry) -> Result<ChatMe
         model: None,
         execution_mode: None,
         thinking_level: None,
+        effort_level: None,
         recovered: run.recovered,
         usage: run.usage.clone(),
     })
@@ -1005,7 +1006,7 @@ pub fn load_session_messages(
                 model: run.model.clone(),
                 execution_mode: run.execution_mode.clone(),
                 thinking_level: run.thinking_level.clone(),
-                effort_level: run.effort_level.clone(),
+                effort_level: None,
                 recovered: false,
                 usage: None, // User messages don't have token usage
             });

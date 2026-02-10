@@ -5,6 +5,7 @@ import { isBaseSession, type Worktree } from '@/types/projects'
 import {
   useArchiveWorktree,
   useCloseBaseSession,
+  useCloseBaseSessionClean,
   useDeleteWorktree,
   useOpenWorktreeInFinder,
   useOpenWorktreeInTerminal,
@@ -27,8 +28,10 @@ export function useWorktreeMenuActions({
   projectId,
 }: UseWorktreeMenuActionsProps) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [showDeleteBaseConfirm, setShowDeleteBaseConfirm] = useState(false)
   const archiveWorktree = useArchiveWorktree()
   const closeBaseSession = useCloseBaseSession()
+  const closeBaseSessionClean = useCloseBaseSessionClean()
   const deleteWorktree = useDeleteWorktree()
   const openInFinder = useOpenWorktreeInFinder()
   const openInTerminal = useOpenWorktreeInTerminal()
@@ -84,6 +87,11 @@ export function useWorktreeMenuActions({
     setShowDeleteConfirm(false)
   }, [deleteWorktree, worktree.id, projectId])
 
+  const handleDeleteBaseSession = useCallback(() => {
+    closeBaseSessionClean.mutate({ worktreeId: worktree.id, projectId })
+    setShowDeleteBaseConfirm(false)
+  }, [closeBaseSessionClean, worktree.id, projectId])
+
   const handleOpenJeanConfig = useCallback(() => {
     openInEditor.mutate({
       worktreePath: `${worktree.path}/jean.json`,
@@ -135,6 +143,8 @@ export function useWorktreeMenuActions({
     // State
     showDeleteConfirm,
     setShowDeleteConfirm,
+    showDeleteBaseConfirm,
+    setShowDeleteBaseConfirm,
     isBase,
     hasMessages,
     runScript,
@@ -148,6 +158,7 @@ export function useWorktreeMenuActions({
     handleOpenInEditor,
     handleArchiveOrClose,
     handleDelete,
+    handleDeleteBaseSession,
     handleOpenJeanConfig,
     handleGenerateRecap,
   }

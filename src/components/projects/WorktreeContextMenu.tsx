@@ -47,6 +47,8 @@ export function WorktreeContextMenu({
   const {
     showDeleteConfirm,
     setShowDeleteConfirm,
+    showDeleteBaseConfirm,
+    setShowDeleteBaseConfirm,
     isBase,
     hasMessages,
     runScript,
@@ -57,6 +59,7 @@ export function WorktreeContextMenu({
     handleOpenInEditor,
     handleArchiveOrClose,
     handleDelete,
+    handleDeleteBaseSession,
     handleOpenJeanConfig,
     handleGenerateRecap,
   } = useWorktreeMenuActions({ worktree, projectId })

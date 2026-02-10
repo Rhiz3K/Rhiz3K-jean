@@ -187,10 +187,10 @@ export const MagicPromptsPane: React.FC = () => {
   const currentCodexModel =
     currentCodexModels[selectedConfig.modelKey] ??
     DEFAULT_MAGIC_PROMPT_CODEX_MODELS[selectedConfig.modelKey]
-  const currentCodexEffort =
-    (currentCodexEfforts[selectedConfig.modelKey] ??
-      DEFAULT_MAGIC_PROMPT_CODEX_REASONING_EFFORTS[selectedConfig.modelKey]) as
-      ThinkingLevel
+  const currentCodexEffort = (currentCodexEfforts[selectedConfig.modelKey] ??
+    DEFAULT_MAGIC_PROMPT_CODEX_REASONING_EFFORTS[
+      selectedConfig.modelKey
+    ]) as ThinkingLevel
   const isModified = currentValue !== selectedConfig.defaultValue
 
   // Sync local value when selection changes or external value updates
@@ -232,7 +232,13 @@ export const MagicPromptsPane: React.FC = () => {
         })
       }, 500)
     },
-    [preferences, savePreferences, currentPrompts, selectedKey, selectedConfig.defaultValue]
+    [
+      preferences,
+      savePreferences,
+      currentPrompts,
+      selectedKey,
+      selectedConfig.defaultValue,
+    ]
   )
 
   const handleBlur = useCallback(() => {
@@ -270,13 +276,7 @@ export const MagicPromptsPane: React.FC = () => {
         [selectedKey]: null,
       },
     })
-  }, [
-    preferences,
-    savePreferences,
-    currentPrompts,
-    selectedKey,
-    selectedConfig.defaultValue,
-  ])
+  }, [preferences, savePreferences, currentPrompts, selectedKey])
 
   const handleClaudeModelChange = useCallback(
     (model: ClaudeModel) => {

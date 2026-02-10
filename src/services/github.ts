@@ -85,11 +85,17 @@ export function useGitHubIssues(
 
       try {
         logger.debug('Fetching GitHub issues', { projectPath, state })
-        const result = await invoke<GitHubIssueListResult>('list_github_issues', {
-          projectPath,
-          state,
+        const result = await invoke<GitHubIssueListResult>(
+          'list_github_issues',
+          {
+            projectPath,
+            state,
+          }
+        )
+        logger.info('GitHub issues loaded', {
+          count: result.issues.length,
+          totalCount: result.totalCount,
         })
-        logger.info('GitHub issues loaded', { count: result.issues.length, totalCount: result.totalCount })
         return result
       } catch (error) {
         logger.error('Failed to load GitHub issues', { error, projectPath })

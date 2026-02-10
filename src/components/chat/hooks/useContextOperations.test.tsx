@@ -1,13 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { renderHook } from '@testing-library/react'
 import { QueryClient } from '@tanstack/react-query'
-import { invoke } from '@tauri-apps/api/core'
+import { invoke } from '@/lib/transport'
 import { useContextOperations } from './useContextOperations'
 import { defaultPreferences, type AppPreferences } from '@/types/preferences'
 import type { SaveContextResponse } from '@/types/chat'
 import type { Worktree } from '@/types/projects'
 
-vi.mock('@tauri-apps/api/core', () => ({
+vi.mock('@/lib/transport', () => ({
   invoke: vi.fn(),
 }))
 

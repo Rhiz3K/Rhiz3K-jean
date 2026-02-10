@@ -23,7 +23,9 @@ async function invoke<T = unknown>(
       const internals = (window as unknown as { __TAURI_INTERNALS__?: unknown })
         .__TAURI_INTERNALS__
       const invokeFn = (
-        internals as { invoke?: (cmd: string, payload?: unknown) => Promise<unknown> }
+        internals as {
+          invoke?: (cmd: string, payload?: unknown) => Promise<unknown>
+        }
       )?.invoke
       if (!invokeFn) {
         throw new Error('window.__TAURI_INTERNALS__.invoke is not available')
@@ -124,8 +126,12 @@ test('command surface: startup, plugin and environment checks', async ({
   const savedUiState = toRecord(await invoke(page, 'load_ui_state'))
   expect(savedUiState.panelSizes).toEqual([35, 65])
 
-  const claudeInstalled = toRecord(await invoke(page, 'check_claude_cli_installed'))
-  const codexInstalled = toRecord(await invoke(page, 'check_codex_cli_installed'))
+  const claudeInstalled = toRecord(
+    await invoke(page, 'check_claude_cli_installed')
+  )
+  const codexInstalled = toRecord(
+    await invoke(page, 'check_codex_cli_installed')
+  )
   const ghInstalled = toRecord(await invoke(page, 'check_gh_cli_installed'))
   const claudeAuth = toRecord(await invoke(page, 'check_claude_cli_auth'))
   const codexAuth = toRecord(await invoke(page, 'check_codex_cli_auth'))
@@ -266,9 +272,9 @@ test('project/worktree/session lifecycle commands', async ({ page }) => {
     sessionId,
   })
   await invoke(page, 'delete_archived_session', { sessionId })
-  expect(
-    toArray(await invoke(page, 'list_all_archived_sessions')).length
-  ).toBe(0)
+  expect(toArray(await invoke(page, 'list_all_archived_sessions')).length).toBe(
+    0
+  )
 
   const allSessions = toRecord(await invoke(page, 'list_all_sessions'))
   expect(toArray(allSessions.entries).length).toBeGreaterThan(0)
@@ -387,7 +393,8 @@ test('chat, model, thinking and question/answer flows', async ({ page }) => {
     await invoke(page, 'send_chat_message', {
       worktreeId: codexWorktreeId,
       sessionId: codexSessionId,
-      message: 'For "Which flow should I validate next?" answer with: Archive and restore',
+      message:
+        'For "Which flow should I validate next?" answer with: Archive and restore',
       agent: 'codex',
     })
   )
@@ -420,7 +427,9 @@ test('github, context and polling commands', async ({ page }) => {
   expect(toArray(await invoke(page, 'search_github_issues'))).toEqual([])
   expect(toArray(await invoke(page, 'search_github_prs'))).toEqual([])
 
-  const issue = toRecord(await invoke(page, 'get_github_issue', { issueNumber: 12 }))
+  const issue = toRecord(
+    await invoke(page, 'get_github_issue', { issueNumber: 12 })
+  )
   const pr = toRecord(await invoke(page, 'get_github_pr', { prNumber: 34 }))
   expect(issue.number).toBe(12)
   expect(pr.number).toBe(34)

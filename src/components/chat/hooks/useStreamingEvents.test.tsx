@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { renderHook } from '@testing-library/react'
 import { QueryClient } from '@tanstack/react-query'
 import useStreamingEvents from './useStreamingEvents'
+import { invoke } from '@/lib/transport'
 import { useChatStore } from '@/store/chat-store'
 import { chatQueryKeys } from '@/services/chat'
 import { preferencesQueryKeys } from '@/services/preferences'
@@ -13,15 +14,13 @@ interface ListenerEvent {
 }
 const listeners = new Map<string, (event: ListenerEvent) => void>()
 
-vi.mock('@tauri-apps/api/event', () => ({
+vi.mock('@/lib/transport', () => ({
+  invoke: vi.fn(),
   listen: vi.fn((eventName: string, cb: (event: ListenerEvent) => void) => {
     listeners.set(eventName, cb)
     return Promise.resolve(() => undefined)
   }),
-}))
-
-vi.mock('@tauri-apps/api/core', () => ({
-  invoke: vi.fn(),
+  useWsConnectionStatus: vi.fn(() => true),
 }))
 
 vi.mock('sonner', () => ({
@@ -45,6 +44,7 @@ vi.mock('@/services/projects', async () => {
 describe('useStreamingEvents', () => {
   beforeEach(() => {
     listeners.clear()
+    vi.mocked(invoke).mockReset()
 
     Object.defineProperty(window, '__TAURI_INTERNALS__', {
       value: {},

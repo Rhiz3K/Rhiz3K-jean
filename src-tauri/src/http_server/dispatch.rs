@@ -74,6 +74,7 @@ pub async fn dispatch_command(
             let issue_context = field_opt(&args, "issueContext", "issue_context")?;
             let pr_context = field_opt(&args, "prContext", "pr_context")?;
             let custom_name = field_opt(&args, "customName", "custom_name")?;
+            let agent = field_opt(&args, "agent", "agent")?;
             let result = crate::projects::create_worktree(
                 app.clone(),
                 project_id,
@@ -81,6 +82,7 @@ pub async fn dispatch_command(
                 issue_context,
                 pr_context,
                 custom_name,
+                agent,
             )
             .await?;
             emit_cache_invalidation(app, &["projects"]);
@@ -196,12 +198,17 @@ pub async fn dispatch_command(
         "create_pr_with_ai_content" => {
             let worktree_path: String = field(&args, "worktreePath", "worktree_path")?;
             let magic_prompt: Option<String> = field_opt(&args, "magicPrompt", "magic_prompt")?;
+            let agent = field_opt(&args, "agent", "agent")?;
             let model: Option<String> = from_field_opt(&args, "model")?;
+            let codex_reasoning_effort: Option<String> =
+                field_opt(&args, "codexReasoningEffort", "codex_reasoning_effort")?;
             let result = crate::projects::create_pr_with_ai_content(
                 app.clone(),
                 worktree_path,
                 magic_prompt,
+                agent,
                 model,
+                codex_reasoning_effort,
             )
             .await?;
             to_value(result)
@@ -210,13 +217,18 @@ pub async fn dispatch_command(
             let worktree_path: String = field(&args, "worktreePath", "worktree_path")?;
             let custom_prompt: Option<String> = field_opt(&args, "magicPrompt", "magic_prompt")?;
             let push: bool = from_field_opt(&args, "push")?.unwrap_or(false);
+            let agent = field_opt(&args, "agent", "agent")?;
             let model: Option<String> = from_field_opt(&args, "model")?;
+            let codex_reasoning_effort: Option<String> =
+                field_opt(&args, "codexReasoningEffort", "codex_reasoning_effort")?;
             let result = crate::projects::create_commit_with_ai(
                 app.clone(),
                 worktree_path,
                 custom_prompt,
                 push,
+                agent,
                 model,
+                codex_reasoning_effort,
             )
             .await?;
             to_value(result)
@@ -224,12 +236,17 @@ pub async fn dispatch_command(
         "run_review_with_ai" => {
             let worktree_path: String = field(&args, "worktreePath", "worktree_path")?;
             let magic_prompt: Option<String> = field_opt(&args, "magicPrompt", "magic_prompt")?;
+            let agent = field_opt(&args, "agent", "agent")?;
             let model: Option<String> = from_field_opt(&args, "model")?;
+            let codex_reasoning_effort: Option<String> =
+                field_opt(&args, "codexReasoningEffort", "codex_reasoning_effort")?;
             let result = crate::projects::run_review_with_ai(
                 app.clone(),
                 worktree_path,
                 magic_prompt,
+                agent,
                 model,
+                codex_reasoning_effort,
             )
             .await?;
             to_value(result)
@@ -471,8 +488,10 @@ pub async fn dispatch_command(
             let worktree_id: String = field(&args, "worktreeId", "worktree_id")?;
             let worktree_path: String = field(&args, "worktreePath", "worktree_path")?;
             let name: Option<String> = from_field_opt(&args, "name")?;
+            let agent = field_opt(&args, "agent", "agent")?;
             let result =
-                crate::chat::create_session(app.clone(), worktree_id, worktree_path, name).await?;
+                crate::chat::create_session(app.clone(), worktree_id, worktree_path, name, agent)
+                    .await?;
             to_value(result)
         }
         "rename_session" => {
@@ -532,6 +551,11 @@ pub async fn dispatch_command(
             let thinking_level = field_opt(&args, "thinkingLevel", "thinking_level")?;
             let disable_thinking_for_mode: Option<bool> =
                 field_opt(&args, "disableThinkingForMode", "disable_thinking_for_mode")?;
+            let codex_build_network_access: Option<bool> = field_opt(
+                &args,
+                "codexBuildNetworkAccess",
+                "codex_build_network_access",
+            )?;
             let parallel_execution_prompt_enabled: Option<bool> = field_opt(
                 &args,
                 "parallelExecutionPromptEnabled",
@@ -544,6 +568,7 @@ pub async fn dispatch_command(
                 field_opt(&args, "effortLevel", "effort_level")?;
             let mcp_config: Option<String> = field_opt(&args, "mcpConfig", "mcp_config")?;
             let chrome_enabled: Option<bool> = field_opt(&args, "chromeEnabled", "chrome_enabled")?;
+            let agent = field_opt(&args, "agent", "agent")?;
             let result = crate::chat::send_chat_message(
                 app.clone(),
                 session_id,
@@ -555,11 +580,13 @@ pub async fn dispatch_command(
                 thinking_level,
                 effort_level,
                 disable_thinking_for_mode,
+                codex_build_network_access,
                 parallel_execution_prompt_enabled,
                 ai_language,
                 allowed_tools,
                 mcp_config,
                 chrome_enabled,
+                agent,
             )
             .await?;
             to_value(result)
@@ -684,7 +711,10 @@ pub async fn dispatch_command(
             let session_id: String = field(&args, "sessionId", "session_id")?;
             let project_name: String = field(&args, "projectName", "project_name")?;
             let custom_prompt: Option<String> = field_opt(&args, "magicPrompt", "magic_prompt")?;
+            let agent = field_opt(&args, "agent", "agent")?;
             let model: Option<String> = from_field_opt(&args, "model")?;
+            let codex_reasoning_effort: Option<String> =
+                field_opt(&args, "codexReasoningEffort", "codex_reasoning_effort")?;
             let result = crate::chat::generate_context_from_session(
                 app.clone(),
                 worktree_path,
@@ -692,7 +722,9 @@ pub async fn dispatch_command(
                 session_id,
                 project_name,
                 custom_prompt,
+                agent,
                 model,
+                codex_reasoning_effort,
             )
             .await?;
             to_value(result)
@@ -849,12 +881,14 @@ pub async fn dispatch_command(
             let branch_name: String = field(&args, "branchName", "branch_name")?;
             let issue_context = field_opt(&args, "issueContext", "issue_context")?;
             let pr_context = field_opt(&args, "prContext", "pr_context")?;
+            let agent = field_opt(&args, "agent", "agent")?;
             let result = crate::projects::create_worktree_from_existing_branch(
                 app.clone(),
                 project_id,
                 branch_name,
                 issue_context,
                 pr_context,
+                agent,
             )
             .await?;
             to_value(result)
@@ -867,7 +901,9 @@ pub async fn dispatch_command(
         }
         "create_base_session" => {
             let project_id: String = field(&args, "projectId", "project_id")?;
-            let result = crate::projects::create_base_session(app.clone(), project_id).await?;
+            let agent = field_opt(&args, "agent", "agent")?;
+            let result =
+                crate::projects::create_base_session(app.clone(), project_id, agent).await?;
             emit_cache_invalidation(app, &["projects"]);
             to_value(result)
         }

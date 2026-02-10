@@ -1,8 +1,8 @@
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 
 use super::events::{
-    ChunkEvent, DoneEvent, ErrorEvent, PermissionDenialEvent, PermissionDeniedEvent, ThinkingEvent,
-    ToolBlockEvent, ToolResultEvent, ToolUseEvent,
+    ChunkEvent, DoneEvent, ErrorEvent, PermissionDenialEvent, PermissionDeniedEvent,
+    StreamWarningEvent, ThinkingEvent, ToolBlockEvent, ToolResultEvent, ToolUseEvent,
 };
 use super::types::{
     CompactMetadata, ContentBlock, EffortLevel, ThinkingLevel, ToolCall, UsageData,
@@ -30,23 +30,6 @@ pub struct ClaudeResponse {
     pub cancelled: bool,
     /// Token usage for this response
     pub usage: Option<UsageData>,
-}
-
-/// A single permission denial from Claude CLI
-#[derive(serde::Serialize, Clone)]
-struct PermissionDenial {
-    tool_name: String,
-    tool_use_id: String,
-    tool_input: serde_json::Value,
-}
-
-/// Payload for permission denied events sent to frontend
-/// Sent when Claude CLI returns permission_denials (tools that require approval)
-#[derive(serde::Serialize, Clone)]
-struct PermissionDeniedEvent {
-    session_id: String,
-    worktree_id: String, // Kept for backward compatibility
-    denials: Vec<PermissionDenial>,
 }
 
 /// Payload for compacting-in-progress events sent to frontend

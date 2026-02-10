@@ -550,7 +550,6 @@ export function useCommandContext(
   }, [])
 
   // AI - Run code review
-  // eslint-disable-next-line react-hooks/preserve-manual-memoization
   const runAIReview = useCallback(async () => {
     const { activeWorktreeId, activeWorktreePath, getActiveSession } =
       useChatStore.getState()

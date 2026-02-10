@@ -180,8 +180,7 @@ export function MagicModal() {
 
   // Detect if we're on a canvas view (without a session modal open)
   const isViewingCanvasTab = useChatStore(state => {
-    const wtId =
-      selectedWorktreeIdFromProjects ?? state.activeWorktreeId
+    const wtId = selectedWorktreeIdFromProjects ?? state.activeWorktreeId
     return wtId ? (state.viewingCanvasTab[wtId] ?? true) : false
   })
   const sessionModalOpen = useUIStore(state => state.sessionChatModalOpen)
@@ -240,7 +239,9 @@ export function MagicModal() {
           const isPush = option === 'commit-and-push'
           const branch = worktree.branch ?? ''
           const toastId = toast.loading(
-            isPush ? `Committing and pushing on ${branch}...` : `Creating commit on ${branch}...`
+            isPush
+              ? `Committing and pushing on ${branch}...`
+              : `Creating commit on ${branch}...`
           )
           try {
             const result = await invoke<CreateCommitResponse>(
@@ -267,7 +268,9 @@ export function MagicModal() {
         }
         case 'pull': {
           setWorktreeLoading(selectedWorktreeId, 'pull')
-          const toastId = toast.loading(`Pulling changes on ${worktree.branch}...`)
+          const toastId = toast.loading(
+            `Pulling changes on ${worktree.branch}...`
+          )
           try {
             const baseBranch = project?.default_branch ?? 'main'
             await gitPull(worktree.path, baseBranch)
@@ -349,7 +352,14 @@ export function MagicModal() {
 
       setMagicModalOpen(false)
     },
-    [selectedWorktreeId, selectedProjectId, setMagicModalOpen, worktree?.pr_url, isOnCanvas, executeGitDirectly]
+    [
+      selectedWorktreeId,
+      selectedProjectId,
+      setMagicModalOpen,
+      worktree?.pr_url,
+      isOnCanvas,
+      executeGitDirectly,
+    ]
   )
 
   // Handle keyboard navigation

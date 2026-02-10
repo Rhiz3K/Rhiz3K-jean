@@ -391,7 +391,7 @@ impl Default for MagicPromptAgents {
 /// Customizable prompts for AI-powered features.
 /// Fields are Option<String>: None = use current app default (auto-updates on new versions),
 /// Some(text) = user customization (preserved across updates).
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct MagicPrompts {
     #[serde(default)]
     pub investigate_issue: Option<String>,
@@ -679,32 +679,26 @@ impl Default for MagicPromptCodexReasoningEfforts {
     }
 }
 
-impl Default for MagicPrompts {
-    fn default() -> Self {
-        Self {
-            investigate_issue: None,
-            investigate_pr: None,
-            pr_content: None,
-            commit_message: None,
-            code_review: None,
-            context_summary: None,
-            resolve_conflicts: None,
-        }
-    }
-}
+type PromptDefaultField<'a> = (fn() -> String, &'a mut Option<String>);
 
 impl MagicPrompts {
     /// Migrate prompts that match the current default to None.
     /// This ensures users who never customized a prompt get auto-updated defaults.
     fn migrate_defaults(&mut self) {
-        let defaults: [(fn() -> String, &mut Option<String>); 7] = [
-            (default_investigate_issue_prompt, &mut self.investigate_issue),
+        let defaults: [PromptDefaultField<'_>; 7] = [
+            (
+                default_investigate_issue_prompt,
+                &mut self.investigate_issue,
+            ),
             (default_investigate_pr_prompt, &mut self.investigate_pr),
             (default_pr_content_prompt, &mut self.pr_content),
             (default_commit_message_prompt, &mut self.commit_message),
             (default_code_review_prompt, &mut self.code_review),
             (default_context_summary_prompt, &mut self.context_summary),
-            (default_resolve_conflicts_prompt, &mut self.resolve_conflicts),
+            (
+                default_resolve_conflicts_prompt,
+                &mut self.resolve_conflicts,
+            ),
         ];
 
         for (default_fn, field) in defaults {

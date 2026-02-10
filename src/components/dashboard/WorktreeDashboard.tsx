@@ -285,7 +285,7 @@ export function WorktreeDashboard({ projectId }: WorktreeDashboardProps) {
         setActiveWorktree(base.id, base.path)
       }
     } else {
-      createBaseSession.mutate(projectId)
+      createBaseSession.mutate({ projectId })
     }
   }, [projectId, hasBaseSession, worktrees, createBaseSession])
 
@@ -1026,9 +1026,7 @@ export function WorktreeDashboard({ projectId }: WorktreeDashboardProps) {
               <DropdownMenuContent align="start">
                 <DropdownMenuItem
                   onSelect={() =>
-                    window.dispatchEvent(
-                      new CustomEvent('create-new-worktree')
-                    )
+                    window.dispatchEvent(new CustomEvent('create-new-worktree'))
                   }
                 >
                   <Plus className="h-4 w-4" />

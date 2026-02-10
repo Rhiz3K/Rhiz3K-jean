@@ -593,7 +593,13 @@ export function SessionTabBar({
         setActiveSession(worktreeId, targetSession)
       }
     }
-  }, [sessionsData, worktreeId, getActiveSession, setActiveSession, uiStateInitialized])
+  }, [
+    sessionsData,
+    worktreeId,
+    getActiveSession,
+    setActiveSession,
+    uiStateInitialized,
+  ])
 
   const handleCreateSession = useCallback(() => {
     createSession.mutate(
@@ -717,7 +723,13 @@ export function SessionTabBar({
       // Fire-and-forget: persist active session to backend index
       invoke('set_active_session', { worktreeId, worktreePath, sessionId })
     },
-    [worktreeId, worktreePath, setActiveSession, setViewingReviewTab, setViewingCanvasTab]
+    [
+      worktreeId,
+      worktreePath,
+      setActiveSession,
+      setViewingReviewTab,
+      setViewingCanvasTab,
+    ]
   )
 
   const handleReviewTabClick = useCallback(() => {

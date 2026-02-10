@@ -120,7 +120,12 @@ import { supportsAdaptiveThinking } from '@/lib/model-utils'
 import { useClaudeCliStatus } from '@/services/claude-cli'
 import { usePrStatus, usePrStatusEvents } from '@/services/pr-status'
 import type { PrDisplayStatus, CheckStatus } from '@/types/pr-status'
-import type { QueuedMessage, ExecutionMode, Session, ChatAgent } from '@/types/chat'
+import type {
+  QueuedMessage,
+  ExecutionMode,
+  Session,
+  ChatAgent,
+} from '@/types/chat'
 import type { DiffRequest } from '@/types/git-diff'
 import { GitDiffModal } from './GitDiffModal'
 import { FileDiffModal } from './FileDiffModal'
@@ -1264,7 +1269,6 @@ export function ChatWindow({
       preferences?.parallel_execution_prompt_enabled,
       preferences?.chrome_enabled,
       preferences?.ai_language,
-      preferences?.allow_web_tools_in_plan_mode,
     ]
   )
 
@@ -1336,7 +1340,9 @@ export function ChatWindow({
           disableThinkingForMode:
             disableByPreference &&
             !hasManualOverride &&
-            (agent === 'claude' ? thinkingLevel !== 'off' : thinkingLevel !== 'minimal'),
+            (agent === 'claude'
+              ? thinkingLevel !== 'off'
+              : thinkingLevel !== 'minimal'),
           effortLevel: useAdaptiveThinkingRef.current
             ? selectedEffortLevelRef.current
             : undefined,
@@ -1456,7 +1462,9 @@ export function ChatWindow({
           disableByPreference &&
           mode !== 'plan' &&
           !hasManualOverride &&
-          (agent === 'claude' ? thinkingLvl !== 'off' : thinkingLvl !== 'minimal'),
+          (agent === 'claude'
+            ? thinkingLvl !== 'off'
+            : thinkingLvl !== 'minimal'),
         effortLevel: useAdaptiveThinkingRef.current
           ? selectedEffortLevelRef.current
           : undefined,
@@ -1888,7 +1896,9 @@ Begin your investigation now.`
           disableByPreference &&
           mode !== 'plan' &&
           !hasManualOverride &&
-          (agent === 'claude' ? thinkingLevel !== 'off' : thinkingLevel !== 'minimal'),
+          (agent === 'claude'
+            ? thinkingLevel !== 'off'
+            : thinkingLevel !== 'minimal'),
         effortLevel: useAdaptiveThinkingRef.current
           ? selectedEffortLevelRef.current
           : undefined,
@@ -2750,7 +2760,9 @@ Begin your investigation now.`
                             <SkillBadge
                               key={skill.id}
                               skill={skill}
-                              onRemove={() => handleRemovePendingSkill(skill.id)}
+                              onRemove={() =>
+                                handleRemovePendingSkill(skill.id)
+                              }
                             />
                           ))}
                         </div>
@@ -2761,7 +2773,8 @@ Begin your investigation now.`
                       {activeTodos.length > 0 &&
                         (dismissedTodoMessageId === null ||
                           (todoSourceMessageId !== null &&
-                            todoSourceMessageId !== dismissedTodoMessageId)) && (
+                            todoSourceMessageId !==
+                              dismissedTodoMessageId)) && (
                           <div className="px-4 md:px-6 pt-2">
                             <TodoWidget
                               todos={normalizeTodosForDisplay(
@@ -2808,12 +2821,14 @@ Begin your investigation now.`
                         selectedEffortLevel={selectedEffortLevel}
                         thinkingOverrideActive={
                           selectedAgent === 'claude'
-                            ? (preferences?.disable_thinking_in_non_plan_modes ?? true) &&
+                            ? (preferences?.disable_thinking_in_non_plan_modes ??
+                                true) &&
                               executionMode !== 'plan' &&
                               (useAdaptiveThinkingFlag ||
                                 selectedThinkingLevel !== 'off') &&
                               !hasManualThinkingOverride
-                            : (preferences?.codex_disable_reasoning_in_non_plan_modes ?? true) &&
+                            : (preferences?.codex_disable_reasoning_in_non_plan_modes ??
+                                true) &&
                               executionMode !== 'plan' &&
                               selectedThinkingLevel !== 'minimal' &&
                               !hasManualThinkingOverride
@@ -3001,6 +3016,7 @@ Begin your investigation now.`
 
                 const queuedMessage: QueuedMessage = {
                   id: generateId(),
+                  agent: selectedAgentRef.current,
                   message,
                   pendingImages: [],
                   pendingFiles: [],
@@ -3071,6 +3087,7 @@ Begin your investigation now.`
 
                 const queuedMessage: QueuedMessage = {
                   id: generateId(),
+                  agent: selectedAgentRef.current,
                   message,
                   pendingImages: [],
                   pendingFiles: [],
@@ -3158,6 +3175,7 @@ Begin your investigation now.`
 
                 const queuedMessage: QueuedMessage = {
                   id: generateId(),
+                  agent: selectedAgentRef.current,
                   message,
                   pendingImages: [],
                   pendingFiles: [],
@@ -3228,6 +3246,7 @@ Begin your investigation now.`
 
                 const queuedMessage: QueuedMessage = {
                   id: generateId(),
+                  agent: selectedAgentRef.current,
                   message,
                   pendingImages: [],
                   pendingFiles: [],

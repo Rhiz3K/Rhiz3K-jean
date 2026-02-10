@@ -138,9 +138,7 @@ export const MessageItem = memo(function MessageItem({
   const skillPaths =
     message.role === 'user' ? extractSkillPaths(message.content) : []
   const displayContent =
-    message.role === 'user'
-      ? stripAllMarkers(message.content)
-      : message.content
+    message.role === 'user' ? stripAllMarkers(message.content) : message.content
 
   // Show content if it's not empty
   const showContent = displayContent.trim()

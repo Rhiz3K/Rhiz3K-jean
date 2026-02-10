@@ -194,19 +194,14 @@ describe('Project Commands', () => {
     expect(found.length).toBe(2)
   })
 
-  describe('execution mode commands', () => {
-    it('registers all execution mode commands', () => {
+  describe('auxiliary project commands', () => {
+    it('registers debug and feature-tour commands', () => {
       const commands = getAllCommands(mockContext)
-      const executionIds = [
-        'execution-plan',
-        'execution-build',
-        'execution-yolo',
-        'cycle-execution-mode',
-      ]
-      const found = commands.filter(cmd => executionIds.includes(cmd.id))
-      // cycle-execution-mode should always be available
-      expect(found.some(c => c.id === 'cycle-execution-mode')).toBe(true)
+      const auxiliaryIds = ['toggle-debug-mode', 'help.feature-tour']
+      const found = commands.filter(cmd => auxiliaryIds.includes(cmd.id))
+      expect(found).toHaveLength(2)
     })
+  })
 
   it('add-project is always available', () => {
     const commands = getAllCommands(mockContext)

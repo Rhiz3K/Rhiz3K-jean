@@ -43,7 +43,10 @@ async function createQuickWorktree(
   await dialog.getByRole('combobox').click()
   await page.getByRole('option', { name: agentLabel }).click()
 
-  await dialog.getByRole('button', { name: /New Worktree/i }).first().click()
+  await dialog
+    .getByRole('button', { name: /New Worktree/i })
+    .first()
+    .click()
   await expect(dialog).toBeHidden()
 
   await expect(

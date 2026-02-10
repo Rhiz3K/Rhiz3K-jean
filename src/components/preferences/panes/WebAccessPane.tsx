@@ -224,7 +224,9 @@ export const WebAccessPane: React.FC = () => {
     <div className="space-y-6">
       <div className="rounded-lg border border-yellow-500/20 bg-yellow-500/5 p-4">
         <p className="text-sm text-muted-foreground">
-          <strong className="text-yellow-600 dark:text-yellow-400">Experimental.</strong>{' '}
+          <strong className="text-yellow-600 dark:text-yellow-400">
+            Experimental.
+          </strong>{' '}
           Enable HTTP server to access Jean from a web browser on your local
           network. All commands are routed over WebSocket with token
           authentication.
@@ -337,7 +339,9 @@ export const WebAccessPane: React.FC = () => {
                 <Input
                   type={tokenVisible ? 'text' : 'password'}
                   className="w-64 font-mono text-xs"
-                  value={serverStatus?.token ?? preferences?.http_server_token ?? ''}
+                  value={
+                    serverStatus?.token ?? preferences?.http_server_token ?? ''
+                  }
                   readOnly
                 />
                 <Button
@@ -419,7 +423,8 @@ export const WebAccessPane: React.FC = () => {
                       variant="ghost"
                       size="icon"
                       onClick={() => {
-                        const base = serverStatus.url!
+                        const base = serverStatus.url
+                        if (!base) return
                         openExternal(
                           tokenRequired && serverStatus.token
                             ? `${base}?token=${serverStatus.token}`
@@ -433,8 +438,10 @@ export const WebAccessPane: React.FC = () => {
                     <Button
                       variant="ghost"
                       size="icon"
-                      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-                      onClick={() => handleCopyUrl(serverStatus.url!)}
+                      onClick={() => {
+                        if (!serverStatus.url) return
+                        handleCopyUrl(serverStatus.url)
+                      }}
                       title="Copy URL"
                     >
                       <Copy className="h-4 w-4" />

@@ -133,9 +133,7 @@ export function TitleBar({
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
-                onClick={() =>
-                  openExternal('https://jean.build/sponsorships/')
-                }
+                onClick={() => openExternal('https://jean.build/sponsorships/')}
                 variant="ghost"
                 size="icon"
                 className="h-6 w-6 text-pink-500 hover:text-pink-400"
