@@ -137,13 +137,14 @@ export function ProjectsSidebar() {
         <button
           type="button"
           className="flex h-9 flex-1 items-center justify-center gap-1.5 rounded-lg text-sm text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground"
-          onClick={() => window.dispatchEvent(new CustomEvent('command:open-archived-modal'))}
+          onClick={() =>
+            window.dispatchEvent(new CustomEvent('command:open-archived-modal'))
+          }
         >
           {!isNarrow && <Archive className="size-3.5" />}
           Archived
         </button>
       </div>
-
     </div>
   )
 }

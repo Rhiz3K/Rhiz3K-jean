@@ -40,33 +40,31 @@ export function FilePreview({ files, onRemove, disabled }: FilePreviewProps) {
       {files.map(file => (
         <Tooltip key={file.id}>
           <TooltipTrigger asChild>
-        <div
-          className="group relative flex items-center gap-1.5 rounded-md bg-muted/50 px-2 py-1 text-sm"
-        >
-          <FileIcon
-            className={cn(
-              'h-3.5 w-3.5 shrink-0',
-              getExtensionColor(file.extension)
-            )}
-          />
-          <span className="max-w-32 truncate">
-            {getFilename(file.relativePath)}
-          </span>
-          {!disabled && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  onClick={e => handleRemove(e, file)}
-                  className="ml-1 p-0.5 rounded-full hover:bg-destructive/20 transition-colors"
-                >
-                  <X className="h-3 w-3 text-muted-foreground hover:text-destructive" />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent>Remove file</TooltipContent>
-            </Tooltip>
-          )}
-        </div>
+            <div className="group relative flex items-center gap-1.5 rounded-md bg-muted/50 px-2 py-1 text-sm">
+              <FileIcon
+                className={cn(
+                  'h-3.5 w-3.5 shrink-0',
+                  getExtensionColor(file.extension)
+                )}
+              />
+              <span className="max-w-32 truncate">
+                {getFilename(file.relativePath)}
+              </span>
+              {!disabled && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      onClick={e => handleRemove(e, file)}
+                      className="ml-1 p-0.5 rounded-full hover:bg-destructive/20 transition-colors"
+                    >
+                      <X className="h-3 w-3 text-muted-foreground hover:text-destructive" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>Remove file</TooltipContent>
+                </Tooltip>
+              )}
+            </div>
           </TooltipTrigger>
           <TooltipContent>{file.relativePath}</TooltipContent>
         </Tooltip>

@@ -287,29 +287,6 @@ export function WorktreeDashboard({ projectId }: WorktreeDashboardProps) {
     return map
   }, [sessionQueries])
 
-  // Create worktree/base session for empty state
-  const createWorktree = useCreateWorktree()
-  const createBaseSession = useCreateBaseSession()
-  const hasBaseSession = worktrees.some(wt => isBaseSession(wt))
-
-  const handleEmptyCreateWorktree = useCallback(() => {
-    createWorktree.mutate({ projectId })
-  }, [projectId, createWorktree])
-
-  const handleEmptyBaseSession = useCallback(() => {
-    if (hasBaseSession) {
-      const base = worktrees.find(wt => isBaseSession(wt))
-      if (base) {
-        const { selectWorktree } = useProjectsStore.getState()
-        const { setActiveWorktree } = useChatStore.getState()
-        selectWorktree(base.id)
-        setActiveWorktree(base.id, base.path)
-      }
-    } else {
-      createBaseSession.mutate({ projectId })
-    }
-  }, [projectId, hasBaseSession, worktrees, createBaseSession])
-
   // Use shared store state hook
   const storeState = useCanvasStoreState()
 
@@ -1390,7 +1367,7 @@ function EmptyDashboardTabs({ projectId }: { projectId: string }) {
       setActiveWorktree(baseSession.id, baseSession.path)
       toast.success(`Switched to base session: ${baseSession.name}`)
     } else {
-      createBaseSession.mutate(projectId)
+      createBaseSession.mutate({ projectId })
     }
   }, [projectId, hasBaseSession, baseSession, createBaseSession])
 
@@ -1732,15 +1709,13 @@ function EmptyDashboardTabs({ projectId }: { projectId: string }) {
   ])
 
   return (
-    <div
-      ref={containerRef}
-      className="flex flex-col h-full w-full"
-    >
+    <div ref={containerRef} className="flex flex-col h-full w-full">
       <SessionTabBar activeTab={activeTab} onTabChange={setActiveTab} />
       <div className="flex-1 min-h-0 flex flex-col">
         {activeTab === 'quick' && (
           <QuickActionsTab
             hasBaseSession={hasBaseSession}
+            hasArchivedBaseSession={false}
             onCreateWorktree={handleCreateWorktree}
             onBaseSession={handleBaseSession}
             isCreating={createWorktree.isPending || createBaseSession.isPending}

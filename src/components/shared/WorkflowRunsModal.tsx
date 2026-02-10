@@ -8,7 +8,11 @@ import {
   Loader2,
   Wand2,
 } from 'lucide-react'
-import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
+import {
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+} from '@/components/ui/tooltip'
 import {
   Dialog,
   DialogContent,
@@ -22,11 +26,15 @@ import { useChatStore, DEFAULT_MODEL } from '@/store/chat-store'
 import { useProjectsStore } from '@/store/projects-store'
 import { useWorkflowRuns } from '@/services/github'
 import { projectsQueryKeys } from '@/services/projects'
-import { useCreateSession, useSendMessage, chatQueryKeys } from '@/services/chat'
+import {
+  useCreateSession,
+  useSendMessage,
+  chatQueryKeys,
+} from '@/services/chat'
 import type { WorktreeSessions } from '@/types/chat'
 import { usePreferences } from '@/services/preferences'
 import { openExternal } from '@/lib/platform'
-import { DEFAULT_INVESTIGATE_WORKFLOW_RUN_PROMPT, DEFAULT_PARALLEL_EXECUTION_PROMPT } from '@/types/preferences'
+import { DEFAULT_INVESTIGATE_WORKFLOW_RUN_PROMPT } from '@/types/preferences'
 import type { WorkflowRun } from '@/types/github'
 import type { Project, Worktree } from '@/types/projects'
 
@@ -77,9 +85,7 @@ export function WorkflowRunsModal() {
   const sendMessage = useSendMessage()
   const { data: preferences } = usePreferences()
 
-  const workflowRunsModalOpen = useUIStore(
-    state => state.workflowRunsModalOpen
-  )
+  const workflowRunsModalOpen = useUIStore(state => state.workflowRunsModalOpen)
   const workflowRunsModalProjectPath = useUIStore(
     state => state.workflowRunsModalProjectPath
   )
@@ -95,7 +101,7 @@ export function WorkflowRunsModal() {
     workflowRunsModalBranch ?? undefined
   )
 
-  const runs = result?.runs ?? []
+  const runs = useMemo(() => result?.runs ?? [], [result?.runs])
   const [focusedIndex, setFocusedIndex] = useState(0)
   const listRef = useRef<HTMLDivElement>(null)
   const itemRefs = useRef<(HTMLDivElement | null)[]>([])
@@ -103,9 +109,11 @@ export function WorkflowRunsModal() {
   // Reset focus when modal opens or runs change
   useEffect(() => {
     if (workflowRunsModalOpen) {
-      setFocusedIndex(0)
-      // Auto-focus the list for keyboard nav
-      requestAnimationFrame(() => listRef.current?.focus())
+      requestAnimationFrame(() => {
+        setFocusedIndex(0)
+        // Auto-focus the list for keyboard nav
+        listRef.current?.focus()
+      })
     }
   }, [workflowRunsModalOpen, runs.length])
 
@@ -146,8 +154,7 @@ export function WorkflowRunsModal() {
       setWorkflowRunsModalOpen(false)
 
       // Build the investigate prompt
-      const customPrompt =
-        preferences?.magic_prompts?.investigate_workflow_run
+      const customPrompt = preferences?.magic_prompts?.investigate_workflow_run
       const template =
         customPrompt && customPrompt.trim()
           ? customPrompt
@@ -191,17 +198,19 @@ export function WorkflowRunsModal() {
                 }),
               staleTime: 1000 * 60,
             })
-            console.warn('[WF-MODAL] Worktrees:', worktrees.map(w => ({
-              id: w.id,
-              branch: w.branch,
-              status: w.status,
-            })))
+            console.warn(
+              '[WF-MODAL] Worktrees:',
+              worktrees.map(w => ({
+                id: w.id,
+                branch: w.branch,
+                status: w.status,
+              }))
+            )
           } catch (err) {
             console.error('[WF-MODAL] Failed to fetch worktrees:', err)
           }
 
-          const isUsable = (w: Worktree) =>
-            !w.status || w.status === 'ready'
+          const isUsable = (w: Worktree) => !w.status || w.status === 'ready'
 
           if (worktrees.length > 0) {
             const matching = worktrees.find(
@@ -221,7 +230,10 @@ export function WorkflowRunsModal() {
 
           // No usable worktrees — create the base session
           if (!targetWorktreeId) {
-            console.warn('[WF-MODAL] Creating base session for project:', project.id)
+            console.warn(
+              '[WF-MODAL] Creating base session for project:',
+              project.id
+            )
             try {
               const baseSession = await invoke<Worktree>(
                 'create_base_session',
@@ -293,9 +305,8 @@ export function WorkflowRunsModal() {
           model: investigateModel,
           executionMode: 'build',
           thinkingLevel: 'think',
-          parallelExecutionPrompt: preferences?.parallel_execution_prompt_enabled
-            ? (preferences.magic_prompts?.parallel_execution ?? DEFAULT_PARALLEL_EXECUTION_PROMPT)
-            : undefined,
+          parallelExecutionPromptEnabled:
+            preferences?.parallel_execution_prompt_enabled,
           chromeEnabled: preferences?.chrome_enabled ?? false,
           aiLanguage: preferences?.ai_language,
         })
@@ -325,7 +336,8 @@ export function WorkflowRunsModal() {
       }
 
       const emptySession = existingSessions?.sessions.find(
-        s => !s.archived_at && (s.message_count === 0 || s.message_count == null)
+        s =>
+          !s.archived_at && (s.message_count === 0 || s.message_count == null)
       )
 
       if (emptySession) {
@@ -391,7 +403,10 @@ export function WorkflowRunsModal() {
 
   return (
     <Dialog open={workflowRunsModalOpen} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-h-[80vh] sm:max-w-xl overflow-hidden flex flex-col" onOpenAutoFocus={e => e.preventDefault()}>
+      <DialogContent
+        className="max-h-[80vh] sm:max-w-xl overflow-hidden flex flex-col"
+        onOpenAutoFocus={e => e.preventDefault()}
+      >
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>
@@ -405,12 +420,19 @@ export function WorkflowRunsModal() {
             No workflow runs found
           </div>
         ) : (
-          <div ref={listRef} tabIndex={0} onKeyDown={handleListKeyDown} className="overflow-y-auto -mx-6 px-6 outline-none">
+          <div
+            ref={listRef}
+            tabIndex={0}
+            onKeyDown={handleListKeyDown}
+            className="overflow-y-auto -mx-6 px-6 outline-none"
+          >
             <div className="space-y-1 pb-2">
               {runs.map((run, index) => (
                 <div
                   key={run.databaseId}
-                  ref={el => { itemRefs.current[index] = el }}
+                  ref={el => {
+                    itemRefs.current[index] = el
+                  }}
                   className={`group relative flex cursor-pointer items-center rounded-md px-2 py-2 transition-colors hover:bg-accent ${index === focusedIndex ? 'bg-accent' : ''}`}
                   onClick={() => handleRunClick(run.url)}
                   onMouseEnter={() => setFocusedIndex(index)}
@@ -439,7 +461,9 @@ export function WorkflowRunsModal() {
                                 <span>M</span>
                               </button>
                             </TooltipTrigger>
-                            <TooltipContent>Investigate this failure</TooltipContent>
+                            <TooltipContent>
+                              Investigate this failure
+                            </TooltipContent>
                           </Tooltip>
                         )}
                       </div>

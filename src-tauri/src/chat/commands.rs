@@ -1144,7 +1144,22 @@ pub async fn send_chat_message(
     let run_id = run_log_writer.run_id().to_string();
 
     // Use passed parameter for parallel execution prompt (default false - experimental)
-    let parallel_execution_prompt = parallel_execution_prompt_enabled.unwrap_or(false);
+    let parallel_execution_prompt_enabled = parallel_execution_prompt_enabled.unwrap_or(false);
+    let parallel_execution_prompt_text = if parallel_execution_prompt_enabled {
+        let default_prompt = crate::default_parallel_execution_prompt();
+        match crate::load_preferences(app.clone()).await {
+            Ok(prefs) => Some(
+                prefs
+                    .magic_prompts
+                    .parallel_execution
+                    .filter(|prompt| !prompt.trim().is_empty())
+                    .unwrap_or(default_prompt),
+            ),
+            Err(_) => Some(default_prompt),
+        }
+    } else {
+        None
+    };
 
     // Write input file with the user message
     match agent {
@@ -1161,7 +1176,7 @@ pub async fn send_chat_message(
                 codex_build_network_access,
                 codex_web_search_mode,
                 ai_language.as_deref(),
-                parallel_execution_prompt,
+                parallel_execution_prompt_enabled,
             )?;
         }
     }
@@ -1211,7 +1226,7 @@ pub async fn send_chat_message(
                         effort_level.as_ref(),
                         allowed_tools_for_cli.as_deref(),
                         disable_thinking_in_non_plan_modes,
-                        parallel_execution_prompt,
+                        parallel_execution_prompt_text.as_deref(),
                         ai_language.as_deref(),
                         mcp_config.as_deref(),
                         chrome,

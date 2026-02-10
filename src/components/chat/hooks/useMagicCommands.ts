@@ -103,16 +103,27 @@ export function useMagicCommands({
     // don't register listener here — the modal ChatWindow will handle events instead.
     // When on canvas WITHOUT a modal, the main ChatWindow still listens (for canvas-allowed commands).
     if (!isModal && isViewingCanvasTab && sessionModalOpen) {
-      console.warn('[MAGIC-CMD] Skipping listener registration (main + canvas + modal open)')
+      console.warn(
+        '[MAGIC-CMD] Skipping listener registration (main + canvas + modal open)'
+      )
       return
     }
-    console.warn('[MAGIC-CMD] Registering listener:', { isModal, isViewingCanvasTab, sessionModalOpen })
+    console.warn('[MAGIC-CMD] Registering listener:', {
+      isModal,
+      isViewingCanvasTab,
+      sessionModalOpen,
+    })
 
     const handleMagicCommand = (
       e: CustomEvent<{ command: string } & Partial<WorkflowRunDetail>>
     ) => {
       const { command, ...rest } = e.detail
-      console.warn('[MAGIC-CMD] Received:', command, { isModal, isViewingCanvasTab, sessionModalOpen, rest })
+      console.warn('[MAGIC-CMD] Received:', command, {
+        isModal,
+        isViewingCanvasTab,
+        sessionModalOpen,
+        rest,
+      })
       const handlers = handlersRef.current
       switch (command) {
         case 'save-context':

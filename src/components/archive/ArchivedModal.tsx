@@ -29,7 +29,11 @@ import {
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
+import {
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+} from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import {
   useArchivedWorktrees,

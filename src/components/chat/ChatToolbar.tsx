@@ -135,7 +135,7 @@ const CLAUDE_THINKING_LEVEL_OPTIONS: {
 ]
 
 /** Effort level options for Opus 4.6 adaptive thinking */
-export const EFFORT_LEVEL_OPTIONS: {
+const EFFORT_LEVEL_OPTIONS: {
   value: EffortLevel
   label: string
   description: string
@@ -328,7 +328,9 @@ function McpStatusDot({ status }: { status: McpHealthStatus | undefined }) {
               <ShieldAlert className="size-3 text-amber-600 dark:text-amber-400" />
             </span>
           </TooltipTrigger>
-          <TooltipContent>{"Needs authentication — run 'claude /mcp' to authenticate"}</TooltipContent>
+          <TooltipContent>
+            {"Needs authentication — run 'claude /mcp' to authenticate"}
+          </TooltipContent>
         </Tooltip>
       )
     case 'couldNotConnect':
@@ -1214,7 +1216,9 @@ export const ChatToolbar = memo(function ChatToolbar({
                   <span>Conflicts</span>
                 </button>
               </TooltipTrigger>
-              <TooltipContent>PR has merge conflicts — click to resolve</TooltipContent>
+              <TooltipContent>
+                PR has merge conflicts — click to resolve
+              </TooltipContent>
             </Tooltip>
           </>
         )}
@@ -1265,16 +1269,18 @@ export const ChatToolbar = memo(function ChatToolbar({
                         disabled={server.disabled}
                         className={server.disabled ? 'opacity-50' : undefined}
                       >
-                    <span className="flex items-center gap-1.5">
-                      <McpStatusDot status={status} />
-                      {server.name}
-                    </span>
-                    <span className="ml-auto pl-4 text-xs text-muted-foreground">
-                      {server.disabled ? 'disabled' : server.scope}
-                    </span>
+                        <span className="flex items-center gap-1.5">
+                          <McpStatusDot status={status} />
+                          {server.name}
+                        </span>
+                        <span className="ml-auto pl-4 text-xs text-muted-foreground">
+                          {server.disabled ? 'disabled' : server.scope}
+                        </span>
                       </DropdownMenuCheckboxItem>
                     </TooltipTrigger>
-                    <TooltipContent side="left">{mcpStatusHint(status)}</TooltipContent>
+                    <TooltipContent side="left">
+                      {mcpStatusHint(status)}
+                    </TooltipContent>
                   </Tooltip>
                 )
               })
@@ -1462,7 +1468,9 @@ export const ChatToolbar = memo(function ChatToolbar({
                   {executionMode === 'plan' && (
                     <ClipboardList className="h-3.5 w-3.5" />
                   )}
-                  {executionMode === 'build' && <Hammer className="h-3.5 w-3.5" />}
+                  {executionMode === 'build' && (
+                    <Hammer className="h-3.5 w-3.5" />
+                  )}
                   {executionMode === 'yolo' && <Zap className="h-3.5 w-3.5" />}
                   <span className="capitalize">{executionMode}</span>
                   <ChevronDown className="h-3 w-3 opacity-50" />

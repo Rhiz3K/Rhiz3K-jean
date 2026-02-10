@@ -725,9 +725,7 @@ export const ChatInput = memo(function ChatInput({
         // Cancel pending debounced save (it still has the old "/query" value)
         // and sync cleaned value to store immediately
         clearTimeout(debouncedSaveRef.current)
-        useChatStore
-          .getState()
-          .setInputDraft(activeSessionId, newValue)
+        useChatStore.getState().setInputDraft(activeSessionId, newValue)
         onHasValueChange?.(Boolean(newValue.trim()))
 
         // Set cursor position where the slash was

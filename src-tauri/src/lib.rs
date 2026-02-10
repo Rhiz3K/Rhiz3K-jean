@@ -737,7 +737,7 @@ impl MagicPrompts {
     /// Migrate prompts that match the current default to None.
     /// This ensures users who never customized a prompt get auto-updated defaults.
     fn migrate_defaults(&mut self) {
-        let defaults: [PromptDefaultField<'_>; 7] = [
+        let defaults: [PromptDefaultField<'_>; 8] = [
             (
                 default_investigate_issue_prompt,
                 &mut self.investigate_issue,
@@ -750,6 +750,10 @@ impl MagicPrompts {
             (
                 default_resolve_conflicts_prompt,
                 &mut self.resolve_conflicts,
+            ),
+            (
+                default_investigate_workflow_run_prompt,
+                &mut self.investigate_workflow_run,
             ),
         ];
 

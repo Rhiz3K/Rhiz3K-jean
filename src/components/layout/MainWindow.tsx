@@ -166,7 +166,8 @@ export function MainWindow() {
   useEffect(() => {
     const handler = () => setArchivedModalOpen(true)
     window.addEventListener('command:open-archived-modal', handler)
-    return () => window.removeEventListener('command:open-archived-modal', handler)
+    return () =>
+      window.removeEventListener('command:open-archived-modal', handler)
   }, [])
 
   // Auto-cleanup old archived items on startup
@@ -290,7 +291,10 @@ export function MainWindow() {
       <SessionBoardModal />
       <AddProjectDialog />
       <GitInitModal />
-      <ArchivedModal open={archivedModalOpen} onOpenChange={setArchivedModalOpen} />
+      <ArchivedModal
+        open={archivedModalOpen}
+        onOpenChange={setArchivedModalOpen}
+      />
       <QuitConfirmationDialog />
       <Toaster
         position="bottom-right"

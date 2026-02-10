@@ -22,7 +22,11 @@ import {
   fetchWorktreesStatus,
   triggerImmediateGitPoll,
 } from '@/services/git-status'
-import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
+import {
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+} from '@/components/ui/tooltip'
 import { useSidebarWidth } from '@/components/layout/SidebarWidthContext'
 
 interface WorktreeItemProps {

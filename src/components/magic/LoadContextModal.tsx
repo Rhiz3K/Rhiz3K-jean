@@ -37,7 +37,11 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Input } from '@/components/ui/input'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Markdown } from '@/components/ui/markdown'
-import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
+import {
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+} from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { chatQueryKeys, useAllSessions } from '@/services/chat'
 import type {

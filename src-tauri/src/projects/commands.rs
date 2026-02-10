@@ -605,7 +605,12 @@ pub async fn create_worktree(
             // Must check both storage AND git branches (branch may exist from previously deleted worktree)
             let suggested_name = {
                 let data = load_projects_data(&app_clone).ok();
-                generate_unique_suffix_name(&name_clone, &project_path, &project_id_clone, data.as_ref())
+                generate_unique_suffix_name(
+                    &name_clone,
+                    &project_path,
+                    &project_id_clone,
+                    data.as_ref(),
+                )
             };
 
             // Emit path_exists event with archived worktree info if available
@@ -661,7 +666,12 @@ pub async fn create_worktree(
                     // Generate a suggested alternative name with random suffix
                     let suggested_name = {
                         let data = load_projects_data(&app_clone).ok();
-                        generate_unique_suffix_name(&name_clone, &project_path, &project_id_clone, data.as_ref())
+                        generate_unique_suffix_name(
+                            &name_clone,
+                            &project_path,
+                            &project_id_clone,
+                            data.as_ref(),
+                        )
                     };
 
                     // Emit branch_exists event

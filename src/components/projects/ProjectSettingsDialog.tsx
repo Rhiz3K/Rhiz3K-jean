@@ -19,7 +19,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
+import {
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+} from '@/components/ui/tooltip'
 import {
   Command,
   CommandEmpty,
@@ -87,7 +91,9 @@ function ProjectMcpHealthIndicator({
               <ShieldAlert className="size-3.5 text-amber-600 dark:text-amber-400" />
             </span>
           </TooltipTrigger>
-          <TooltipContent>{"Run 'claude /mcp' in your terminal to authenticate"}</TooltipContent>
+          <TooltipContent>
+            {"Run 'claude /mcp' in your terminal to authenticate"}
+          </TooltipContent>
         </Tooltip>
       )
     case 'couldNotConnect':
@@ -98,7 +104,9 @@ function ProjectMcpHealthIndicator({
               <XCircle className="size-3.5 text-red-600 dark:text-red-400" />
             </span>
           </TooltipTrigger>
-          <TooltipContent>Could not connect -- check that the server is running</TooltipContent>
+          <TooltipContent>
+            Could not connect -- check that the server is running
+          </TooltipContent>
         </Tooltip>
       )
     default:

@@ -10,7 +10,11 @@ import { listen, type UnlistenFn } from '@/lib/transport'
 import { useEffect, useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 
-import { isTauri, updateWorktreeCachedStatus, projectsQueryKeys } from '@/services/projects'
+import {
+  isTauri,
+  updateWorktreeCachedStatus,
+  projectsQueryKeys,
+} from '@/services/projects'
 import type { Worktree } from '@/types/projects'
 import type { GitDiff } from '@/types/git-diff'
 

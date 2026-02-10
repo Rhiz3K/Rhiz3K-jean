@@ -62,6 +62,9 @@ import {
   useCreateWorktree,
   useCreateBaseSession,
   useArchivedWorktrees,
+  useProjectBranches,
+  useCreateWorktreeFromExistingBranch,
+  projectsQueryKeys,
 } from '@/services/projects'
 import { isBaseSession } from '@/types/projects'
 import type {
@@ -129,6 +132,9 @@ export function NewWorktreeModal() {
   const [includeClosed, setIncludeClosed] = useState(false)
   const [selectedItemIndex, setSelectedItemIndex] = useState(0)
   const [creatingFromNumber, setCreatingFromNumber] = useState<number | null>(
+    null
+  )
+  const [creatingFromBranch, setCreatingFromBranch] = useState<string | null>(
     null
   )
   const [selectedAgent, setSelectedAgent] = useState<ChatAgent>(() =>

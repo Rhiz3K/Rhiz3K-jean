@@ -1,4 +1,11 @@
-import { FolderPlus, FolderGit, Bug, Keyboard, Archive, ArchiveRestore } from 'lucide-react'
+import {
+  FolderPlus,
+  FolderGit,
+  Bug,
+  Keyboard,
+  Archive,
+  ArchiveRestore,
+} from 'lucide-react'
 import type { AppCommand } from './types'
 import { useUIStore } from '@/store/ui-store'
 

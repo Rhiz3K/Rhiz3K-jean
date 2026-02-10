@@ -65,7 +65,12 @@ export const githubQueryKeys = {
   prSearch: (projectPath: string, query: string) =>
     [...githubQueryKeys.all, 'pr-search', projectPath, query] as const,
   workflowRuns: (projectPath: string, branch?: string) =>
-    [...githubQueryKeys.all, 'workflow-runs', projectPath, branch ?? ''] as const,
+    [
+      ...githubQueryKeys.all,
+      'workflow-runs',
+      projectPath,
+      branch ?? '',
+    ] as const,
 }
 
 /**

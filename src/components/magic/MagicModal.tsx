@@ -213,14 +213,12 @@ export function MagicModal() {
   const isOnCanvas = isViewingCanvasTab && !sessionModalOpen
 
   // Build columns dynamically based on PR state
-  const magicColumns = useMemo(
-    () => buildMagicColumns(hasOpenPr),
-    [hasOpenPr]
-  )
+  const magicColumns = useMemo(() => buildMagicColumns(hasOpenPr), [hasOpenPr])
 
   // Flatten all options for arrow key navigation
   const allOptions = useMemo(
-    () => magicColumns.all.flatMap(section => section.options.map(opt => opt.id)),
+    () =>
+      magicColumns.all.flatMap(section => section.options.map(opt => opt.id)),
     [magicColumns]
   )
 

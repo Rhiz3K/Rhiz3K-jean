@@ -26,7 +26,11 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
-import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
+import {
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+} from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { useUIStore } from '@/store/ui-store'
 import { useProjectsStore } from '@/store/projects-store'
@@ -269,7 +273,7 @@ export function ReleaseNotesDialog() {
         {/* Phase 1: Select Release */}
         {phase === 'select' && (
           <div className="flex flex-col flex-1 min-h-0">
-              <ScrollArea className="flex-1" ref={scrollRef}>
+            <ScrollArea className="flex-1" ref={scrollRef}>
               {isLoadingReleases && (
                 <div className="flex items-center justify-center py-8">
                   <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
@@ -378,7 +382,10 @@ export function ReleaseNotesDialog() {
                 disabled={isGenerating}
               >
                 <RefreshCw
-                  className={cn('h-3.5 w-3.5 mr-1.5', isGenerating && 'animate-spin')}
+                  className={cn(
+                    'h-3.5 w-3.5 mr-1.5',
+                    isGenerating && 'animate-spin'
+                  )}
                 />
                 Regenerate
               </Button>

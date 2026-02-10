@@ -143,6 +143,12 @@ interface UIState {
     tab: 'quick' | 'issues' | 'prs' | null
   ) => void
   setCheckoutPRModalOpen: (open: boolean) => void
+  setReleaseNotesModalOpen: (open: boolean) => void
+  setWorkflowRunsModalOpen: (
+    open: boolean,
+    projectPath?: string | null,
+    branch?: string | null
+  ) => void
   openCliUpdateModal: (type: 'claude' | 'gh' | 'codex') => void
   closeCliUpdateModal: () => void
   openCliLoginModal: (type: 'claude' | 'gh' | 'codex', command: string) => void
