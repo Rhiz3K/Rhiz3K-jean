@@ -5,7 +5,7 @@ import { usePreferences } from '@/services/preferences'
 import { useProjects, useAppDataDir } from '@/services/projects'
 import { useChatStore } from '@/store/chat-store'
 import { useProjectsStore } from '@/store/projects-store'
-import { convertFileSrc } from '@tauri-apps/api/core'
+import { convertFileSrc } from '@/lib/transport'
 import { getAllCommands, executeCommand } from '@/lib/commands'
 import { formatShortcutDisplay } from '@/types/keybindings'
 import {
@@ -154,6 +154,7 @@ export function CommandPalette() {
       title="Command Palette"
       description="Type a command or search..."
       className="sm:max-w-2xl"
+      disablePointerSelection
     >
       <CommandInput
         placeholder="Type a command or search..."
@@ -239,6 +240,8 @@ function getGroupLabel(groupName: string): string {
       return 'Window'
     case 'notification':
       return 'Notifications'
+    case 'github':
+      return 'GitHub'
     case 'other':
       return 'Other'
     default:

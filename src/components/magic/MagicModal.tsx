@@ -2,7 +2,6 @@ import { useCallback, useState, useRef, useEffect, useMemo } from 'react'
 import {
   ArrowDownToLine,
   ArrowUpToLine,
-  GitBranch,
   GitCommitHorizontal,
   GitMerge,
   GitPullRequest,
@@ -11,7 +10,6 @@ import {
   Wand2,
   BookmarkPlus,
   FolderOpen,
-  Search,
 } from 'lucide-react'
 import {
   Dialog,
@@ -35,7 +33,9 @@ import {
   triggerImmediateGitPoll,
   fetchWorktreesStatus,
 } from '@/services/git-status'
-import type { CreateCommitResponse } from '@/types/projects'
+import type { CreateCommitResponse, CreatePrResponse } from '@/types/projects'
+import { saveWorktreePr, projectsQueryKeys } from '@/services/projects'
+import { useQueryClient } from '@tanstack/react-query'
 
 type MagicOption =
   | 'save-context'
@@ -48,8 +48,6 @@ type MagicOption =
   | 'review'
   | 'merge'
   | 'resolve-conflicts'
-  | 'investigate'
-  | 'checkout-pr'
   | 'release-notes'
 
 /** Options that work on canvas without an open session (git-only operations) */
@@ -58,7 +56,16 @@ const CANVAS_ALLOWED_OPTIONS = new Set<MagicOption>([
   'commit-and-push',
   'pull',
   'push',
+  'open-pr',
   'release-notes',
+  'merge',
+  'resolve-conflicts',
+])
+
+/** Canvas options that need ChatWindow — switch off canvas first, then dispatch event */
+const CANVAS_SESSION_TRANSITION_OPTIONS = new Set<MagicOption>([
+  'merge',
+  'resolve-conflicts',
 ])
 
 interface MagicOptionItem {
@@ -130,7 +137,6 @@ function buildMagicColumns(hasOpenPr: boolean): MagicColumns {
           key: 'O',
         },
         { id: 'review', label: 'Review', icon: Eye, key: 'R' },
-        { id: 'checkout-pr', label: 'Checkout', icon: GitBranch, key: 'K' },
       ],
     },
     {
@@ -154,12 +160,6 @@ function buildMagicColumns(hasOpenPr: boolean): MagicColumns {
           icon: GitMerge,
           key: 'F',
         },
-        {
-          id: 'investigate',
-          label: 'Investigate Context',
-          icon: Search,
-          key: 'I',
-        },
       ],
     },
   ]
@@ -179,8 +179,6 @@ const KEY_TO_OPTION: Record<string, MagicOption> = {
   r: 'review',
   m: 'merge',
   f: 'resolve-conflicts',
-  i: 'investigate',
-  k: 'checkout-pr',
   g: 'release-notes',
 }
 
@@ -241,6 +239,7 @@ export function MagicModal() {
     [setMagicModalOpen, isOnCanvas]
   )
 
+  const queryClient = useQueryClient()
   const selectedProjectId = useProjectsStore(state => state.selectedProjectId)
   const { data: preferences } = usePreferences()
   const { data: projects } = useProjects()
@@ -320,29 +319,55 @@ export function MagicModal() {
           }
           break
         }
+        case 'open-pr': {
+          if (worktree.pr_url) {
+            await openExternal(worktree.pr_url)
+            return
+          }
+          setWorktreeLoading(selectedWorktreeId, 'pr')
+          const branch = worktree.branch ?? ''
+          const toastId = toast.loading(`Creating PR for ${branch}...`)
+          try {
+            const result = await invoke<CreatePrResponse>(
+              'create_pr_with_ai_content',
+              {
+                worktreePath: worktree.path,
+                customPrompt: preferences?.magic_prompts?.pr_content,
+                model: preferences?.magic_prompt_models?.pr_content_model,
+              }
+            )
+            await saveWorktreePr(selectedWorktreeId, result.pr_number, result.pr_url)
+            queryClient.invalidateQueries({
+              queryKey: projectsQueryKeys.worktrees(worktree.project_id),
+            })
+            queryClient.invalidateQueries({
+              queryKey: [...projectsQueryKeys.all, 'worktree', selectedWorktreeId],
+            })
+            triggerImmediateGitPoll()
+            if (worktree.project_id) fetchWorktreesStatus(worktree.project_id)
+            toast.success(`PR created: ${result.title}`, {
+              id: toastId,
+              action: {
+                label: 'Open',
+                onClick: () => openExternal(result.pr_url),
+              },
+            })
+          } catch (error) {
+            toast.error(`Failed to create PR: ${error}`, { id: toastId })
+          } finally {
+            clearWorktreeLoading(selectedWorktreeId)
+          }
+          break
+        }
       }
     },
-    [selectedWorktreeId, worktree, preferences, project]
+    [selectedWorktreeId, worktree, preferences, project, queryClient]
   )
 
   const executeAction = useCallback(
     async (option: MagicOption) => {
       // Block disabled options on canvas
       if (isOnCanvas && !CANVAS_ALLOWED_OPTIONS.has(option)) {
-        return
-      }
-
-      // checkout-pr only needs a project selected, not a worktree
-      // Handle it directly here since ChatWindow may not be rendered
-      if (option === 'checkout-pr') {
-        if (!selectedProjectId) {
-          notify('No project selected', undefined, { type: 'error' })
-          setMagicModalOpen(false)
-          return
-        }
-        // Open the checkout PR modal directly
-        useUIStore.getState().setCheckoutPRModalOpen(true)
-        setMagicModalOpen(false)
         return
       }
 
@@ -368,6 +393,19 @@ export function MagicModal() {
       if (option === 'open-pr' && worktree?.pr_url) {
         await openExternal(worktree.pr_url)
         setMagicModalOpen(false)
+        return
+      }
+
+      // Commands that need ChatWindow: switch off canvas first, then dispatch after mount
+      if (isOnCanvas && CANVAS_SESSION_TRANSITION_OPTIONS.has(option)) {
+        setMagicModalOpen(false)
+        useChatStore.getState().setViewingCanvasTab(selectedWorktreeId, false)
+        // Delay dispatch to allow ChatWindow to mount and register event listener
+        setTimeout(() => {
+          window.dispatchEvent(
+            new CustomEvent('magic-command', { detail: { command: option } })
+          )
+        }, 150)
         return
       }
 
