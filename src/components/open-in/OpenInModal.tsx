@@ -34,7 +34,7 @@ import { openExternal } from '@/lib/platform'
 import { cn } from '@/lib/utils'
 import { isNativeApp } from '@/lib/environment'
 
-type ModalOption = {
+interface ModalOption {
   id: string
   label: string
   icon: typeof Code
@@ -58,7 +58,9 @@ export function OpenInModal() {
   const openOnGitHub = useOpenBranchOnGitHub()
   const { data: preferences } = usePreferences()
   const activeSessionId = useChatStore(state =>
-    selectedWorktreeId ? state.activeSessionIds[selectedWorktreeId] ?? null : null
+    selectedWorktreeId
+      ? (state.activeSessionIds[selectedWorktreeId] ?? null)
+      : null
   )
   const { data: loadedPRs } = useLoadedPRContexts(activeSessionId)
   const { data: loadedIssues } = useLoadedIssueContexts(activeSessionId)
@@ -94,9 +96,7 @@ export function OpenInModal() {
       },
     ]
 
-    return isNative
-      ? allOptions
-      : allOptions.filter(opt => opt.id === 'github')
+    return isNative ? allOptions : allOptions.filter(opt => opt.id === 'github')
   }, [preferences?.editor, preferences?.terminal, isNative])
 
   // Context options (loaded PRs + issues, numbered 1-9)
@@ -300,16 +300,17 @@ export function OpenInModal() {
   return (
     <Dialog open={openInModalOpen} onOpenChange={handleOpenChange}>
       <DialogContent
-        className={cn('p-0', useWideLayout ? 'sm:max-w-[560px]' : 'sm:max-w-[280px]')}
+        className={cn(
+          'p-0',
+          useWideLayout ? 'sm:max-w-[560px]' : 'sm:max-w-[280px]'
+        )}
         onKeyDown={handleKeyDown}
       >
         <DialogHeader className="px-4 pt-4 pb-2">
           <DialogTitle className="text-sm font-medium">Open in...</DialogTitle>
         </DialogHeader>
 
-        <div className="pb-2">
-          {baseOptions.map(renderOption)}
-        </div>
+        <div className="pb-2">{baseOptions.map(renderOption)}</div>
 
         {contextOptions.length > 0 && (
           <div className="border-t pb-2">

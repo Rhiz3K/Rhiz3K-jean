@@ -22,4 +22,9 @@ export function initializeCommandSystem(): void {
   }
 }
 
-export { appearanceCommands, notificationCommands, projectCommands, githubCommands }
+export {
+  appearanceCommands,
+  notificationCommands,
+  projectCommands,
+  githubCommands,
+}

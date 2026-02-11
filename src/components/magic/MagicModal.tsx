@@ -336,12 +336,20 @@ export function MagicModal() {
                 model: preferences?.magic_prompt_models?.pr_content_model,
               }
             )
-            await saveWorktreePr(selectedWorktreeId, result.pr_number, result.pr_url)
+            await saveWorktreePr(
+              selectedWorktreeId,
+              result.pr_number,
+              result.pr_url
+            )
             queryClient.invalidateQueries({
               queryKey: projectsQueryKeys.worktrees(worktree.project_id),
             })
             queryClient.invalidateQueries({
-              queryKey: [...projectsQueryKeys.all, 'worktree', selectedWorktreeId],
+              queryKey: [
+                ...projectsQueryKeys.all,
+                'worktree',
+                selectedWorktreeId,
+              ],
             })
             triggerImmediateGitPoll()
             if (worktree.project_id) fetchWorktreesStatus(worktree.project_id)

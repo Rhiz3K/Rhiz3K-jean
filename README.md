@@ -5,18 +5,21 @@ Jean is a desktop AI assistant for managing multiple projects, worktrees, and ch
 ## Features
 
 ### Project & Worktree Management
+
 - Multi-project support with folder organization
 - Git worktree automation (create, archive, restore, delete)
 - Base session mode (work on main without worktrees)
 - Custom project avatars
 
 ### Session Management
+
 - Multiple sessions per worktree
 - Execution modes: Plan, Build, Yolo
 - Session archiving, recovery, auto-naming
 - Canvas views for visual session overview
 
 ### AI Chat (Claude CLI)
+
 - Model selection (Opus, Sonnet, Haiku)
 - Thinking levels (Think, Megathink, Ultrathink) and effort levels for Opus
 - MCP server support
@@ -24,6 +27,7 @@ Jean is a desktop AI assistant for managing multiple projects, worktrees, and ch
 - Customizable system prompts per project
 
 ### Magic Commands
+
 - Investigate Issue / PR / Workflow
 - Code Review with finding tracking
 - AI Commit messages, PR content generation
@@ -31,23 +35,27 @@ Jean is a desktop AI assistant for managing multiple projects, worktrees, and ch
 - Release notes generation
 
 ### GitHub Integration
+
 - Issue & PR investigation
 - Checkout PRs as worktrees
 - Auto-archive on PR merge
 - GitHub Actions workflow investigation
 
 ### Developer Tools
+
 - Integrated terminal (multiple per worktree)
 - Open in editor (VS Code, Cursor, Xcode)
 - Git status, diff viewer (unified & side-by-side)
 - File tree with preview
 
 ### Remote Access
+
 - Built-in HTTP server with WebSocket support
 - Token-based authentication
 - Web browser access
 
 ### Customization
+
 - Themes (light/dark/system)
 - Custom fonts and font sizes
 - Customizable AI prompts

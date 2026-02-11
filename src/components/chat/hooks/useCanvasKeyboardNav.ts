@@ -42,11 +42,9 @@ export function useCanvasKeyboardNav<T>({
 
   // Use refs to avoid stale closures in event handler
   const selectedIndexRef = useRef(selectedIndex)
-  // eslint-disable-next-line react-hooks/refs
   selectedIndexRef.current = selectedIndex
 
   const cardsLengthRef = useRef(cards.length)
-  // eslint-disable-next-line react-hooks/refs
   cardsLengthRef.current = cards.length
 
   // Throttle rapid key presses
@@ -102,7 +100,9 @@ export function useCanvasKeyboardNav<T>({
 
   // Track when command palette (or any modal) closes to prevent Enter key leaking
   const lastModalCloseRef = useRef(0)
-  const prevCommandPaletteOpen = useRef(useUIStore.getState().commandPaletteOpen)
+  const prevCommandPaletteOpen = useRef(
+    useUIStore.getState().commandPaletteOpen
+  )
 
   useEffect(() => {
     return useUIStore.subscribe(state => {

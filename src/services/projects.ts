@@ -308,7 +308,8 @@ export function useAddProject() {
       toast.success(`Added project: ${project.name}`)
 
       // Auto-expand the new project and parent folder if applicable
-      const { expandProject, expandFolder, selectProject } = useProjectsStore.getState()
+      const { expandProject, expandFolder, selectProject } =
+        useProjectsStore.getState()
       if (parentId) {
         expandFolder(parentId)
       }
@@ -360,7 +361,8 @@ export function useInitProject() {
       toast.success(`Created project: ${project.name}`)
 
       // Auto-expand the new project and parent folder if applicable
-      const { expandProject, expandFolder, selectProject } = useProjectsStore.getState()
+      const { expandProject, expandFolder, selectProject } =
+        useProjectsStore.getState()
       if (parentId) {
         expandFolder(parentId)
       }

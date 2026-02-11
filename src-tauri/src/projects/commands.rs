@@ -736,7 +736,10 @@ pub async fn create_worktree(
             let branch_collision = git::branch_exists(&project_path, &ctx.head_ref_name);
             let local_branch_name = if branch_collision {
                 let alt = format!("pr-{}-{}", ctx.number, ctx.head_ref_name);
-                log::trace!("Branch '{}' already exists, using '{alt}' instead", ctx.head_ref_name);
+                log::trace!(
+                    "Branch '{}' already exists, using '{alt}' instead",
+                    ctx.head_ref_name
+                );
                 alt
             } else {
                 ctx.head_ref_name.clone()
@@ -745,12 +748,16 @@ pub async fn create_worktree(
             let checkout_result = if branch_collision {
                 // Bypass gh pr checkout which internally fetches into the conflicting ref.
                 // Manually fetch the PR into the alt branch name and switch to it.
-                log::trace!("Background: Branch collision, manual fetch PR #{} into {local_branch_name}", ctx.number);
-                git::fetch_pr_to_branch(&project_path, ctx.number, &local_branch_name)
-                    .and_then(|_| {
+                log::trace!(
+                    "Background: Branch collision, manual fetch PR #{} into {local_branch_name}",
+                    ctx.number
+                );
+                git::fetch_pr_to_branch(&project_path, ctx.number, &local_branch_name).and_then(
+                    |_| {
                         git::checkout_branch(&worktree_path_clone, &local_branch_name)?;
                         Ok(local_branch_name)
-                    })
+                    },
+                )
             } else {
                 git::gh_pr_checkout(
                     &worktree_path_clone,
@@ -1556,12 +1563,12 @@ pub async fn checkout_pr(
         // Instead, manually fetch the PR into the alt branch name and switch to it.
         let actual_branch = if branch_collision {
             log::trace!("Background: Branch collision detected, using manual fetch for PR #{pr_number} into {local_branch_name}");
-            match git::fetch_pr_to_branch(&project_path, pr_number, &local_branch_name)
-                .and_then(|_| {
+            match git::fetch_pr_to_branch(&project_path, pr_number, &local_branch_name).and_then(
+                |_| {
                     git::checkout_branch(&worktree_path_clone, &local_branch_name)?;
                     Ok(local_branch_name.clone())
-                })
-            {
+                },
+            ) {
                 Ok(branch) => {
                     log::trace!("Background: Manual PR fetch+checkout succeeded, branch: {branch}");
                     branch
