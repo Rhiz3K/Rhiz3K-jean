@@ -20,9 +20,9 @@ interface MagicCommandHandlers {
   handleReview: () => void
   handleMerge: () => void
   handleResolveConflicts: () => void
-  handleInvestigate: () => void
   handleCheckoutPR: () => void
   handleInvestigateWorkflowRun: (detail: WorkflowRunDetail) => void
+  handleInvestigate: (type: 'issue' | 'pr') => void
 }
 
 interface UseMagicCommandsOptions extends MagicCommandHandlers {
@@ -54,9 +54,9 @@ export function useMagicCommands({
   handleReview,
   handleMerge,
   handleResolveConflicts,
-  handleInvestigate,
   handleCheckoutPR,
   handleInvestigateWorkflowRun,
+  handleInvestigate,
   isModal = false,
   isViewingCanvasTab = false,
   sessionModalOpen = false,
@@ -73,9 +73,9 @@ export function useMagicCommands({
     handleReview,
     handleMerge,
     handleResolveConflicts,
-    handleInvestigate,
     handleCheckoutPR,
     handleInvestigateWorkflowRun,
+    handleInvestigate,
   })
 
   // Update refs in useLayoutEffect to avoid linter warning about ref updates during render
@@ -92,9 +92,9 @@ export function useMagicCommands({
       handleReview,
       handleMerge,
       handleResolveConflicts,
-      handleInvestigate,
       handleCheckoutPR,
       handleInvestigateWorkflowRun,
+      handleInvestigate,
     }
   })
 
@@ -157,7 +157,9 @@ export function useMagicCommands({
           handlers.handleResolveConflicts()
           break
         case 'investigate':
-          handlers.handleInvestigate()
+          handlers.handleInvestigate(
+            (rest as { type: 'issue' | 'pr' }).type ?? 'issue'
+          )
           break
         case 'checkout-pr':
           handlers.handleCheckoutPR()

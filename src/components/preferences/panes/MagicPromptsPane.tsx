@@ -18,6 +18,7 @@ import {
   DEFAULT_CODE_REVIEW_PROMPT,
   DEFAULT_CONTEXT_SUMMARY_PROMPT,
   DEFAULT_RESOLVE_CONFLICTS_PROMPT,
+  DEFAULT_SESSION_NAMING_PROMPT,
   DEFAULT_MAGIC_PROMPTS,
   DEFAULT_MAGIC_PROMPT_MODELS,
   DEFAULT_MAGIC_PROMPT_CODEX_MODELS,
@@ -98,6 +99,21 @@ const PROMPT_CONFIGS: PromptConfig[] = [
       { name: '{diff}', description: 'Git diff of all changes' },
     ],
     defaultValue: DEFAULT_PR_CONTENT_PROMPT,
+    defaultClaudeModel: 'haiku',
+  },
+  {
+    key: 'session_naming',
+    modelKey: 'session_naming_model',
+    label: 'Session Naming',
+    description:
+      'Prompt for generating session titles from the first message. Used for both auto-naming and manual regeneration.',
+    variables: [
+      {
+        name: '{message}',
+        description: "The user's first message in the session",
+      },
+    ],
+    defaultValue: DEFAULT_SESSION_NAMING_PROMPT,
     defaultClaudeModel: 'haiku',
   },
   {

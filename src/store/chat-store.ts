@@ -36,6 +36,8 @@ interface ChatUIState {
   // Currently active worktree for chat
   activeWorktreeId: string | null
   activeWorktreePath: string | null
+  // Last active worktree (survives clearActiveWorktree, used by dashboard to restore selection)
+  lastActiveWorktreeId: string | null
 
   // Active session ID per worktree (for tab selection)
   activeSessionIds: Record<string, string>
@@ -94,6 +96,9 @@ interface ChatUIState {
 
   // Selected model per session (for tracking what model was used)
   selectedModels: Record<string, string>
+
+  // Selected provider per session (null = default Anthropic, or custom profile name)
+  selectedProviders: Record<string, string>
 
   // Enabled MCP servers per session (server names that are active)
   enabledMcpServers: Record<string, string[]>
@@ -190,6 +195,9 @@ interface ChatUIState {
   // Worktree loading operations (commit, pr, review, merge, pull)
   worktreeLoadingOperations: Record<string, string | null>
 
+  // User-assigned labels per session (e.g. "Needs testing")
+  sessionLabels: Record<string, string>
+
   // Canvas-selected session per worktree (for magic menu targeting)
   canvasSelectedSessionIds: Record<string, string | null>
 
@@ -216,6 +224,9 @@ interface ChatUIState {
   setSessionReviewing: (sessionId: string, reviewing: boolean) => void
   isSessionReviewing: (sessionId: string) => boolean
 
+  // Actions - Session label management (persisted)
+  setSessionLabel: (sessionId: string, label: string | null) => void
+
   // Actions - Plan file path management (persisted)
   setPlanFilePath: (sessionId: string, path: string | null) => void
   getPlanFilePath: (sessionId: string) => string | null
@@ -227,6 +238,7 @@ interface ChatUIState {
   // Actions - Worktree management
   setActiveWorktree: (id: string | null, path: string | null) => void
   clearActiveWorktree: () => void
+  setLastActiveWorktreeId: (id: string) => void
   registerWorktreePath: (worktreeId: string, path: string) => void
   getWorktreePath: (worktreeId: string) => string | undefined
 
@@ -289,6 +301,9 @@ interface ChatUIState {
 
   // Actions - Selected model (session-based)
   setSelectedModel: (sessionId: string, model: string) => void
+
+  // Actions - Selected provider (session-based)
+  setSelectedProvider: (sessionId: string, provider: string | null) => void
 
   // Actions - MCP servers (session-based)
   setEnabledMcpServers: (sessionId: string, servers: string[]) => void
@@ -372,6 +387,7 @@ interface ChatUIState {
   clearQueue: (sessionId: string) => void
   getQueueLength: (sessionId: string) => number
   getQueuedMessages: (sessionId: string) => QueuedMessage[]
+  forceProcessQueue: (sessionId: string) => void
 
   // Actions - Executing mode (tracks mode prompt was sent with)
   setExecutingMode: (sessionId: string, mode: ExecutionMode) => void
@@ -457,6 +473,7 @@ export const useChatStore = create<ChatUIState>()(
       // Initial state
       activeWorktreeId: null,
       activeWorktreePath: null,
+      lastActiveWorktreeId: null,
       activeSessionIds: {},
       reviewResults: {},
       viewingReviewTab: {},
@@ -476,6 +493,7 @@ export const useChatStore = create<ChatUIState>()(
       manualThinkingOverrides: {},
       effortLevels: {},
       selectedModels: {},
+      selectedProviders: {},
       enabledMcpServers: {},
       agents: {},
       answeredQuestions: {},
@@ -505,6 +523,7 @@ export const useChatStore = create<ChatUIState>()(
       pendingDigestSessionIds: {},
       sessionDigests: {},
       worktreeLoadingOperations: {},
+      sessionLabels: {},
       canvasSelectedSessionIds: {},
 
       // Session management
@@ -640,6 +659,26 @@ export const useChatStore = create<ChatUIState>()(
       isSessionReviewing: sessionId =>
         get().reviewingSessions[sessionId] ?? false,
 
+      // Session label management (persisted)
+      setSessionLabel: (sessionId, label) =>
+        set(
+          state => {
+            if (label) {
+              return {
+                sessionLabels: {
+                  ...state.sessionLabels,
+                  [sessionId]: label,
+                },
+              }
+            } else {
+              const { [sessionId]: _, ...rest } = state.sessionLabels
+              return { sessionLabels: rest }
+            }
+          },
+          undefined,
+          'setSessionLabel'
+        ),
+
       // Plan file path management
       setPlanFilePath: (sessionId, path) =>
         set(
@@ -691,6 +730,8 @@ export const useChatStore = create<ChatUIState>()(
           state => ({
             activeWorktreeId: id,
             activeWorktreePath: path,
+            // Remember last active worktree for dashboard restoration
+            lastActiveWorktreeId: id ?? state.lastActiveWorktreeId,
             // Also register the path mapping when setting active worktree
             worktreePaths:
               id && path
@@ -707,6 +748,9 @@ export const useChatStore = create<ChatUIState>()(
           undefined,
           'clearActiveWorktree'
         ),
+
+      setLastActiveWorktreeId: id =>
+        set({ lastActiveWorktreeId: id }, undefined, 'setLastActiveWorktreeId'),
 
       registerWorktreePath: (worktreeId, path) =>
         set(
@@ -1112,6 +1156,23 @@ export const useChatStore = create<ChatUIState>()(
           }),
           undefined,
           'setSelectedModel'
+        ),
+
+      // Selected provider (session-based)
+      setSelectedProvider: (sessionId: string, provider: string | null) =>
+        set(
+          state => {
+            const updated = { ...state.selectedProviders }
+            if (provider) {
+              updated[sessionId] = provider
+            } else {
+              // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
+              delete updated[sessionId]
+            }
+            return { selectedProviders: updated }
+          },
+          undefined,
+          'setSelectedProvider'
         ),
 
       // MCP servers (session-based)
@@ -1580,6 +1641,22 @@ export const useChatStore = create<ChatUIState>()(
 
       getQueuedMessages: sessionId => get().messageQueues[sessionId] ?? [],
 
+      forceProcessQueue: sessionId =>
+        set(
+          state => {
+            // Clear stale sending/waiting flags so queue processor picks up the message
+            const { [sessionId]: _s, ...restSending } = state.sendingSessionIds
+            const { [sessionId]: _w, ...restWaiting } =
+              state.waitingForInputSessionIds
+            return {
+              sendingSessionIds: restSending,
+              waitingForInputSessionIds: restWaiting,
+            }
+          },
+          undefined,
+          'forceProcessQueue'
+        ),
+
       // Executing mode actions (tracks mode prompt was sent with)
       setExecutingMode: (sessionId, mode) =>
         set(
@@ -1709,6 +1786,7 @@ export const useChatStore = create<ChatUIState>()(
             const { [sessionId]: _effort, ...restEffort } = state.effortLevels
             const { [sessionId]: _mcp, ...restMcp } = state.enabledMcpServers
             const { [sessionId]: _agent, ...restAgents } = state.agents
+            const { [sessionId]: _label, ...restLabels } = state.sessionLabels
 
             return {
               approvedTools: restApproved,
@@ -1723,6 +1801,7 @@ export const useChatStore = create<ChatUIState>()(
               effortLevels: restEffort,
               enabledMcpServers: restMcp,
               agents: restAgents,
+              sessionLabels: restLabels,
             }
           },
           undefined,

@@ -73,6 +73,7 @@ fn build_claude_args(
     ai_language: Option<&str>,
     mcp_config: Option<&str>,
     chrome_enabled: bool,
+    custom_profile_name: Option<&str>,
 ) -> (Vec<String>, Vec<(String, String)>) {
     let mut args = Vec::new();
     let mut env_vars = Vec::new();
@@ -142,6 +143,26 @@ fn build_claude_args(
         mode == "build" || mode == "yolo"
     };
 
+    // Custom profile settings: resolve name → file path, pass to --settings (secrets stay in file, not in ps)
+    if let Some(name) = custom_profile_name {
+        if !name.is_empty() {
+            if let Ok(path) = crate::get_cli_profile_path(name) {
+                if path.exists() {
+                    args.push("--settings".to_string());
+                    args.push(path.to_string_lossy().to_string());
+                } else {
+                    log::warn!(
+                        "CLI profile file not found for '{name}': {}",
+                        path.display()
+                    );
+                }
+            }
+        }
+    }
+
+    // Thinking/effort settings: passed as separate --settings JSON (no secrets here)
+    let mut settings_json: Option<serde_json::Value> = None;
+
     if let Some(effort) = effort_level {
         // Opus 4.6 adaptive thinking: use effort parameter via --settings JSON
         let effective_effort = if is_non_plan_override {
@@ -151,11 +172,15 @@ fn build_claude_args(
         };
 
         if let Some(effort_value) = effective_effort.effort_value() {
-            let settings = format!(r#"{{"effortLevel": "{effort_value}"}}"#);
-            args.push("--settings".to_string());
-            args.push(settings);
+            let obj = settings_json.get_or_insert_with(|| serde_json::json!({}));
+            if let Some(map) = obj.as_object_mut() {
+                map.insert(
+                    "effortLevel".to_string(),
+                    serde_json::Value::String(effort_value.to_string()),
+                );
+            }
         }
-        // If Off, don't send any thinking/effort settings
+        // If Off, don't send any thinking/effort settings (but still send custom profile if present)
     } else {
         // Traditional thinking levels (Opus 4.5, Sonnet, Haiku)
         let effective_thinking_level = if is_non_plan_override {
@@ -165,18 +190,24 @@ fn build_claude_args(
         };
 
         if let Some(level) = effective_thinking_level {
-            let settings = if level.is_enabled() {
-                r#"{"alwaysThinkingEnabled": true}"#
-            } else {
-                r#"{"alwaysThinkingEnabled": false}"#
-            };
-            args.push("--settings".to_string());
-            args.push(settings.to_string());
+            let obj = settings_json.get_or_insert_with(|| serde_json::json!({}));
+            if let Some(map) = obj.as_object_mut() {
+                map.insert(
+                    "alwaysThinkingEnabled".to_string(),
+                    serde_json::Value::Bool(level.is_enabled()),
+                );
+            }
 
             if let Some(tokens) = level.thinking_tokens() {
                 env_vars.push(("MAX_THINKING_TOKENS".to_string(), tokens.to_string()));
             }
         }
+    }
+
+    // Emit --settings if we have any settings to pass
+    if let Some(settings) = &settings_json {
+        args.push("--settings".to_string());
+        args.push(settings.to_string());
     }
 
     // Allowed tools
@@ -496,6 +527,7 @@ pub fn execute_claude_detached(
     ai_language: Option<&str>,
     mcp_config: Option<&str>,
     chrome_enabled: bool,
+    custom_profile_name: Option<&str>,
 ) -> Result<(u32, ClaudeResponse), String> {
     use super::detached::spawn_detached_claude;
     use crate::claude_cli::get_cli_binary_path;
@@ -548,6 +580,7 @@ pub fn execute_claude_detached(
         ai_language,
         mcp_config,
         chrome_enabled,
+        custom_profile_name,
     );
 
     // Log the full Claude CLI command for debugging
@@ -556,6 +589,11 @@ pub fn execute_claude_detached(
         cli_path.display(),
         args.join(" ")
     );
+    if !env_vars.is_empty() {
+        // Log env var keys only (not values, which may contain secrets)
+        let env_keys: Vec<&str> = env_vars.iter().map(|(k, _)| k.as_str()).collect();
+        log::debug!("Claude CLI env vars: {}", env_keys.join(", "));
+    }
 
     // Convert env_vars to &str references for spawn_detached_claude
     let env_refs: Vec<(&str, &str)> = env_vars

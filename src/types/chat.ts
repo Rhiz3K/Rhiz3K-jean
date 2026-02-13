@@ -156,6 +156,8 @@ export interface Session {
   selected_model?: string
   /** Selected thinking level for this session */
   selected_thinking_level?: ThinkingLevel
+  /** Selected provider (custom CLI profile name) for this session */
+  selected_provider?: string
   /** Whether session naming has been attempted for this session */
   session_naming_completed?: boolean
   /** Unix timestamp when session was archived (undefined = not archived) */
@@ -193,6 +195,8 @@ export interface Session {
   last_run_status?: RunStatus
   /** Execution mode of the last run (plan/build/yolo) */
   last_run_execution_mode?: ExecutionMode
+  /** User-assigned label (e.g. "Needs testing") */
+  label?: string
 }
 
 /**
@@ -732,6 +736,8 @@ export interface QueuedMessage {
   pendingTextFiles: PendingTextFile[]
   /** Model to use for this message (snapshot at queue time) */
   model: string
+  /** Provider profile name to use (snapshot at queue time, null = default) */
+  provider: string | null
   /** Execution mode setting (snapshot at queue time) */
   executionMode: ExecutionMode
   /** Thinking level setting (snapshot at queue time) */

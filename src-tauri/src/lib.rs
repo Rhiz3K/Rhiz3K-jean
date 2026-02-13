@@ -166,6 +166,8 @@ pub struct AppPreferences {
     pub http_server_localhost_only: bool, // Bind to localhost only (more secure)
     #[serde(default = "default_http_server_token_required")]
     pub http_server_token_required: bool, // Require token for web access (default true)
+    #[serde(default = "default_removal_behavior")]
+    pub removal_behavior: String, // What happens when closing sessions/worktrees: archive, delete
     #[serde(default = "default_auto_archive_on_pr_merged")]
     pub auto_archive_on_pr_merged: bool, // Auto-archive worktrees when their PR is merged
     #[serde(default = "default_show_keybinding_hints")]
@@ -176,10 +178,53 @@ pub struct AppPreferences {
     pub default_enabled_mcp_servers: Vec<String>, // MCP server names enabled by default (empty = none)
     #[serde(default)]
     pub has_seen_feature_tour: bool, // Whether user has seen the feature tour onboarding
+    #[serde(default)]
+    pub has_seen_jean_config_wizard: bool, // Whether user has seen the jean.json setup wizard
     #[serde(default = "default_chrome_enabled")]
     pub chrome_enabled: bool, // Enable browser automation via Chrome extension
     #[serde(default = "default_zoom_level")]
     pub zoom_level: u32, // Zoom level percentage (50-200, default 100)
+    #[serde(default)]
+    pub custom_cli_profiles: Vec<CustomCliProfile>, // Custom CLI settings profiles (e.g., OpenRouter, MiniMax)
+    #[serde(default)]
+    pub default_provider: Option<String>, // Default provider profile name (None = Anthropic direct)
+    #[serde(default = "default_canvas_layout")]
+    pub canvas_layout: String, // Canvas display mode: grid or list
+}
+
+fn default_true() -> Option<bool> {
+    None
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CustomCliProfile {
+    pub name: String,
+    #[serde(default)]
+    pub settings_json: String,
+    #[serde(default, skip_serializing)]
+    pub file_path: String,
+    #[serde(default = "default_true")]
+    pub supports_thinking: Option<bool>,
+}
+
+fn slugify_profile_name(name: &str) -> String {
+    let slug: String = name
+        .to_lowercase()
+        .chars()
+        .map(|c| if c.is_alphanumeric() { c } else { '-' })
+        .collect();
+    slug.trim_matches('-').to_string()
+}
+
+pub fn get_cli_profile_path(name: &str) -> Result<std::path::PathBuf, String> {
+    let home = dirs::home_dir().ok_or("No home directory found")?;
+    let slug = slugify_profile_name(name);
+    if slug.is_empty() {
+        return Err("Profile name is empty".to_string());
+    }
+    Ok(home
+        .join(".claude")
+        .join(format!("settings.jean.{slug}.json")))
 }
 
 fn default_auto_branch_naming() -> bool {
@@ -325,6 +370,10 @@ fn default_chrome_enabled() -> bool {
     true // Enabled by default
 }
 
+fn default_canvas_layout() -> String {
+    "grid".to_string()
+}
+
 fn default_zoom_level() -> u32 {
     100 // 100% = no zoom
 }
@@ -347,6 +396,10 @@ fn default_http_server_port() -> u16 {
 
 fn default_http_server_token_required() -> bool {
     true // Require token by default for security
+}
+
+fn default_removal_behavior() -> String {
+    "archive".to_string()
 }
 
 fn default_auto_archive_on_pr_merged() -> bool {
@@ -411,6 +464,8 @@ pub struct MagicPrompts {
     pub investigate_workflow_run: Option<String>,
     #[serde(default)]
     pub release_notes: Option<String>,
+    #[serde(default)]
+    pub session_naming: Option<String>,
     #[serde(default)]
     pub parallel_execution: Option<String>,
 }
@@ -643,6 +698,8 @@ pub struct MagicPromptModels {
     pub resolve_conflicts_model: String,
     #[serde(default = "default_haiku_model")]
     pub release_notes_model: String,
+    #[serde(default = "default_haiku_model")]
+    pub session_naming_model: String,
 }
 
 /// Per-prompt Codex model overrides for magic prompts
@@ -701,6 +758,7 @@ impl Default for MagicPromptModels {
             context_summary_model: default_model(),
             resolve_conflicts_model: default_model(),
             release_notes_model: default_haiku_model(),
+            session_naming_model: default_haiku_model(),
         }
     }
 }
@@ -737,7 +795,7 @@ impl MagicPrompts {
     /// Migrate prompts that match the current default to None.
     /// This ensures users who never customized a prompt get auto-updated defaults.
     fn migrate_defaults(&mut self) {
-        let defaults: [PromptDefaultField<'_>; 8] = [
+        let defaults: [PromptDefaultField<'_>; 9] = [
             (
                 default_investigate_issue_prompt,
                 &mut self.investigate_issue,
@@ -754,6 +812,10 @@ impl MagicPrompts {
             (
                 default_investigate_workflow_run_prompt,
                 &mut self.investigate_workflow_run,
+            ),
+            (
+                default_parallel_execution_prompt,
+                &mut self.parallel_execution,
             ),
         ];
 
@@ -817,14 +879,19 @@ impl Default for AppPreferences {
             http_server_token: None,
             http_server_localhost_only: true, // Default to localhost-only for security
             http_server_token_required: default_http_server_token_required(),
+            removal_behavior: default_removal_behavior(),
             auto_archive_on_pr_merged: default_auto_archive_on_pr_merged(),
             show_keybinding_hints: default_show_keybinding_hints(),
             debug_mode_enabled: false,
             default_effort_level: default_effort_level(),
             default_enabled_mcp_servers: Vec::new(),
             has_seen_feature_tour: false,
+            has_seen_jean_config_wizard: false,
             chrome_enabled: default_chrome_enabled(),
             zoom_level: default_zoom_level(),
+            custom_cli_profiles: Vec::new(),
+            default_provider: None,
+            canvas_layout: default_canvas_layout(),
         }
     }
 }
@@ -844,6 +911,10 @@ pub struct UIState {
     /// Last opened worktree path (needed for chat context)
     #[serde(default)]
     pub active_worktree_path: Option<String>,
+
+    /// Last active worktree ID (survives clearing, used by dashboard to restore selection)
+    #[serde(default)]
+    pub last_active_worktree_id: Option<String>,
 
     /// Last selected project ID (to restore project selection for GitHub issues)
     #[serde(default)]
@@ -911,6 +982,7 @@ impl Default for UIState {
         Self {
             active_worktree_id: None,
             active_worktree_path: None,
+            last_active_worktree_id: None,
             active_project_id: None,
             expanded_project_ids: Vec::new(),
             expanded_folder_ids: Vec::new(),
@@ -966,6 +1038,56 @@ async fn load_preferences(app: AppHandle) -> Result<AppPreferences, String> {
     // so they auto-update when new defaults are shipped
     preferences.magic_prompts.migrate_defaults();
 
+    // Migrate CLI profiles: move settings_json from preferences.json to standalone files
+    let mut needs_resave = false;
+    for profile in &mut preferences.custom_cli_profiles {
+        let path = match get_cli_profile_path(&profile.name) {
+            Ok(p) => p,
+            Err(e) => {
+                log::warn!("Failed to get CLI profile path for '{}': {e}", profile.name);
+                continue;
+            }
+        };
+        profile.file_path = path.to_string_lossy().to_string();
+
+        // Migration: if settings_json is in preferences.json, write to file
+        if !profile.settings_json.is_empty() && !path.exists() {
+            if let Some(parent) = path.parent() {
+                let _ = std::fs::create_dir_all(parent);
+            }
+            if let Err(e) = std::fs::write(&path, &profile.settings_json) {
+                log::error!("Failed to migrate CLI profile '{}': {e}", profile.name);
+            } else {
+                log::info!(
+                    "Migrated CLI profile '{}' to {}",
+                    profile.name,
+                    path.display()
+                );
+                needs_resave = true;
+            }
+        }
+
+        // Load settings_json from file (always prefer file as source of truth)
+        if path.exists() {
+            match std::fs::read_to_string(&path) {
+                Ok(contents) => profile.settings_json = contents,
+                Err(e) => log::warn!("Failed to read CLI profile '{}': {e}", profile.name),
+            }
+        }
+    }
+
+    // Re-save preferences with settings_json cleared (file is now source of truth)
+    if needs_resave {
+        let mut prefs_for_disk = preferences.clone();
+        for profile in &mut prefs_for_disk.custom_cli_profiles {
+            profile.settings_json = String::new();
+        }
+        if let Ok(json) = serde_json::to_string_pretty(&prefs_for_disk) {
+            let _ = std::fs::write(&prefs_path, json);
+            log::trace!("Re-saved preferences after CLI profile migration");
+        }
+    }
+
     log::trace!("Successfully loaded preferences");
     Ok(preferences)
 }
@@ -975,10 +1097,31 @@ async fn save_preferences(app: AppHandle, preferences: AppPreferences) -> Result
     // Validate theme value
     validate_theme(&preferences.theme)?;
 
-    log::trace!("Saving preferences to disk: {preferences:?}");
+    log::trace!("Saving preferences to disk");
     let prefs_path = get_preferences_path(&app)?;
 
-    let json_content = serde_json::to_string_pretty(&preferences).map_err(|e| {
+    // Write any non-empty settings_json to standalone files before clearing
+    for profile in &preferences.custom_cli_profiles {
+        if !profile.settings_json.is_empty() {
+            if let Ok(path) = get_cli_profile_path(&profile.name) {
+                if let Some(parent) = path.parent() {
+                    let _ = std::fs::create_dir_all(parent);
+                }
+                if let Err(e) = std::fs::write(&path, &profile.settings_json) {
+                    log::error!("Failed to write CLI profile '{}': {e}", profile.name);
+                }
+            }
+        }
+    }
+
+    // Strip settings_json from CLI profiles before writing to preferences.json (file is source of truth)
+    let mut prefs_for_disk = preferences;
+    for profile in &mut prefs_for_disk.custom_cli_profiles {
+        profile.settings_json = String::new();
+        profile.file_path = String::new();
+    }
+
+    let json_content = serde_json::to_string_pretty(&prefs_for_disk).map_err(|e| {
         log::error!("Failed to serialize preferences: {e}");
         format!("Failed to serialize preferences: {e}")
     })?;
@@ -1000,6 +1143,42 @@ async fn save_preferences(app: AppHandle, preferences: AppPreferences) -> Result
     })?;
 
     log::trace!("Successfully saved preferences to {prefs_path:?}");
+    Ok(())
+}
+
+#[tauri::command]
+async fn save_cli_profile(name: String, settings_json: String) -> Result<String, String> {
+    // Validate JSON
+    serde_json::from_str::<serde_json::Value>(&settings_json)
+        .map_err(|e| format!("Invalid JSON: {e}"))?;
+
+    let path = get_cli_profile_path(&name)?;
+
+    // Ensure ~/.claude/ exists
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| format!("Failed to create directory: {e}"))?;
+    }
+
+    // Atomic write via temp file
+    let temp = path.with_extension("tmp");
+    std::fs::write(&temp, &settings_json).map_err(|e| format!("Failed to write: {e}"))?;
+    std::fs::rename(&temp, &path).map_err(|e| {
+        let _ = std::fs::remove_file(&temp);
+        format!("Failed to finalize: {e}")
+    })?;
+
+    let path_str = path.to_string_lossy().to_string();
+    log::trace!("Saved CLI profile '{name}' to {path_str}");
+    Ok(path_str)
+}
+
+#[tauri::command]
+async fn delete_cli_profile(name: String) -> Result<(), String> {
+    let path = get_cli_profile_path(&name)?;
+    if path.exists() {
+        std::fs::remove_file(&path).map_err(|e| format!("Failed to delete: {e}"))?;
+        log::trace!("Deleted CLI profile '{name}' at {}", path.display());
+    }
     Ok(())
 }
 
@@ -1489,18 +1668,11 @@ fn create_app_menu(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error
         .item(&MenuItemBuilder::with_id("toggle-right-sidebar", "Toggle Right Sidebar").build(app)?)
         .build()?;
 
-    // Build the Git submenu
-    // Note: Accelerators removed since keybindings are user-configurable in preferences
-    let git_submenu = SubmenuBuilder::new(app, "Git")
-        .item(&MenuItemBuilder::with_id("open-pull-request", "Open Pull Request...").build(app)?)
-        .build()?;
-
     // Build the main menu with submenus
     let menu = MenuBuilder::new(app)
         .item(&app_submenu)
         .item(&edit_submenu)
         .item(&view_submenu)
-        .item(&git_submenu)
         .build()?;
 
     // Set the menu for the app
@@ -1752,18 +1924,6 @@ pub fn run() {
                                 }
                             }
                         }
-                        "open-pull-request" => {
-                            log::trace!("Open Pull Request menu item clicked");
-                            // Emit event to React for handling
-                            match app.emit("menu-open-pull-request", ()) {
-                                Ok(_) => {
-                                    log::trace!("Successfully emitted menu-open-pull-request event")
-                                }
-                                Err(e) => {
-                                    log::error!("Failed to emit menu-open-pull-request event: {e}")
-                                }
-                            }
-                        }
                         _ => {
                             log::trace!("Unhandled menu event: {:?}", event.id());
                         }
@@ -1843,6 +2003,8 @@ pub fn run() {
             greet,
             load_preferences,
             save_preferences,
+            save_cli_profile,
+            delete_cli_profile,
             load_ui_state,
             save_ui_state,
             send_native_notification,
@@ -1892,6 +2054,8 @@ pub fn run() {
             projects::list_worktree_files,
             projects::get_project_branches,
             projects::update_project_settings,
+            projects::get_jean_config,
+            projects::save_jean_config,
             projects::get_pr_prompt,
             projects::get_review_prompt,
             projects::save_worktree_pr,
@@ -1959,6 +2123,7 @@ pub fn run() {
             chat::get_session,
             chat::create_session,
             chat::rename_session,
+            chat::regenerate_session_name,
             chat::update_session_state,
             chat::close_session,
             chat::archive_session,
@@ -1976,6 +2141,7 @@ pub fn run() {
             chat::clear_session_history,
             chat::set_session_model,
             chat::set_session_thinking_level,
+            chat::set_session_provider,
             chat::cancel_chat_message,
             chat::has_running_sessions,
             chat::save_cancelled_message,
@@ -2029,6 +2195,7 @@ pub fn run() {
             // Background task commands
             background_tasks::commands::set_app_focus_state,
             background_tasks::commands::set_active_worktree_for_polling,
+            background_tasks::commands::set_pr_worktrees_for_polling,
             background_tasks::commands::set_git_poll_interval,
             background_tasks::commands::get_git_poll_interval,
             background_tasks::commands::trigger_immediate_git_poll,

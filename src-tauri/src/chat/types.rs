@@ -355,6 +355,9 @@ pub struct Session {
     /// Selected thinking level for this session
     #[serde(default)]
     pub selected_thinking_level: Option<ThinkingLevel>,
+    /// Selected provider (custom CLI profile name) for this session
+    #[serde(default)]
+    pub selected_provider: Option<String>,
     /// Whether session naming has been attempted for this session
     /// Prevents re-triggering on app restart
     #[serde(default)]
@@ -412,6 +415,9 @@ pub struct Session {
     /// Execution mode of the last run (plan/build/yolo)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub last_run_execution_mode: Option<String>,
+    /// User-assigned label (e.g. "Needs testing")
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
 }
 
 impl Session {
@@ -432,6 +438,7 @@ impl Session {
             codex_session_id: None,
             selected_model: None,
             selected_thinking_level: None,
+            selected_provider: None,
             session_naming_completed: false,
             archived_at: None,
             // Session-specific UI state
@@ -449,6 +456,7 @@ impl Session {
             digest: None,
             last_run_status: None,
             last_run_execution_mode: None,
+            label: None,
         }
     }
 
@@ -587,6 +595,7 @@ impl SessionMetadata {
             codex_session_id: self.codex_session_id.clone(),
             selected_model: self.selected_model.clone(),
             selected_thinking_level: self.selected_thinking_level.clone(),
+            selected_provider: self.selected_provider.clone(),
             session_naming_completed: self.session_naming_completed,
             archived_at: self.archived_at,
             answered_questions: self.answered_questions.clone(),
@@ -604,6 +613,7 @@ impl SessionMetadata {
             // Populate from last run for status recovery on app restart
             last_run_status: last_run.map(|r| r.status.clone()),
             last_run_execution_mode: last_run.and_then(|r| r.execution_mode.clone()),
+            label: self.label.clone(),
         }
     }
 
@@ -616,6 +626,7 @@ impl SessionMetadata {
         self.codex_session_id = session.codex_session_id.clone();
         self.selected_model = session.selected_model.clone();
         self.selected_thinking_level = session.selected_thinking_level.clone();
+        self.selected_provider = session.selected_provider.clone();
         self.session_naming_completed = session.session_naming_completed;
         self.archived_at = session.archived_at;
         self.answered_questions = session.answered_questions.clone();
@@ -629,6 +640,7 @@ impl SessionMetadata {
         self.approved_plan_message_ids = session.approved_plan_message_ids.clone();
         self.plan_file_path = session.plan_file_path.clone();
         self.pending_plan_message_id = session.pending_plan_message_id.clone();
+        self.label = session.label.clone();
     }
 }
 
@@ -900,6 +912,9 @@ pub struct SessionMetadata {
     /// Selected thinking level for this session
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub selected_thinking_level: Option<ThinkingLevel>,
+    /// Selected provider (custom CLI profile name) for this session
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub selected_provider: Option<String>,
     /// Whether session naming has been attempted
     #[serde(default)]
     pub session_naming_completed: bool,
@@ -944,6 +959,9 @@ pub struct SessionMetadata {
     /// Persisted session digest (recap summary)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub digest: Option<SessionDigest>,
+    /// User-assigned label (e.g. "Needs testing")
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
 
     /// Run history - each entry corresponds to one Claude CLI execution
     #[serde(default)]
@@ -1032,6 +1050,7 @@ impl SessionMetadata {
             codex_session_id: None,
             selected_model: None,
             selected_thinking_level: None,
+            selected_provider: None,
             session_naming_completed: false,
             archived_at: None,
             answered_questions: vec![],
@@ -1046,6 +1065,7 @@ impl SessionMetadata {
             plan_file_path: None,
             pending_plan_message_id: None,
             digest: None,
+            label: None,
             runs: vec![],
             version: 1,
         }

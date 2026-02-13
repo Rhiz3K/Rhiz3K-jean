@@ -436,6 +436,7 @@ pub fn load_sessions(
                 codex_session_id: None,
                 selected_model: None,
                 selected_thinking_level: None,
+                selected_provider: None,
                 session_naming_completed: false,
                 archived_at: entry.archived_at,
                 answered_questions: vec![],
@@ -452,6 +453,7 @@ pub fn load_sessions(
                 digest: None,
                 last_run_status: None,
                 last_run_execution_mode: None,
+                label: None,
             }
         };
         sessions.push(session);

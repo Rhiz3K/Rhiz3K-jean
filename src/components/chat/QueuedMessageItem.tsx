@@ -4,6 +4,7 @@ import {
   ClipboardList,
   Clock,
   Hammer,
+  Play,
   Sparkles,
   X,
   Zap,
@@ -35,6 +36,8 @@ interface QueuedMessageItemProps {
   index: number
   sessionId: string
   onRemove: (sessionId: string, messageId: string) => void
+  onForceSend?: (sessionId: string) => void
+  isSessionIdle?: boolean
 }
 
 /**
@@ -46,10 +49,18 @@ export const QueuedMessageItem = memo(function QueuedMessageItem({
   index,
   sessionId,
   onRemove,
+  onForceSend,
+  isSessionIdle,
 }: QueuedMessageItemProps) {
   const handleRemove = useCallback(() => {
     onRemove(sessionId, message.id)
   }, [onRemove, sessionId, message.id])
+
+  const handleForceSend = useCallback(() => {
+    onForceSend?.(sessionId)
+  }, [onForceSend, sessionId])
+
+  const showForceSend = index === 0 && isSessionIdle && onForceSend
 
   return (
     <div className="w-full flex justify-end overflow-visible">
@@ -59,6 +70,21 @@ export const QueuedMessageItem = memo(function QueuedMessageItem({
           <Clock className="h-2.5 w-2.5" />
           <span>#{index + 1}</span>
         </div>
+        {/* Force send button - only on first queued message when session is idle */}
+        {showForceSend && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                onClick={handleForceSend}
+                className="absolute -top-2 -right-7 p-0.5 bg-muted hover:bg-green-600 text-muted-foreground hover:text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity z-10"
+              >
+                <Play className="h-3 w-3" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>Force send now</TooltipContent>
+          </Tooltip>
+        )}
         {/* Remove button */}
         <Tooltip>
           <TooltipTrigger asChild>
@@ -160,6 +186,8 @@ interface QueuedMessagesListProps {
   messages: QueuedMessage[]
   sessionId: string
   onRemove: (sessionId: string, messageId: string) => void
+  onForceSend?: (sessionId: string) => void
+  isSessionIdle?: boolean
 }
 
 /**
@@ -170,6 +198,8 @@ export const QueuedMessagesList = memo(function QueuedMessagesList({
   messages,
   sessionId,
   onRemove,
+  onForceSend,
+  isSessionIdle,
 }: QueuedMessagesListProps) {
   if (messages.length === 0) return null
 
@@ -182,6 +212,8 @@ export const QueuedMessagesList = memo(function QueuedMessagesList({
           index={index}
           sessionId={sessionId}
           onRemove={onRemove}
+          onForceSend={onForceSend}
+          isSessionIdle={isSessionIdle}
         />
       ))}
     </div>

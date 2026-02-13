@@ -14,6 +14,7 @@ import {
 } from '@/services/projects'
 import { usePreferences } from '@/services/preferences'
 import { useSessions } from '@/services/chat'
+import { useProjectsStore } from '@/store/projects-store'
 import { useTerminalStore } from '@/store/terminal-store'
 import { useChatStore } from '@/store/chat-store'
 import type { SessionDigest } from '@/types/chat'
@@ -93,11 +94,8 @@ export function useWorktreeMenuActions({
   }, [closeBaseSessionClean, worktree.id, projectId])
 
   const handleOpenJeanConfig = useCallback(() => {
-    openInEditor.mutate({
-      worktreePath: `${worktree.path}/jean.json`,
-      editor: preferences?.editor,
-    })
-  }, [openInEditor, worktree.path, preferences?.editor])
+    useProjectsStore.getState().openProjectSettings(projectId, 'jean-json')
+  }, [projectId])
 
   const handleGenerateRecap = useCallback(async () => {
     const sessions = sessionsData?.sessions ?? []

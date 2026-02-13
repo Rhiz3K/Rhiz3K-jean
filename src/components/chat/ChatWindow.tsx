@@ -31,6 +31,7 @@ import {
   useSendMessage,
   useSetSessionModel,
   useSetSessionThinkingLevel,
+  useSetSessionProvider,
   useCreateSession,
   cancelChatMessage,
   chatQueryKeys,
@@ -63,6 +64,7 @@ import {
   DEFAULT_INVESTIGATE_ISSUE_PROMPT,
   DEFAULT_INVESTIGATE_PR_PROMPT,
   DEFAULT_INVESTIGATE_WORKFLOW_RUN_PROMPT,
+  PREDEFINED_CLI_PROFILES,
 } from '@/types/preferences'
 import type { Project, Worktree } from '@/types/projects'
 import type {
@@ -103,6 +105,9 @@ import { QueuedMessagesList } from './QueuedMessageItem'
 import { FloatingButtons } from './FloatingButtons'
 import { PlanDialog } from './PlanDialog'
 import { StreamingMessage } from './StreamingMessage'
+import { ChatErrorFallback } from './ChatErrorFallback'
+import { logger } from '@/lib/logger'
+import { saveCrashState } from '@/lib/recovery'
 import { ErrorBanner } from './ErrorBanner'
 import { SessionDigestReminder } from './SessionDigestReminder'
 import {
@@ -420,6 +425,7 @@ export function ChatWindow({
   const createSession = useCreateSession()
   const setSessionModel = useSetSessionModel()
   const setSessionThinkingLevel = useSetSessionThinkingLevel()
+  const setSessionProvider = useSetSessionProvider()
 
   // Fetch worktree data for PR link display
   const { data: worktree } = useWorktree(activeWorktreeId ?? null)
@@ -442,46 +448,6 @@ export function ChatWindow({
   const { data: loadedPRContexts } = useLoadedPRContexts(
     activeWorktreeId ?? null
   )
-
-  // Emit readiness event for auto-investigate coordination
-  // When a worktree is marked for auto-investigate, projects.ts waits for this event
-  // before dispatching the magic-command, ensuring session and contexts are ready
-  useEffect(() => {
-    if (!activeWorktreeId || !activeSessionId) return
-
-    // Check if this worktree was marked for auto-investigate
-    const { autoInvestigateWorktreeIds, autoInvestigatePRWorktreeIds } =
-      useUIStore.getState()
-    const shouldInvestigateIssue =
-      autoInvestigateWorktreeIds.has(activeWorktreeId)
-    const shouldInvestigatePR =
-      autoInvestigatePRWorktreeIds.has(activeWorktreeId)
-
-    if (!shouldInvestigateIssue && !shouldInvestigatePR) return
-
-    // Wait for contexts to be loaded
-    const hasIssueContexts =
-      shouldInvestigateIssue &&
-      loadedIssueContexts &&
-      loadedIssueContexts.length > 0
-    const hasPRContexts =
-      shouldInvestigatePR && loadedPRContexts && loadedPRContexts.length > 0
-
-    if (hasIssueContexts) {
-      window.dispatchEvent(
-        new CustomEvent('chat-ready-for-investigate', {
-          detail: { worktreeId: activeWorktreeId, type: 'issue' },
-        })
-      )
-    }
-    if (hasPRContexts) {
-      window.dispatchEvent(
-        new CustomEvent('chat-ready-for-investigate', {
-          detail: { worktreeId: activeWorktreeId, type: 'pr' },
-        })
-      )
-    }
-  }, [activeWorktreeId, activeSessionId, loadedIssueContexts, loadedPRContexts])
 
   // Attached saved contexts for indicator
   const { data: attachedSavedContexts } = useAttachedSavedContexts(
@@ -542,6 +508,21 @@ export function ChatWindow({
       : storedModel && CLAUDE_MODEL_VALUES.has(storedModel)
         ? storedModel
         : defaultClaudeModel
+
+  // Per-session provider selection: persisted session → zustand → project default → global default
+  const projectDefaultProvider = project?.default_provider ?? null
+  const globalDefaultProvider = preferences?.default_provider ?? null
+  const defaultProvider = projectDefaultProvider ?? globalDefaultProvider
+  const zustandProvider = useChatStore(state =>
+    deferredSessionId ? state.selectedProviders[deferredSessionId] : undefined
+  )
+  const sessionProvider = session?.selected_provider ?? zustandProvider
+  const selectedProvider =
+    sessionProvider !== undefined ? sessionProvider : defaultProvider
+  // __anthropic__ is the sentinel for "use default Anthropic" — treat as non-custom for feature detection
+  const isCustomProvider = Boolean(
+    selectedProvider && selectedProvider !== '__anthropic__'
+  )
 
   // Per-session thinking level, falls back to preferences default
   const defaultClaudeThinkingLevel =
@@ -624,10 +605,22 @@ export function ChatWindow({
 
   // CLI version for adaptive thinking feature detection
   const { data: cliStatus } = useClaudeCliStatus()
-  const useAdaptiveThinkingFlag = supportsAdaptiveThinking(
-    selectedModel,
-    cliStatus?.version ?? null
-  )
+  // Custom providers don't support Opus 4.6 adaptive thinking — use thinking levels instead
+  const useAdaptiveThinkingFlag =
+    !isCustomProvider &&
+    supportsAdaptiveThinking(selectedModel, cliStatus?.version ?? null)
+
+  // Hide thinking level UI entirely for providers that don't support it
+  const customCliProfiles = preferences?.custom_cli_profiles ?? []
+  const activeProfile = isCustomProvider
+    ? customCliProfiles.find(p => p.name === selectedProvider)
+    : null
+  // Fall back to predefined template's supports_thinking for profiles saved before this field existed
+  const activeSupportsThinking =
+    activeProfile?.supports_thinking ??
+    PREDEFINED_CLI_PROFILES.find(p => p.name === selectedProvider)
+      ?.supports_thinking
+  const hideThinkingLevel = activeSupportsThinking === false
 
   const isSending = isSendingForSession
 
@@ -763,6 +756,7 @@ export function ChatWindow({
   const activeWorktreePathRef = useRef(activeWorktreePath)
   const selectedAgentRef = useRef(selectedAgent)
   const selectedModelRef = useRef(selectedModel)
+  const selectedProviderRef = useRef(selectedProvider)
   const selectedThinkingLevelRef = useRef(selectedThinkingLevel)
   const selectedEffortLevelRef = useRef(selectedEffortLevel)
   const useAdaptiveThinkingRef = useRef(useAdaptiveThinkingFlag)
@@ -777,6 +771,7 @@ export function ChatWindow({
   activeWorktreePathRef.current = activeWorktreePath
   selectedAgentRef.current = selectedAgent
   selectedModelRef.current = selectedModel
+  selectedProviderRef.current = selectedProvider
   selectedThinkingLevelRef.current = selectedThinkingLevel
   selectedEffortLevelRef.current = selectedEffortLevel
   useAdaptiveThinkingRef.current = useAdaptiveThinkingFlag
@@ -1140,6 +1135,23 @@ export function ChatWindow({
   // Note: Streaming event listeners are in App.tsx, not here
   // This ensures they stay active even when ChatWindow is unmounted (e.g., session board view)
 
+  // Helper to resolve custom CLI profile name for the active provider
+  const resolveCustomProfile = useCallback(
+    (model: string, provider: string | null) => {
+      if (!provider || provider === '__anthropic__')
+        return { model, customProfileName: undefined }
+      // Verify the provider exists in profiles
+      const profile = preferences?.custom_cli_profiles?.find(
+        p => p.name === provider
+      )
+      return {
+        model,
+        customProfileName: profile?.name,
+      }
+    },
+    [preferences?.custom_cli_profiles]
+  )
+
   // Helper to build full message with attachment references for backend
   const buildMessageWithRefs = useCallback(
     (queuedMsg: QueuedMessage): string => {
@@ -1248,6 +1260,9 @@ export function ChatWindow({
       // Build full message with attachment refs for backend
       const fullMessage = buildMessageWithRefs(queuedMsg)
 
+      // Resolve custom CLI profile if provider is set
+      const resolved = resolveCustomProfile(queuedMsg.model, queuedMsg.provider)
+
       sendMessage.mutate(
         {
           sessionId: activeSessionId,
@@ -1255,13 +1270,14 @@ export function ChatWindow({
           worktreePath: activeWorktreePath,
           agent: queuedMsg.agent,
           message: fullMessage,
-          model: queuedMsg.model,
+          model: resolved.model,
           executionMode: queuedMsg.executionMode,
           thinkingLevel: queuedMsg.thinkingLevel,
           disableThinkingForMode: queuedMsg.disableThinkingForMode,
           effortLevel: queuedMsg.effortLevel,
           mcpConfig: queuedMsg.mcpConfig,
           codexBuildNetworkAccess: queuedMsg.codexBuildNetworkAccess,
+          customProfileName: resolved.customProfileName,
           parallelExecutionPromptEnabled:
             preferences?.parallel_execution_prompt_enabled ?? false,
           chromeEnabled: preferences?.chrome_enabled ?? false,
@@ -1282,6 +1298,7 @@ export function ChatWindow({
       buildMessageWithRefs,
       sendMessage,
       queryClient,
+      resolveCustomProfile,
       preferences?.parallel_execution_prompt_enabled,
       preferences?.chrome_enabled,
       preferences?.ai_language,
@@ -1343,6 +1360,10 @@ export function ChatWindow({
         agent === 'claude'
           ? (preferences?.disable_thinking_in_non_plan_modes ?? true)
           : (preferences?.codex_disable_reasoning_in_non_plan_modes ?? true)
+      const diffResolved = resolveCustomProfile(
+        model,
+        selectedProviderRef.current
+      )
       sendMessage.mutate(
         {
           sessionId: activeSessionId,
@@ -1350,7 +1371,8 @@ export function ChatWindow({
           worktreePath: activeWorktreePath,
           agent,
           message,
-          model,
+          model: diffResolved.model,
+          customProfileName: diffResolved.customProfileName,
           executionMode: 'build',
           thinkingLevel,
           disableThinkingForMode:
@@ -1381,6 +1403,7 @@ export function ChatWindow({
       activeWorktreeId,
       activeWorktreePath,
       preferences,
+      resolveCustomProfile,
       sendMessage,
     ]
   )
@@ -1473,6 +1496,7 @@ export function ChatWindow({
         pendingSkills: skills,
         pendingTextFiles: textFiles,
         model: selectedModelRef.current,
+        provider: selectedProviderRef.current,
         executionMode: mode,
         thinkingLevel: thinkingLvl,
         disableThinkingForMode:
@@ -1614,6 +1638,23 @@ export function ChatWindow({
     [activeSessionId, activeWorktreeId, activeWorktreePath, setSessionModel]
   )
 
+  const handleToolbarProviderChange = useCallback(
+    (provider: string | null) => {
+      if (activeSessionId) {
+        useChatStore.getState().setSelectedProvider(activeSessionId, provider)
+        if (activeWorktreeId && activeWorktreePath) {
+          setSessionProvider.mutate({
+            sessionId: activeSessionId,
+            worktreeId: activeWorktreeId,
+            worktreePath: activeWorktreePath,
+            provider,
+          })
+        }
+      }
+    },
+    [activeSessionId, activeWorktreeId, activeWorktreePath, setSessionProvider]
+  )
+
   // PERFORMANCE: Use refs to keep callback stable, get store actions via getState()
   const handleToolbarThinkingLevelChange = useCallback(
     (level: ThinkingLevel) => {
@@ -1714,173 +1755,111 @@ export function ChatWindow({
     useUIStore.getState().setMagicModalOpen(true)
   }, [])
 
-  // Handle investigate context - sends prompt to analyze loaded issue(s) and/or PR(s)
-  // If nothing is loaded, opens the Load Context modal instead
-  const handleInvestigate = useCallback(async () => {
-    const sessionId = activeSessionIdRef.current
-    const worktreeId = activeWorktreeIdRef.current
-    const worktreePath = activeWorktreePathRef.current
-    if (!sessionId || !worktreeId || !worktreePath) {
-      toast.error('No active session')
-      return
-    }
+  // Handle investigate - sends investigation prompt for loaded issue/PR contexts
+  const handleInvestigate = useCallback(
+    async (type: 'issue' | 'pr') => {
+      if (!activeSessionId || !activeWorktreeId || !activeWorktreePath) return
 
-    // Fetch both loaded issues and PRs in parallel
-    const [loadedIssues, loadedPRs] = await Promise.all([
-      queryClient.fetchQuery({
-        queryKey: githubQueryKeys.loadedContexts(worktreeId),
-        queryFn: () =>
-          invoke<LoadedIssueContext[]>('list_loaded_issue_contexts', {
-            worktreeId,
-          }),
-        staleTime: 1000 * 60,
-      }),
-      queryClient.fetchQuery({
-        queryKey: githubQueryKeys.loadedPrContexts(worktreeId),
-        queryFn: () =>
-          invoke<LoadedPullRequestContext[]>('list_loaded_pr_contexts', {
-            worktreeId,
-          }),
-        staleTime: 1000 * 60,
-      }),
-    ])
+      const investigateModel =
+        preferences?.magic_prompt_models?.investigate_model ??
+        selectedModelRef.current
 
-    const hasIssues = loadedIssues && loadedIssues.length > 0
-    const hasPRs = loadedPRs && loadedPRs.length > 0
+      let prompt: string
 
-    // If nothing loaded, open the Load Context modal and re-trigger on close
-    if (!hasIssues && !hasPRs) {
-      pendingInvestigateRef.current = true
-      setLoadContextModalOpen(true)
-      return
-    }
+      if (type === 'issue') {
+        // Query by worktree ID — during auto-investigate, contexts are registered
+        // under worktree ID (not session ID) by the backend create_worktree command
+        const contexts = await queryClient.fetchQuery({
+          queryKey: ['investigate-contexts', 'issue', activeWorktreeId],
+          queryFn: () =>
+            invoke<{ number: number }[]>('list_loaded_issue_contexts', {
+              sessionId: activeWorktreeId,
+            }),
+          staleTime: 0,
+        })
+        const refs = (contexts ?? []).map(c => `#${c.number}`).join(', ')
+        const word = (contexts ?? []).length === 1 ? 'issue' : 'issues'
+        const customPrompt = preferences?.magic_prompts?.investigate_issue
+        const template =
+          customPrompt && customPrompt.trim()
+            ? customPrompt
+            : DEFAULT_INVESTIGATE_ISSUE_PROMPT
+        prompt = template
+          .replace(/\{issueWord\}/g, word)
+          .replace(/\{issueRefs\}/g, refs)
+      } else {
+        const contexts = await queryClient.fetchQuery({
+          queryKey: ['investigate-contexts', 'pr', activeWorktreeId],
+          queryFn: () =>
+            invoke<{ number: number }[]>('list_loaded_pr_contexts', {
+              sessionId: activeWorktreeId,
+            }),
+          staleTime: 0,
+        })
+        const refs = (contexts ?? []).map(c => `#${c.number}`).join(', ')
+        const word = (contexts ?? []).length === 1 ? 'PR' : 'PRs'
+        const customPrompt = preferences?.magic_prompts?.investigate_pr
+        const template =
+          customPrompt && customPrompt.trim()
+            ? customPrompt
+            : DEFAULT_INVESTIGATE_PR_PROMPT
+        prompt = template
+          .replace(/\{prWord\}/g, word)
+          .replace(/\{prRefs\}/g, refs)
+      }
 
-    // Build combined prompt from loaded issues and/or PRs
-    const promptParts: string[] = []
+      const {
+        addSendingSession,
+        setLastSentMessage,
+        setError,
+        setSelectedModel,
+        setExecutingMode,
+      } = useChatStore.getState()
 
-    if (hasIssues) {
-      const issueRefs = loadedIssues.map(i => `#${i.number}`).join(', ')
-      const issueWord = loadedIssues.length === 1 ? 'issue' : 'issues'
-      const customPrompt = preferences?.magic_prompts?.investigate_issue
-      const issueTemplate =
-        customPrompt && customPrompt.trim()
-          ? customPrompt
-          : DEFAULT_INVESTIGATE_ISSUE_PROMPT
+      setLastSentMessage(activeSessionId, prompt)
+      setError(activeSessionId, null)
+      addSendingSession(activeSessionId)
+      setSelectedModel(activeSessionId, investigateModel)
+      setExecutingMode(activeSessionId, executionModeRef.current)
 
-      promptParts.push(
-        issueTemplate
-          .replace(/\{issueRefs\}/g, issueRefs)
-          .replace(/\{issueWord\}/g, issueWord)
-      )
-    }
-
-    if (hasPRs) {
-      const prRefs = loadedPRs.map(pr => `#${pr.number}`).join(', ')
-      const prWord = loadedPRs.length === 1 ? 'pull request' : 'pull requests'
-      const customPrompt = preferences?.magic_prompts?.investigate_pr
-      const prTemplate =
-        customPrompt && customPrompt.trim()
-          ? customPrompt
-          : DEFAULT_INVESTIGATE_PR_PROMPT
-
-      promptParts.push(
-        prTemplate.replace(/\{prRefs\}/g, prRefs).replace(/\{prWord\}/g, prWord)
-      )
-    }
-
-    const prompt = promptParts.join('\n\n---\n\n')
-
-    // Send message
-    const agent = ((session?.agent as ChatAgent | undefined) ??
-      'claude') as ChatAgent
-
-    const investigateModel =
-      agent === 'codex'
-        ? (preferences?.magic_prompt_codex_models?.investigate_model ??
-          selectedModelRef.current)
-        : (preferences?.magic_prompt_models?.investigate_model ??
-          selectedModelRef.current)
-
-    const mode = executionModeRef.current
-    const thinkingLevel: ThinkingLevel =
-      agent === 'codex'
-        ? ((preferences?.magic_prompt_codex_reasoning_efforts
-            ?.investigate_model ?? 'high') as ThinkingLevel)
-        : selectedThinkingLevelRef.current
-    const modelForSend = investigateModel
-    const hasManualOverride = useChatStore
-      .getState()
-      .hasManualThinkingOverride(sessionId)
-    const disableByPreference =
-      agent === 'claude'
-        ? (preferences?.disable_thinking_in_non_plan_modes ?? true)
-        : (preferences?.codex_disable_reasoning_in_non_plan_modes ?? true)
-
-    const {
-      addSendingSession,
-      setLastSentMessage,
-      setError,
-      setSelectedModel,
-      setExecutingMode,
-    } = useChatStore.getState()
-
-    setLastSentMessage(sessionId, prompt)
-    setError(sessionId, null)
-    addSendingSession(sessionId)
-    setSelectedModel(sessionId, investigateModel)
-    setExecutingMode(sessionId, executionModeRef.current)
-
-    sendMessage.mutate(
-      {
-        sessionId,
-        worktreeId,
-        worktreePath,
-        agent,
-        message: prompt,
-        model: modelForSend,
-        executionMode: mode,
-        thinkingLevel,
-        disableThinkingForMode:
-          disableByPreference &&
-          mode !== 'plan' &&
-          !hasManualOverride &&
-          (agent === 'claude'
-            ? thinkingLevel !== 'off'
-            : thinkingLevel !== 'minimal'),
-        effortLevel: useAdaptiveThinkingRef.current
-          ? selectedEffortLevelRef.current
-          : undefined,
-        mcpConfig: buildMcpConfigJson(
-          mcpServersDataRef.current,
-          enabledMcpServersRef.current
-        ),
-        codexBuildNetworkAccess:
-          agent === 'codex' && mode === 'build'
-            ? codexBuildNetworkAccessRef.current
+      sendMessage.mutate(
+        {
+          sessionId: activeSessionId,
+          worktreeId: activeWorktreeId,
+          worktreePath: activeWorktreePath,
+          message: prompt,
+          model: investigateModel,
+          executionMode: executionModeRef.current,
+          thinkingLevel: selectedThinkingLevelRef.current,
+          effortLevel: useAdaptiveThinkingRef.current
+            ? selectedEffortLevelRef.current
             : undefined,
-        parallelExecutionPromptEnabled:
-          preferences?.parallel_execution_prompt_enabled ?? false,
-        chromeEnabled: preferences?.chrome_enabled ?? false,
-        aiLanguage: preferences?.ai_language,
-      },
-      { onSettled: () => inputRef.current?.focus() }
-    )
-  }, [
-    queryClient,
-    sendMessage,
-    setLoadContextModalOpen,
-    preferences?.magic_prompts?.investigate_issue,
-    preferences?.magic_prompts?.investigate_pr,
-    preferences?.magic_prompt_models?.investigate_model,
-    preferences?.magic_prompt_codex_models?.investigate_model,
-    preferences?.magic_prompt_codex_reasoning_efforts?.investigate_model,
-    preferences?.disable_thinking_in_non_plan_modes,
-    preferences?.codex_disable_reasoning_in_non_plan_modes,
-    preferences?.parallel_execution_prompt_enabled,
-    preferences?.chrome_enabled,
-    preferences?.ai_language,
-    session?.agent,
-  ])
+          mcpConfig: buildMcpConfigJson(
+            mcpServersDataRef.current,
+            enabledMcpServersRef.current
+          ),
+          parallelExecutionPromptEnabled:
+            preferences?.parallel_execution_prompt_enabled ?? false,
+          chromeEnabled: preferences?.chrome_enabled ?? false,
+          aiLanguage: preferences?.ai_language,
+        },
+        { onSettled: () => inputRef.current?.focus() }
+      )
+    },
+    [
+      activeSessionId,
+      activeWorktreeId,
+      activeWorktreePath,
+      sendMessage,
+      queryClient,
+      preferences?.magic_prompts?.investigate_issue,
+      preferences?.magic_prompts?.investigate_pr,
+      preferences?.magic_prompt_models?.investigate_model,
+      preferences?.parallel_execution_prompt_enabled,
+      preferences?.chrome_enabled,
+      preferences?.ai_language,
+    ]
+  )
 
   // Wraps modal open/close to auto-trigger investigation after user loads context
   const handleLoadContextModalChange = useCallback(
@@ -1909,11 +1888,10 @@ export function ChatWindow({
             staleTime: 1000 * 60,
           }),
         ])
-        if (
-          (loadedIssues && loadedIssues.length > 0) ||
-          (loadedPRs && loadedPRs.length > 0)
-        ) {
-          handleInvestigate()
+        if (loadedIssues && loadedIssues.length > 0) {
+          handleInvestigate('issue')
+        } else if (loadedPRs && loadedPRs.length > 0) {
+          handleInvestigate('pr')
         }
       }
     },
@@ -1925,7 +1903,6 @@ export function ChatWindow({
     useUIStore.getState().setCheckoutPRModalOpen(true)
   }, [])
 
-  // Handle investigate workflow run - sends investigation prompt for a failed GitHub Actions run
   const handleInvestigateWorkflowRun = useCallback(
     async (detail: WorkflowRunDetail) => {
       console.warn('[INVESTIGATE-WF] Handler called with detail:', {
@@ -2145,7 +2122,7 @@ export function ChatWindow({
               enabledMcpServersRef.current
             ),
             parallelExecutionPromptEnabled:
-              preferences?.parallel_execution_prompt_enabled,
+              preferences?.parallel_execution_prompt_enabled ?? false,
             chromeEnabled: preferences?.chrome_enabled ?? false,
             aiLanguage: preferences?.ai_language,
           },
@@ -2218,6 +2195,16 @@ export function ChatWindow({
     isViewingCanvasTab,
     sessionModalOpen,
   })
+
+  // Pick up pending investigate type from UI store (set by projects.ts when
+  // worktree is created/unarchived with auto-investigate flag)
+  useEffect(() => {
+    if (!activeSessionId || !activeWorktreeId || !activeWorktreePath) return
+    const type = useUIStore.getState().consumePendingInvestigateType()
+    if (type) {
+      handleInvestigate(type)
+    }
+  }, [activeSessionId, activeWorktreeId, activeWorktreePath, handleInvestigate])
 
   // Listen for command palette context events
   useEffect(() => {
@@ -2301,6 +2288,9 @@ export function ChatWindow({
     activeWorktreePathRef,
     selectedAgentRef,
     selectedModelRef,
+    getCustomProfileName: () => {
+      return selectedProviderRef.current ?? undefined
+    },
     executionModeRef,
     selectedThinkingLevelRef,
     selectedEffortLevelRef,
@@ -2481,6 +2471,10 @@ export function ChatWindow({
           agent === 'claude'
             ? (preferences?.disable_thinking_in_non_plan_modes ?? true)
             : (preferences?.codex_disable_reasoning_in_non_plan_modes ?? true)
+        const fixResolved = resolveCustomProfile(
+          selectedModelRef.current,
+          selectedProviderRef.current
+        )
         sendMessage.mutate(
           {
             sessionId: targetSessionId,
@@ -2488,7 +2482,8 @@ export function ChatWindow({
             worktreePath,
             agent,
             message,
-            model: selectedModelRef.current,
+            model: fixResolved.model,
+            customProfileName: fixResolved.customProfileName,
             executionMode: 'build', // Always use build mode for fixes
             thinkingLevel: thinkingLvl,
             // Build mode: reduce thinking/reasoning if preference enabled and no manual override
@@ -2554,6 +2549,7 @@ export function ChatWindow({
   }, [
     sendMessage,
     createSession,
+    resolveCustomProfile,
     preferences?.disable_thinking_in_non_plan_modes,
     preferences?.codex_disable_reasoning_in_non_plan_modes,
     preferences?.parallel_execution_prompt_enabled,
@@ -2568,6 +2564,11 @@ export function ChatWindow({
     },
     []
   )
+
+  // Handle force-sending a stuck queued message
+  const handleForceSendQueued = useCallback((sessionId: string) => {
+    useChatStore.getState().forceProcessQueue(sessionId)
+  }, [])
 
   // Handle cancellation of running Claude process (triggered by Cmd+Option+Backspace / Ctrl+Alt+Backspace)
   const handleCancel = useCallback(async () => {
@@ -2627,6 +2628,7 @@ export function ChatWindow({
         pendingSkills: [],
         pendingTextFiles: [],
         model: selectedModelRef.current,
+        provider: selectedProviderRef.current,
         executionMode: executionModeRef.current,
         thinkingLevel: selectedThinkingLevelRef.current,
         disableThinkingForMode: false,
@@ -2735,18 +2737,29 @@ export function ChatWindow({
 
   return (
     <ErrorBoundary
-      fallback={
-        <div className="flex h-full flex-col items-center justify-center gap-4 text-muted-foreground">
-          <span>Something went wrong. Please refresh the page.</span>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => window.location.reload()}
-          >
-            Refresh
-          </Button>
-        </div>
-      }
+      onError={(error, errorInfo) => {
+        logger.error('ChatWindow crashed', {
+          error: error.message,
+          stack: error.stack,
+        })
+        saveCrashState(
+          { activeWorktreeId, activeSessionId },
+          {
+            error: error.message,
+            stack: error.stack ?? '',
+            componentStack: errorInfo.componentStack ?? undefined,
+          }
+        ).catch(() => {
+          /* noop */
+        })
+      }}
+      fallbackRender={({ error, resetErrorBoundary }) => (
+        <ChatErrorFallback
+          error={error}
+          resetErrorBoundary={resetErrorBoundary}
+          activeWorktreeId={activeWorktreeId}
+        />
+      )}
     >
       <div className="flex h-full w-full min-w-0 flex-col overflow-hidden">
         {/* Session tab bar - hidden in modal mode and canvas-only mode */}
@@ -2904,6 +2917,8 @@ export function ChatWindow({
                             messages={currentQueuedMessages}
                             sessionId={activeSessionId}
                             onRemove={handleRemoveQueuedMessage}
+                            onForceSend={handleForceSendQueued}
+                            isSessionIdle={!isSending}
                           />
                         )}
                       </div>
@@ -3039,6 +3054,8 @@ export function ChatWindow({
                         executionMode={executionMode}
                         selectedAgent={selectedAgent}
                         selectedModel={selectedModel}
+                        selectedProvider={selectedProvider}
+                        providerLocked={(session?.messages?.length ?? 0) > 0}
                         selectedThinkingLevel={selectedThinkingLevel}
                         selectedEffortLevel={selectedEffortLevel}
                         thinkingOverrideActive={
@@ -3061,6 +3078,7 @@ export function ChatWindow({
                         hasBranchUpdates={hasBranchUpdates}
                         behindCount={behindCount}
                         aheadCount={aheadCount}
+                        hideThinkingLevel={hideThinkingLevel}
                         baseBranch={gitStatus?.base_branch ?? 'main'}
                         uncommittedAdded={uncommittedAdded}
                         uncommittedRemoved={uncommittedRemoved}
@@ -3089,10 +3107,14 @@ export function ChatWindow({
                         onMerge={handleMerge}
                         onResolvePrConflicts={handleResolvePrConflicts}
                         onResolveConflicts={handleResolveConflicts}
-                        onInvestigate={handleInvestigate}
+                        onInvestigate={() => handleInvestigate('issue')}
                         hasOpenPr={Boolean(worktree?.pr_url)}
                         onSetDiffRequest={setDiffRequest}
                         onModelChange={handleToolbarModelChange}
+                        onProviderChange={handleToolbarProviderChange}
+                        customCliProfiles={
+                          preferences?.custom_cli_profiles ?? []
+                        }
                         onThinkingLevelChange={handleToolbarThinkingLevelChange}
                         onEffortLevelChange={handleToolbarEffortLevelChange}
                         onSetExecutionMode={handleToolbarSetExecutionMode}
@@ -3245,6 +3267,7 @@ export function ChatWindow({
                   pendingSkills: [],
                   pendingTextFiles: [],
                   model: selectedModelRef.current,
+                  provider: selectedProviderRef.current,
                   executionMode: 'build',
                   thinkingLevel: selectedThinkingLevelRef.current,
                   disableThinkingForMode: !useChatStore
@@ -3318,6 +3341,7 @@ export function ChatWindow({
                   pendingSkills: [],
                   pendingTextFiles: [],
                   model: selectedModelRef.current,
+                  provider: selectedProviderRef.current,
                   executionMode: 'yolo',
                   thinkingLevel: selectedThinkingLevelRef.current,
                   disableThinkingForMode: !useChatStore
@@ -3408,6 +3432,7 @@ export function ChatWindow({
                   pendingSkills: [],
                   pendingTextFiles: [],
                   model: selectedModelRef.current,
+                  provider: selectedProviderRef.current,
                   executionMode: 'build',
                   thinkingLevel: selectedThinkingLevelRef.current,
                   disableThinkingForMode: !useChatStore
@@ -3481,6 +3506,7 @@ export function ChatWindow({
                   pendingSkills: [],
                   pendingTextFiles: [],
                   model: selectedModelRef.current,
+                  provider: selectedProviderRef.current,
                   executionMode: 'yolo',
                   thinkingLevel: selectedThinkingLevelRef.current,
                   disableThinkingForMode: !useChatStore

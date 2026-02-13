@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowUp, GitBranch, Pencil } from 'lucide-react'
+import { ArrowDown, ArrowUp } from 'lucide-react'
 import {
   Tooltip,
   TooltipTrigger,
@@ -44,7 +44,6 @@ export function GitStatusBadges({
               onClick={onDiffClick}
               className="inline-flex shrink-0 cursor-pointer items-center gap-0.5 text-[11px] font-medium hover:opacity-70 transition-opacity"
             >
-              <Pencil className="h-2.5 w-2.5 text-muted-foreground" />
               <span className="text-green-500">+{diffAdded}</span>
               <span className="text-muted-foreground">/</span>
               <span className="text-red-500">-{diffRemoved}</span>
@@ -61,7 +60,6 @@ export function GitStatusBadges({
               onClick={onBranchDiffClick}
               className="inline-flex shrink-0 cursor-pointer items-center gap-0.5 text-[11px] font-medium hover:opacity-70 transition-opacity"
             >
-              <GitBranch className="h-2.5 w-2.5 text-muted-foreground" />
               <span className="text-green-500">+{branchDiffAdded}</span>
               <span className="text-muted-foreground">/</span>
               <span className="text-red-500">-{branchDiffRemoved}</span>

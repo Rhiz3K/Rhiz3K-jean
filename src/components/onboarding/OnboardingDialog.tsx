@@ -488,6 +488,27 @@ function OnboardingDialogContent() {
     setOnboardingStartStep,
   ])
 
+  const handleAbort = useCallback(() => {
+    const claudeReady =
+      claudeSetup.status?.installed && claudeAuth.data?.authenticated
+    setOnboardingOpen(false)
+    setOnboardingStartStep(null)
+    if (!claudeReady) {
+      toast.warning(
+        'Setup incomplete. Jean requires Claude CLI to function. Reopen from Settings.'
+      )
+    } else {
+      toast.info(
+        'GitHub authentication skipped. You can authenticate later in Settings.'
+      )
+    }
+  }, [
+    claudeSetup.status?.installed,
+    claudeAuth.data?.authenticated,
+    setOnboardingOpen,
+    setOnboardingStartStep,
+  ])
+
   const handleSkipGh = useCallback(() => {
     // Only available on error - graceful fallback
     setStep('complete')
@@ -590,7 +611,6 @@ function OnboardingDialogContent() {
         title: 'Setup Complete',
         description:
           'All required tools have been installed and authenticated.',
-        showClose: true,
       }
     }
 
@@ -602,7 +622,6 @@ function OnboardingDialogContent() {
         description: isClaudeReinstall
           ? 'Select a version to install. This will replace the current installation.'
           : 'Jean needs Claude CLI to work. Please install it to continue.',
-        showClose: isClaudeReinstall,
       }
     }
 
@@ -610,7 +629,6 @@ function OnboardingDialogContent() {
       return {
         title: 'Authenticate Claude CLI',
         description: 'Claude CLI requires authentication to function.',
-        showClose: false,
       }
     }
 
@@ -642,7 +660,6 @@ function OnboardingDialogContent() {
         description: isGhReinstall
           ? 'Select a version to install. This will replace the current installation.'
           : 'GitHub CLI is required for GitHub integration.',
-        showClose: isGhReinstall,
       }
     }
 
@@ -650,11 +667,10 @@ function OnboardingDialogContent() {
       return {
         title: 'Authenticate GitHub CLI',
         description: 'Authenticate GitHub CLI for full functionality.',
-        showClose: false,
       }
     }
 
-    return { title: 'Setup', description: '', showClose: false }
+    return { title: 'Setup', description: '' }
   }
 
   const dialogContent = getDialogContent()
@@ -751,13 +767,22 @@ function OnboardingDialogContent() {
     )
   }
 
+  const handleOpenChange = useCallback(
+    (open: boolean) => {
+      if (!open) {
+        if (step === 'complete') {
+          handleComplete()
+        } else {
+          handleAbort()
+        }
+      }
+    },
+    [step, handleComplete, handleAbort]
+  )
+
   return (
-    <Dialog open={onboardingOpen} onOpenChange={setOnboardingOpen}>
-      <DialogContent
-        className="sm:max-w-[500px]"
-        showCloseButton={dialogContent.showClose}
-        preventClose={!dialogContent.showClose}
-      >
+    <Dialog open={onboardingOpen} onOpenChange={handleOpenChange}>
+      <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
           <DialogTitle className="text-xl">{dialogContent.title}</DialogTitle>
           <DialogDescription>{dialogContent.description}</DialogDescription>

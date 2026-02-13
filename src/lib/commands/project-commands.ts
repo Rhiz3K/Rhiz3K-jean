@@ -5,6 +5,8 @@ import {
   Keyboard,
   Archive,
   ArchiveRestore,
+  Settings,
+  RefreshCw,
 } from 'lucide-react'
 import type { AppCommand } from './types'
 import { useUIStore } from '@/store/ui-store'
@@ -37,6 +39,28 @@ export const projectCommands: AppCommand[] = [
   },
 
   {
+    id: 'project-settings',
+    label: 'Project Settings',
+    description: 'Configure settings for the current project',
+    icon: Settings,
+    group: 'projects',
+    keywords: [
+      'project',
+      'settings',
+      'configure',
+      'mcp',
+      'branch',
+      'jean.json',
+    ],
+
+    isAvailable: context => context.hasSelectedProject(),
+
+    execute: context => {
+      context.openProjectSettings()
+    },
+  },
+
+  {
     id: 'toggle-debug-mode',
     label: 'Toggle Debug Mode',
     description: 'Show/hide session debug panel',
@@ -51,7 +75,7 @@ export const projectCommands: AppCommand[] = [
 
   {
     id: 'help.feature-tour',
-    label: 'Show Feature Tour',
+    label: 'Show Boarding Flow',
     description: 'Learn essential keyboard shortcuts',
     icon: Keyboard,
     group: 'help',
@@ -92,6 +116,19 @@ export const projectCommands: AppCommand[] = [
 
     execute: context => {
       context.restoreLastArchived()
+    },
+  },
+
+  {
+    id: 'regenerate-session-title',
+    label: 'Regenerate Session Title',
+    description: 'Use AI to generate a new title for the current session',
+    icon: RefreshCw,
+    group: 'sessions',
+    keywords: ['session', 'title', 'name', 'regenerate', 'rename', 'ai'],
+
+    execute: context => {
+      context.regenerateSessionName()
     },
   },
 ]

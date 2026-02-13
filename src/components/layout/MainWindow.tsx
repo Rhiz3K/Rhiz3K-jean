@@ -10,6 +10,7 @@ import { ProjectSettingsDialog } from '@/components/projects/ProjectSettingsDial
 import { CommitModal } from '@/components/commit/CommitModal'
 import { OnboardingDialog } from '@/components/onboarding/OnboardingDialog'
 import { FeatureTourDialog } from '@/components/onboarding/FeatureTourDialog'
+import { JeanConfigWizard } from '@/components/onboarding/JeanConfigWizard'
 import { CliUpdateModal } from '@/components/layout/CliUpdateModal'
 import { CliLoginModal } from '@/components/preferences/CliLoginModal'
 import { OpenInModal } from '@/components/open-in/OpenInModal'
@@ -18,8 +19,6 @@ import { MagicModal } from '@/components/magic/MagicModal'
 import { CheckoutPRModal } from '@/components/magic/CheckoutPRModal'
 import { ReleaseNotesDialog } from '@/components/magic/ReleaseNotesDialog'
 import { NewWorktreeModal } from '@/components/worktree/NewWorktreeModal'
-import { PathConflictModal } from '@/components/worktree/PathConflictModal'
-import { BranchConflictModal } from '@/components/worktree/BranchConflictModal'
 import { SessionBoardModal } from '@/components/session-board'
 import { AddProjectDialog } from '@/components/projects/AddProjectDialog'
 import { GitInitModal } from '@/components/projects/GitInitModal'
@@ -35,6 +34,7 @@ import { useSessionStatePersistence } from '@/hooks/useSessionStatePersistence'
 import { useSessionPrefetch } from '@/hooks/useSessionPrefetch'
 import { useRestoreLastArchived } from '@/hooks/useRestoreLastArchived'
 import { useArchiveCleanup } from '@/hooks/useArchiveCleanup'
+import { usePrWorktreeSweep } from '@/hooks/usePrWorktreeSweep'
 import {
   useAppFocusTracking,
   useGitStatusEvents,
@@ -173,6 +173,9 @@ export function MainWindow() {
   // Auto-cleanup old archived items on startup
   useArchiveCleanup()
 
+  // Sync all worktrees with open PRs to backend for sweep polling
+  usePrWorktreeSweep(projects)
+
   // Track app focus state for background task manager
   useAppFocusTracking()
 
@@ -278,6 +281,7 @@ export function MainWindow() {
       <CommitModal />
       <OnboardingDialog />
       <FeatureTourDialog />
+      <JeanConfigWizard />
       <CliUpdateModal />
       <CliLoginModal />
       <OpenInModal />
@@ -286,8 +290,6 @@ export function MainWindow() {
       <CheckoutPRModal />
       <ReleaseNotesDialog />
       <NewWorktreeModal />
-      <PathConflictModal />
-      <BranchConflictModal />
       <SessionBoardModal />
       <AddProjectDialog />
       <GitInitModal />

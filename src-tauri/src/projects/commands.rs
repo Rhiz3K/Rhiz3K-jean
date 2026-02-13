@@ -22,10 +22,10 @@ use super::github_issues::{
 use super::names::generate_unique_workspace_name;
 use super::storage::{get_project_worktrees_dir, load_projects_data, save_projects_data};
 use super::types::{
-    MergeType, Project, SessionType, Worktree, WorktreeArchivedEvent, WorktreeBranchExistsEvent,
-    WorktreeCreateErrorEvent, WorktreeCreatedEvent, WorktreeCreatingEvent,
-    WorktreeDeleteErrorEvent, WorktreeDeletedEvent, WorktreeDeletingEvent, WorktreePathExistsEvent,
-    WorktreePermanentlyDeletedEvent, WorktreeUnarchivedEvent,
+    JeanConfig, MergeType, Project, SessionType, Worktree, WorktreeArchivedEvent,
+    WorktreeBranchExistsEvent, WorktreeCreateErrorEvent, WorktreeCreatedEvent,
+    WorktreeCreatingEvent, WorktreeDeleteErrorEvent, WorktreeDeletedEvent, WorktreeDeletingEvent,
+    WorktreePathExistsEvent, WorktreePermanentlyDeletedEvent, WorktreeUnarchivedEvent,
 };
 use crate::chat::types::ChatAgent;
 use crate::claude_cli::get_cli_binary_path;
@@ -87,6 +87,7 @@ fn ensure_agent_cli_ready(app: &AppHandle, agent: &ChatAgent) -> Result<(), Stri
 pub async fn check_git_identity() -> Result<GitIdentity, String> {
     let name = silent_command("git")
         .args(["config", "--global", "user.name"])
+        .current_dir(std::env::temp_dir())
         .output()
         .ok()
         .filter(|o| o.status.success())
@@ -95,6 +96,7 @@ pub async fn check_git_identity() -> Result<GitIdentity, String> {
 
     let email = silent_command("git")
         .args(["config", "--global", "user.email"])
+        .current_dir(std::env::temp_dir())
         .output()
         .ok()
         .filter(|o| o.status.success())
@@ -109,6 +111,7 @@ pub async fn check_git_identity() -> Result<GitIdentity, String> {
 pub async fn set_git_identity(name: String, email: String) -> Result<(), String> {
     let name_output = silent_command("git")
         .args(["config", "--global", "user.name", &name])
+        .current_dir(std::env::temp_dir())
         .output()
         .map_err(|e| format!("Failed to set git user.name: {e}"))?;
 
@@ -119,6 +122,7 @@ pub async fn set_git_identity(name: String, email: String) -> Result<(), String>
 
     let email_output = silent_command("git")
         .args(["config", "--global", "user.email", &email])
+        .current_dir(std::env::temp_dir())
         .output()
         .map_err(|e| format!("Failed to set git user.email: {e}"))?;
 
@@ -187,6 +191,7 @@ pub async fn add_project(
         avatar_path: None,
         enabled_mcp_servers: Vec::new(),
         custom_system_prompt: None,
+        default_provider: None,
     };
 
     data.add_project(project.clone());
@@ -339,6 +344,7 @@ pub async fn init_project(
         avatar_path: None,
         enabled_mcp_servers: Vec::new(),
         custom_system_prompt: None,
+        default_provider: None,
     };
 
     data.add_project(project.clone());
@@ -3158,6 +3164,7 @@ pub async fn update_project_settings(
     default_branch: Option<String>,
     enabled_mcp_servers: Option<Vec<String>>,
     custom_system_prompt: Option<String>,
+    default_provider: Option<Option<String>>,
 ) -> Result<Project, String> {
     log::trace!("Updating settings for project: {project_id}");
 
@@ -3189,6 +3196,11 @@ pub async fn update_project_settings(
         } else {
             Some(prompt)
         };
+    }
+
+    if let Some(provider) = default_provider {
+        log::trace!("Updating default provider: {provider:?}");
+        project.default_provider = provider.filter(|p| p != "__none__");
     }
 
     let updated_project = project.clone();
@@ -5863,6 +5875,7 @@ pub async fn create_folder(
         avatar_path: None,
         enabled_mcp_servers: Vec::new(),
         custom_system_prompt: None,
+        default_provider: None,
     };
 
     data.add_project(folder.clone());
@@ -6481,6 +6494,24 @@ pub async fn get_app_data_dir(app: AppHandle) -> Result<String, String> {
         .map_err(|e| format!("Failed to get app data dir: {e}"))?;
 
     Ok(app_data_dir.to_string_lossy().to_string())
+}
+
+/// Get full jean.json config for a project
+#[tauri::command]
+pub async fn get_jean_config(project_path: String) -> Option<JeanConfig> {
+    git::read_jean_config(&project_path)
+}
+
+/// Save jean.json config to disk
+#[tauri::command]
+pub async fn save_jean_config(project_path: String, config: JeanConfig) -> Result<(), String> {
+    let config_path = Path::new(&project_path).join("jean.json");
+    let json = serde_json::to_string_pretty(&config)
+        .map_err(|e| format!("Failed to serialize config: {e}"))?;
+    std::fs::write(&config_path, format!("{json}\n"))
+        .map_err(|e| format!("Failed to write jean.json: {e}"))?;
+    log::trace!("Saved jean.json to {}", config_path.display());
+    Ok(())
 }
 
 #[cfg(test)]

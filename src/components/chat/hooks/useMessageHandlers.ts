@@ -44,6 +44,7 @@ interface SendMessageMutation {
       allowedTools?: string[]
       disableThinkingForMode?: boolean
       mcpConfig?: string
+      customProfileName?: string
     },
     options?: {
       onSettled?: () => void
@@ -59,6 +60,7 @@ interface UseMessageHandlersParams {
   // Refs for settings (stable across re-renders)
   selectedAgentRef: RefObject<ChatAgent>
   selectedModelRef: RefObject<string>
+  getCustomProfileName: () => string | undefined
   executionModeRef: RefObject<ExecutionMode>
   selectedThinkingLevelRef: RefObject<ThinkingLevel>
   selectedEffortLevelRef: RefObject<EffortLevel>
@@ -116,6 +118,7 @@ export function useMessageHandlers({
   activeWorktreePathRef,
   selectedAgentRef,
   selectedModelRef,
+  getCustomProfileName,
   executionModeRef,
   selectedThinkingLevelRef,
   selectedEffortLevelRef,
@@ -172,8 +175,12 @@ export function useMessageHandlers({
         )
       })
 
-      // Scroll to bottom to compensate for the question form collapsing
-      scrollToBottom()
+      // Scroll to bottom after DOM updates from collapsing the question form
+      // Using rAF ensures React has processed state changes (clearToolCalls,
+      // clearStreamingContentBlocks, markQuestionAnswered) so scrollHeight is accurate
+      requestAnimationFrame(() => {
+        scrollToBottom()
+      })
 
       // Format answers as natural language
       const message = formatAnswersAsNaturalLanguage(questions, answers)
@@ -199,6 +206,7 @@ export function useMessageHandlers({
             ? selectedEffortLevelRef.current
             : undefined,
           mcpConfig: getMcpConfig(),
+          customProfileName: getCustomProfileName(),
         },
         {
           onSettled: () => {
@@ -218,6 +226,7 @@ export function useMessageHandlers({
       selectedEffortLevelRef,
       useAdaptiveThinkingRef,
       getMcpConfig,
+      getCustomProfileName,
       sendMessage,
       scrollToBottom,
       inputRef,
@@ -371,6 +380,7 @@ export function useMessageHandlers({
             : undefined,
           disableThinkingForMode: true, // Always disable thinking when executing approved plan
           mcpConfig: getMcpConfig(),
+          customProfileName: getCustomProfileName(),
         },
         {
           onSettled: () => {
@@ -389,6 +399,7 @@ export function useMessageHandlers({
       selectedEffortLevelRef,
       useAdaptiveThinkingRef,
       getMcpConfig,
+      getCustomProfileName,
       sendMessage,
       queryClient,
       inputRef,
@@ -484,6 +495,7 @@ export function useMessageHandlers({
             : undefined,
           disableThinkingForMode: true, // Always disable thinking when executing approved plan
           mcpConfig: getMcpConfig(),
+          customProfileName: getCustomProfileName(),
         },
         {
           onSettled: () => {
@@ -502,6 +514,7 @@ export function useMessageHandlers({
       selectedEffortLevelRef,
       useAdaptiveThinkingRef,
       getMcpConfig,
+      getCustomProfileName,
       sendMessage,
       queryClient,
       inputRef,
@@ -574,6 +587,7 @@ export function useMessageHandlers({
           : undefined,
         disableThinkingForMode: true, // Always disable thinking when executing approved plan
         mcpConfig: getMcpConfig(),
+        customProfileName: getCustomProfileName(),
       },
       {
         onSettled: () => {
@@ -591,6 +605,7 @@ export function useMessageHandlers({
     selectedEffortLevelRef,
     useAdaptiveThinkingRef,
     getMcpConfig,
+    getCustomProfileName,
     sendMessage,
     inputRef,
   ])
@@ -652,6 +667,7 @@ export function useMessageHandlers({
           : undefined,
         disableThinkingForMode: true, // Always disable thinking when executing approved plan
         mcpConfig: getMcpConfig(),
+        customProfileName: getCustomProfileName(),
       },
       {
         onSettled: () => {
@@ -669,6 +685,7 @@ export function useMessageHandlers({
     selectedEffortLevelRef,
     useAdaptiveThinkingRef,
     getMcpConfig,
+    getCustomProfileName,
     sendMessage,
     inputRef,
   ])
@@ -777,6 +794,7 @@ export function useMessageHandlers({
             : undefined,
           allowedTools: [...GIT_ALLOWED_TOOLS, ...allApprovedTools],
           mcpConfig: getMcpConfig(),
+          customProfileName: getCustomProfileName(),
         },
         {
           onSettled: () => {
@@ -795,6 +813,7 @@ export function useMessageHandlers({
       selectedEffortLevelRef,
       useAdaptiveThinkingRef,
       getMcpConfig,
+      getCustomProfileName,
       sendMessage,
       inputRef,
     ]
@@ -902,6 +921,7 @@ export function useMessageHandlers({
             ? selectedEffortLevelRef.current
             : undefined,
           mcpConfig: getMcpConfig(),
+          customProfileName: getCustomProfileName(),
         },
         {
           onSettled: () => {
@@ -919,6 +939,7 @@ export function useMessageHandlers({
       selectedEffortLevelRef,
       useAdaptiveThinkingRef,
       getMcpConfig,
+      getCustomProfileName,
       sendMessage,
       inputRef,
     ]
@@ -1024,6 +1045,7 @@ Please apply this fix to the file.`
             ? selectedEffortLevelRef.current
             : undefined,
           mcpConfig: getMcpConfig(),
+          customProfileName: getCustomProfileName(),
         },
         {
           onSettled: () => {
@@ -1042,6 +1064,7 @@ Please apply this fix to the file.`
       selectedEffortLevelRef,
       useAdaptiveThinkingRef,
       getMcpConfig,
+      getCustomProfileName,
       sendMessage,
       queryClient,
       inputRef,
@@ -1138,6 +1161,7 @@ Please apply all these fixes to the respective files.`
             ? selectedEffortLevelRef.current
             : undefined,
           mcpConfig: getMcpConfig(),
+          customProfileName: getCustomProfileName(),
         },
         {
           onSettled: () => {
@@ -1156,6 +1180,7 @@ Please apply all these fixes to the respective files.`
       selectedEffortLevelRef,
       useAdaptiveThinkingRef,
       getMcpConfig,
+      getCustomProfileName,
       sendMessage,
       queryClient,
       inputRef,

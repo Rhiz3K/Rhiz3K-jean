@@ -109,6 +109,7 @@ pub async fn dispatch_command(
                 default_branch,
                 None,
                 None,
+                None,
             )
             .await?;
             to_value(result)
@@ -574,6 +575,8 @@ pub async fn dispatch_command(
             let mcp_config: Option<String> = field_opt(&args, "mcpConfig", "mcp_config")?;
             let chrome_enabled: Option<bool> = field_opt(&args, "chromeEnabled", "chrome_enabled")?;
             let agent = field_opt(&args, "agent", "agent")?;
+            let custom_profile_name: Option<String> =
+                field_opt(&args, "customProfileName", "custom_profile_name")?;
             let result = crate::chat::send_chat_message(
                 app.clone(),
                 session_id,
@@ -592,6 +595,7 @@ pub async fn dispatch_command(
                 mcp_config,
                 chrome_enabled,
                 agent,
+                custom_profile_name,
             )
             .await?;
             to_value(result)
@@ -1171,6 +1175,7 @@ pub async fn dispatch_command(
                 field_opt(&args, "planFilePath", "plan_file_path")?;
             let pending_plan_message_id: Option<Option<String>> =
                 field_opt(&args, "pendingPlanMessageId", "pending_plan_message_id")?;
+            let label: Option<String> = field_opt(&args, "label", "label")?;
             crate::chat::update_session_state(
                 app.clone(),
                 worktree_id,
@@ -1186,6 +1191,7 @@ pub async fn dispatch_command(
                 waiting_for_input_type,
                 plan_file_path,
                 pending_plan_message_id,
+                label,
             )
             .await?;
             emit_cache_invalidation(app, &["sessions"]);

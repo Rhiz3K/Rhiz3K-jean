@@ -442,6 +442,16 @@ export function useCommandContext(
     )
   }, [])
 
+  // Projects - Open project settings
+  const openProjectSettings = useCallback(() => {
+    const { selectedProjectId } = useProjectsStore.getState()
+    if (!selectedProjectId) {
+      notify('No project selected', undefined, { type: 'error' })
+      return
+    }
+    useProjectsStore.getState().openProjectSettings(selectedProjectId)
+  }, [])
+
   // State getters
   const hasActiveSession = useCallback(() => {
     const { activeWorktreeId, getActiveSession } = useChatStore.getState()
@@ -693,6 +703,47 @@ export function useCommandContext(
     }
   }, [])
 
+  // Session - Regenerate session name using AI
+  // eslint-disable-next-line react-hooks/preserve-manual-memoization
+  const regenerateSessionName = useCallback(async () => {
+    const { activeWorktreeId, getActiveSession, getWorktreePath } =
+      useChatStore.getState()
+    if (!activeWorktreeId) {
+      notify('No worktree selected', undefined, { type: 'error' })
+      return
+    }
+
+    const sessionId = getActiveSession(activeWorktreeId)
+    if (!sessionId) {
+      notify('No session selected', undefined, { type: 'error' })
+      return
+    }
+
+    const worktreePath = getWorktreePath(activeWorktreeId)
+    if (!worktreePath) {
+      notify('No worktree path found', undefined, { type: 'error' })
+      return
+    }
+
+    const toastId = toast.loading('Regenerating session title...')
+    try {
+      await invoke('regenerate_session_name', {
+        worktreeId: activeWorktreeId,
+        worktreePath,
+        sessionId,
+        customPrompt: preferences?.magic_prompts?.session_naming ?? null,
+        model: preferences?.magic_prompt_models?.session_naming_model ?? null,
+      })
+      toast.success('Session title will update shortly', { id: toastId })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      toast.error(`Failed to regenerate: ${message}`, { id: toastId })
+    }
+  }, [
+    preferences?.magic_prompts?.session_naming,
+    preferences?.magic_prompt_models?.session_naming_model,
+  ])
+
   // State getter - Check if run script is available
   const hasRunScript = useCallback(() => {
     // This needs to check if jean.json has a run script
@@ -729,6 +780,7 @@ export function useCommandContext(
       clearSessionHistory,
       renameSession,
       resumeSession,
+      regenerateSessionName,
 
       // Worktrees
       createWorktree,
@@ -762,6 +814,7 @@ export function useCommandContext(
       addProject,
       initProject,
       removeProject,
+      openProjectSettings,
 
       // AI
       runAIReview,
@@ -810,6 +863,7 @@ export function useCommandContext(
       clearSessionHistory,
       renameSession,
       resumeSession,
+      regenerateSessionName,
       createWorktree,
       nextWorktree,
       previousWorktree,
@@ -829,6 +883,7 @@ export function useCommandContext(
       addProject,
       initProject,
       removeProject,
+      openProjectSettings,
       runAIReview,
       openTerminalPanel,
       runScript,

@@ -38,6 +38,7 @@ export interface SessionCardData {
   pendingPlanMessageId: string | null
   hasRecap: boolean
   recapDigest: SessionDigest | null
+  label: string | null
 }
 
 export const statusConfig: Record<
@@ -93,6 +94,7 @@ export interface ChatStoreState {
   reviewingSessions: Record<string, boolean>
   pendingPermissionDenials: Record<string, PermissionDenial[]>
   sessionDigests: Record<string, SessionDigest>
+  sessionLabels: Record<string, string>
 }
 
 export function computeSessionCardData(
@@ -109,6 +111,7 @@ export function computeSessionCardData(
     reviewingSessions,
     pendingPermissionDenials,
     sessionDigests,
+    sessionLabels,
   } = storeState
 
   const sessionSending = sendingSessionIds[session.id] ?? false
@@ -287,6 +290,9 @@ export function computeSessionCardData(
   const recapDigest = sessionDigests[session.id] ?? session.digest ?? null
   const hasRecap = recapDigest !== null
 
+  // Label from Zustand store (populated from persisted data on load)
+  const label = sessionLabels[session.id] ?? null
+
   return {
     session,
     status,
@@ -302,5 +308,44 @@ export function computeSessionCardData(
     pendingPlanMessageId,
     hasRecap,
     recapDigest,
+    label,
   }
+}
+
+// --- Status grouping ---
+
+export interface StatusGroup {
+  key: 'inProgress' | 'waiting' | 'review' | 'completed' | 'idle'
+  title: string
+  cards: SessionCardData[]
+}
+
+const STATUS_GROUP_ORDER: {
+  key: StatusGroup['key']
+  title: string
+  statuses: SessionStatus[]
+}[] = [
+  { key: 'idle', title: 'Idle', statuses: ['idle'] },
+  { key: 'waiting', title: 'Waiting', statuses: ['waiting', 'permission'] },
+  { key: 'review', title: 'Review', statuses: ['review'] },
+  {
+    key: 'inProgress',
+    title: 'In Progress',
+    statuses: ['planning', 'vibing', 'yoloing'],
+  },
+  { key: 'completed', title: 'Completed', statuses: ['completed'] },
+]
+
+/** Group cards by status. Returns only non-empty groups. Preserves card order within groups. */
+export function groupCardsByStatus(cards: SessionCardData[]): StatusGroup[] {
+  return STATUS_GROUP_ORDER.map(({ key, title, statuses }) => ({
+    key,
+    title,
+    cards: cards.filter(c => statuses.includes(c.status)),
+  })).filter(g => g.cards.length > 0)
+}
+
+/** Flatten grouped cards back into a single array (for keyboard nav indices). */
+export function flattenGroups(groups: StatusGroup[]): SessionCardData[] {
+  return groups.flatMap(g => g.cards)
 }

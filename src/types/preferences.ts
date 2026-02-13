@@ -51,6 +51,8 @@ export interface MagicPrompts {
   investigate_workflow_run: string | null
   /** Prompt for generating release notes */
   release_notes: string | null
+  /** Prompt for generating session names from the first message */
+  session_naming: string | null
   /** System prompt for parallel execution (appended to every chat session when enabled) */
   parallel_execution: string | null
 }
@@ -314,6 +316,28 @@ export const DEFAULT_RELEASE_NOTES_PROMPT = `Generate release notes for changes 
 - Write in past tense ("Added", "Fixed", "Improved")
 - Keep it concise and user-facing (skip internal implementation details)`
 
+/** Default prompt for generating session names */
+export const DEFAULT_SESSION_NAMING_PROMPT = `<task>Generate a short, human-friendly name for this chat session based on the user's request.</task>
+
+<rules>
+- Maximum 4-5 words total
+- Use sentence case (only capitalize first word)
+- Be descriptive but concise
+- Focus on the main topic or goal
+- No special characters or punctuation
+- No generic names like "Chat session" or "New task"
+- Do NOT use commit-style prefixes like "Add", "Fix", "Update", "Refactor"
+</rules>
+
+<user_request>
+{message}
+</user_request>
+
+<output_format>
+Respond with ONLY the raw JSON object, no markdown, no code fences, no explanation:
+{"session_name": "Your session name here"}
+</output_format>`
+
 export const DEFAULT_PARALLEL_EXECUTION_PROMPT = `In plan mode, structure plans so sub-agents can work simultaneously. In build/execute mode, use sub-agents in parallel for faster implementation.
 
 When launching multiple Task sub-agents, prefer sending them in a single message rather than sequentially. Group independent work items (e.g., editing separate files, researching unrelated questions) into parallel Task calls. Only sequence Tasks when one depends on another's output.
@@ -331,6 +355,7 @@ export const DEFAULT_MAGIC_PROMPTS: MagicPrompts = {
   resolve_conflicts: null,
   investigate_workflow_run: null,
   release_notes: null,
+  session_naming: null,
   parallel_execution: null,
 }
 
@@ -345,6 +370,7 @@ export interface MagicPromptModels {
   context_summary_model: ClaudeModel
   resolve_conflicts_model: ClaudeModel
   release_notes_model: ClaudeModel
+  session_naming_model: ClaudeModel
 }
 
 /**
@@ -358,6 +384,7 @@ export interface MagicPromptCodexModels {
   code_review_model: CodexModel
   context_summary_model: CodexModel
   resolve_conflicts_model: CodexModel
+  session_naming_model: CodexModel
 }
 
 /**
@@ -371,6 +398,7 @@ export interface MagicPromptCodexReasoningEfforts {
   code_review_model: ThinkingLevel
   context_summary_model: ThinkingLevel
   resolve_conflicts_model: ThinkingLevel
+  session_naming_model: ThinkingLevel
 }
 
 /** Default models for each magic prompt */
@@ -382,6 +410,7 @@ export const DEFAULT_MAGIC_PROMPT_MODELS: MagicPromptModels = {
   context_summary_model: 'opus',
   resolve_conflicts_model: 'opus',
   release_notes_model: 'haiku',
+  session_naming_model: 'haiku',
 }
 
 export const DEFAULT_MAGIC_PROMPT_CODEX_MODELS: MagicPromptCodexModels = {
@@ -391,6 +420,7 @@ export const DEFAULT_MAGIC_PROMPT_CODEX_MODELS: MagicPromptCodexModels = {
   code_review_model: 'gpt-5.3-codex',
   context_summary_model: 'gpt-5.3-codex',
   resolve_conflicts_model: 'gpt-5.3-codex',
+  session_naming_model: 'gpt-5.3-codex',
 }
 
 // Claude -> Codex reasoning-effort analog:
@@ -405,6 +435,7 @@ export const DEFAULT_MAGIC_PROMPT_CODEX_REASONING_EFFORTS: MagicPromptCodexReaso
     code_review_model: 'low', // haiku
     context_summary_model: 'high', // opus
     resolve_conflicts_model: 'high', // opus
+    session_naming_model: 'low', // haiku
   }
 
 // Types that match the Rust AppPreferences struct
@@ -458,14 +489,102 @@ export interface AppPreferences {
   http_server_auto_start: boolean // Auto-start HTTP server on launch
   http_server_localhost_only: boolean // Bind to localhost only (more secure)
   http_server_token_required: boolean // Require token for web access (default true)
+  removal_behavior: RemovalBehavior // What happens when closing sessions/worktrees: 'archive' or 'delete'
   auto_archive_on_pr_merged: boolean // Auto-archive worktrees when their PR is merged
   show_keybinding_hints: boolean // Show keyboard shortcut hints at bottom of canvas views
   debug_mode_enabled: boolean // Show debug panel in chat sessions
   default_enabled_mcp_servers: string[] // MCP server names enabled by default (empty = none)
   has_seen_feature_tour: boolean // Whether user has seen the feature tour onboarding
+  has_seen_jean_config_wizard: boolean // Whether user has seen the jean.json setup wizard
   chrome_enabled: boolean // Enable browser automation via Chrome extension
   zoom_level: number // Zoom level percentage (50-200, default 100)
+  custom_cli_profiles: CustomCliProfile[] // Custom CLI settings profiles (e.g., OpenRouter, MiniMax)
+  default_provider: string | null // Default provider profile name (null = Anthropic direct)
+  canvas_layout: CanvasLayout // Canvas display mode: grid (cards) or list (compact rows)
 }
+
+export type CanvasLayout = 'grid' | 'list'
+
+export interface CustomCliProfile {
+  name: string // Display name, e.g. "OpenRouter"
+  settings_json: string // JSON string matching Claude CLI settings format (with env block)
+  file_path?: string // Path to settings file on disk (e.g. ~/.claude/settings.jean.openrouter.json)
+  supports_thinking?: boolean // Whether this provider supports thinking/effort levels (default: true)
+}
+
+export const PREDEFINED_CLI_PROFILES: CustomCliProfile[] = [
+  {
+    name: 'OpenRouter',
+    settings_json: JSON.stringify(
+      {
+        env: {
+          ANTHROPIC_BASE_URL: 'https://openrouter.ai/api',
+          ANTHROPIC_API_KEY: '',
+          ANTHROPIC_AUTH_TOKEN: '<your_api_key>',
+        },
+      },
+      null,
+      2
+    ),
+  },
+  {
+    name: 'MiniMax',
+    supports_thinking: false,
+    settings_json: JSON.stringify(
+      {
+        env: {
+          ANTHROPIC_BASE_URL: 'https://api.minimax.io/anthropic',
+          ANTHROPIC_AUTH_TOKEN: '<your-minimax-api-key>',
+          API_TIMEOUT_MS: '3000000',
+          CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
+          ANTHROPIC_MODEL: 'MiniMax-M2.5',
+          ANTHROPIC_SMALL_FAST_MODEL: 'MiniMax-M2.5',
+          ANTHROPIC_DEFAULT_SONNET_MODEL: 'MiniMax-M2.5',
+          ANTHROPIC_DEFAULT_OPUS_MODEL: 'MiniMax-M2.5',
+          ANTHROPIC_DEFAULT_HAIKU_MODEL: 'MiniMax-M2.5',
+        },
+      },
+      null,
+      2
+    ),
+  },
+  {
+    name: 'Z.ai',
+    supports_thinking: false,
+    settings_json: JSON.stringify(
+      {
+        env: {
+          ANTHROPIC_BASE_URL: 'https://api.z.ai/api/anthropic',
+          ANTHROPIC_AUTH_TOKEN: '<your-zai-api-key>',
+          API_TIMEOUT_MS: '3000000',
+          ANTHROPIC_DEFAULT_HAIKU_MODEL: 'glm-4.5-air',
+          ANTHROPIC_DEFAULT_SONNET_MODEL: 'glm-4.7',
+          ANTHROPIC_DEFAULT_OPUS_MODEL: 'glm-4.7',
+        },
+      },
+      null,
+      2
+    ),
+  },
+  {
+    name: 'Moonshot',
+    supports_thinking: false,
+    settings_json: JSON.stringify(
+      {
+        env: {
+          ANTHROPIC_BASE_URL: 'https://api.moonshot.ai/anthropic',
+          ANTHROPIC_AUTH_TOKEN: '<your-moonshot-api-key>',
+          ANTHROPIC_MODEL: 'kimi-k2.5',
+          ANTHROPIC_DEFAULT_OPUS_MODEL: 'kimi-k2.5',
+          ANTHROPIC_DEFAULT_SONNET_MODEL: 'kimi-k2.5',
+          ANTHROPIC_DEFAULT_HAIKU_MODEL: 'kimi-k2.5',
+        },
+      },
+      null,
+      2
+    ),
+  },
+]
 
 export type FileEditMode = 'inline' | 'external'
 
@@ -647,6 +766,26 @@ export const remotePollIntervalOptions: { value: number; label: string }[] = [
   { value: 600, label: '10 minutes' },
 ]
 
+// Removal behavior options - what happens when closing sessions/worktrees
+export type RemovalBehavior = 'archive' | 'delete'
+
+export const removalBehaviorOptions: {
+  value: RemovalBehavior
+  label: string
+  description: string
+}[] = [
+  {
+    value: 'archive',
+    label: 'Archive',
+    description: 'Soft-delete; can be restored later',
+  },
+  {
+    value: 'delete',
+    label: 'Delete',
+    description: 'Permanently delete; cannot be undone',
+  },
+]
+
 // Archive retention options (days) - how long to keep archived items
 export const archiveRetentionOptions: { value: number; label: string }[] = [
   { value: 0, label: 'Never (keep forever)' },
@@ -767,11 +906,16 @@ export const defaultPreferences: AppPreferences = {
   http_server_auto_start: false,
   http_server_localhost_only: true, // Default to localhost-only for security
   http_server_token_required: true, // Default: require token for security
+  removal_behavior: 'archive', // Default: archive (soft-delete)
   auto_archive_on_pr_merged: true, // Default: enabled
   show_keybinding_hints: true, // Default: enabled
   debug_mode_enabled: false, // Default: disabled
   default_enabled_mcp_servers: [], // Default: no MCP servers enabled
   has_seen_feature_tour: false, // Default: not seen
+  has_seen_jean_config_wizard: false, // Default: not seen
   chrome_enabled: true, // Default: enabled
   zoom_level: ZOOM_LEVEL_DEFAULT,
+  custom_cli_profiles: [],
+  default_provider: null,
+  canvas_layout: 'grid',
 }

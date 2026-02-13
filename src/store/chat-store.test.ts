@@ -50,6 +50,7 @@ describe('ChatStore', () => {
       lastCompaction: {},
       compactingSessions: {},
       reviewingSessions: {},
+      sessionLabels: {},
       savingContext: {},
       skippedQuestionSessions: {},
     })
@@ -391,6 +392,7 @@ describe('ChatStore', () => {
       pendingSkills: [],
       pendingTextFiles: [],
       model: 'sonnet',
+      provider: null,
       executionMode: 'plan',
       thinkingLevel: 'off',
       disableThinkingForMode: false,
@@ -461,16 +463,16 @@ describe('ChatStore', () => {
     it('adds approved tool', () => {
       const { addApprovedTool, getApprovedTools } = useChatStore.getState()
 
-      addApprovedTool('session-1', 'Bash(npm test)')
+      addApprovedTool('session-1', 'Bash(bun test)')
 
-      expect(getApprovedTools('session-1')).toContain('Bash(npm test)')
+      expect(getApprovedTools('session-1')).toContain('Bash(bun test)')
     })
 
     it('clears approved tools', () => {
       const { addApprovedTool, clearApprovedTools, getApprovedTools } =
         useChatStore.getState()
 
-      addApprovedTool('session-1', 'Bash(npm test)')
+      addApprovedTool('session-1', 'Bash(bun test)')
       clearApprovedTools('session-1')
 
       expect(getApprovedTools('session-1')).toHaveLength(0)

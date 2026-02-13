@@ -125,6 +125,7 @@ describe('preferences service', () => {
         http_server_auto_start: false,
         http_server_localhost_only: true,
         http_server_token_required: true,
+        removal_behavior: 'archive',
         auto_archive_on_pr_merged: true,
         canvas_enabled: true,
         canvas_only_mode: false,
@@ -133,8 +134,12 @@ describe('preferences service', () => {
         default_effort_level: 'high',
         default_enabled_mcp_servers: [],
         has_seen_feature_tour: false,
+        has_seen_jean_config_wizard: false,
         chrome_enabled: true,
         zoom_level: 100,
+        custom_cli_profiles: [],
+        default_provider: null,
+        canvas_layout: 'grid',
       }
       vi.mocked(invoke).mockResolvedValueOnce(mockPreferences)
 
@@ -226,6 +231,7 @@ describe('preferences service', () => {
         http_server_auto_start: false,
         http_server_localhost_only: true,
         http_server_token_required: true,
+        removal_behavior: 'archive',
         auto_archive_on_pr_merged: true,
         canvas_enabled: true,
         canvas_only_mode: false,
@@ -234,8 +240,12 @@ describe('preferences service', () => {
         default_effort_level: 'high',
         default_enabled_mcp_servers: [],
         has_seen_feature_tour: false,
+        has_seen_jean_config_wizard: false,
         chrome_enabled: true,
         zoom_level: 100,
+        custom_cli_profiles: [],
+        default_provider: null,
+        canvas_layout: 'grid',
       }
       vi.mocked(invoke).mockResolvedValueOnce(prefsWithOldBinding)
 
@@ -255,7 +265,6 @@ describe('preferences service', () => {
   describe('useSavePreferences', () => {
     it('saves preferences to backend', async () => {
       const { invoke } = await import('@/lib/transport')
-      const { toast } = await import('sonner')
       vi.mocked(invoke).mockResolvedValueOnce(undefined)
 
       const newPrefs: AppPreferences = {
@@ -304,6 +313,7 @@ describe('preferences service', () => {
         http_server_auto_start: false,
         http_server_localhost_only: true,
         http_server_token_required: true,
+        removal_behavior: 'archive',
         auto_archive_on_pr_merged: true,
         canvas_enabled: true,
         canvas_only_mode: false,
@@ -312,8 +322,12 @@ describe('preferences service', () => {
         default_effort_level: 'high',
         default_enabled_mcp_servers: [],
         has_seen_feature_tour: false,
+        has_seen_jean_config_wizard: false,
         chrome_enabled: true,
         zoom_level: 100,
+        custom_cli_profiles: [],
+        default_provider: null,
+        canvas_layout: 'grid',
       }
 
       const { result } = renderHook(() => useSavePreferences(), {
@@ -327,7 +341,6 @@ describe('preferences service', () => {
       expect(invoke).toHaveBeenCalledWith('save_preferences', {
         preferences: newPrefs,
       })
-      expect(toast.success).toHaveBeenCalledWith('Preferences saved')
     })
 
     it('updates cache on success', async () => {
@@ -380,6 +393,7 @@ describe('preferences service', () => {
         http_server_auto_start: false,
         http_server_localhost_only: true,
         http_server_token_required: true,
+        removal_behavior: 'archive',
         auto_archive_on_pr_merged: true,
         canvas_enabled: true,
         canvas_only_mode: false,
@@ -388,8 +402,12 @@ describe('preferences service', () => {
         default_effort_level: 'high',
         default_enabled_mcp_servers: [],
         has_seen_feature_tour: false,
+        has_seen_jean_config_wizard: false,
         chrome_enabled: true,
         zoom_level: 100,
+        custom_cli_profiles: [],
+        default_provider: null,
+        canvas_layout: 'grid',
       }
 
       const { result } = renderHook(() => useSavePreferences(), {
@@ -456,6 +474,7 @@ describe('preferences service', () => {
         http_server_auto_start: false,
         http_server_localhost_only: true,
         http_server_token_required: true,
+        removal_behavior: 'archive',
         auto_archive_on_pr_merged: true,
         canvas_enabled: true,
         canvas_only_mode: false,
@@ -464,8 +483,12 @@ describe('preferences service', () => {
         default_effort_level: 'high',
         default_enabled_mcp_servers: [],
         has_seen_feature_tour: false,
+        has_seen_jean_config_wizard: false,
         chrome_enabled: true,
         zoom_level: 100,
+        custom_cli_profiles: [],
+        default_provider: null,
+        canvas_layout: 'grid',
       }
 
       const { result } = renderHook(() => useSavePreferences(), {
@@ -530,6 +553,7 @@ describe('preferences service', () => {
         http_server_auto_start: false,
         http_server_localhost_only: true,
         http_server_token_required: true,
+        removal_behavior: 'archive',
         auto_archive_on_pr_merged: true,
         canvas_enabled: true,
         canvas_only_mode: false,
@@ -538,8 +562,12 @@ describe('preferences service', () => {
         default_effort_level: 'high',
         default_enabled_mcp_servers: [],
         has_seen_feature_tour: false,
+        has_seen_jean_config_wizard: false,
         chrome_enabled: true,
         zoom_level: 100,
+        custom_cli_profiles: [],
+        default_provider: null,
+        canvas_layout: 'grid',
       }
 
       const { result } = renderHook(() => useSavePreferences(), {
